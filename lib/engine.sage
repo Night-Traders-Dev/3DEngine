@@ -1,6 +1,6 @@
 gc_disable()
 # -----------------------------------------
-# engine.sage - Core engine module for Sage Engine
+# engine.sage - Core engine module for Forge Engine
 # Creates and manages the engine context: world, renderer, input, events, time
 # -----------------------------------------
 
@@ -45,7 +45,7 @@ proc create_engine(title, width, height):
     eng["update_callbacks"] = []
     eng["render_callbacks"] = []
 
-    print "Sage Engine initialized (" + str(width) + "x" + str(height) + ")"
+    print "Forge Engine initialized (" + str(width) + "x" + str(height) + ")"
     print "GPU: " + gpu.device_name()
     return eng
 

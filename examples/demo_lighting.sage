@@ -1,4 +1,4 @@
-# demo_lighting.sage - Sage Engine Phase 2 Demo
+# demo_lighting.sage - Forge Engine Phase 2 Demo
 # Demonstrates: Lit rendering, point/directional lights, fog, procedural sky
 #
 # Run: ./run.sh examples/demo_lighting.sage
@@ -27,12 +27,12 @@ from sky import sky_preset_day, sky_preset_sunset, sky_preset_night, sky_preset_
 from game_loop import create_time_state, update_time
 import sys
 
-print "=== Sage Engine - Phase 2: Lighting & Sky Demo ==="
+print "=== Forge Engine - Phase 2: Lighting & Sky Demo ==="
 
 # ============================================================================
 # Renderer setup
 # ============================================================================
-let r = create_renderer(1280, 720, "Sage Engine - Lighting Demo")
+let r = create_renderer(1280, 720, "Forge Engine - Lighting Demo")
 if r == nil:
     raise "Failed to create renderer"
 print "GPU: " + gpu.device_name()
@@ -301,7 +301,7 @@ while running:
         ri = ri + 1
 
     end_frame(r, frame)
-    update_title_fps(r, "Sage Engine - Lighting Demo")
+    update_title_fps(r, "Forge Engine - Lighting Demo")
 
 gpu.device_wait_idle()
 shutdown_renderer(r)

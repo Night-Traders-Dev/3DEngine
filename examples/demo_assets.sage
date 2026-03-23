@@ -1,4 +1,4 @@
-# demo_assets.sage - Sage Engine Phase 4 Demo
+# demo_assets.sage - Forge Engine Phase 4 Demo
 # Asset manager, scene save/load, audio system
 #
 # Run: ./run.sh examples/demo_assets.sage
@@ -46,7 +46,7 @@ from audio import create_audio_manager, update_listener
 from audio import set_channel_volume, shutdown_audio
 from game_loop import create_time_state, update_time
 
-print "=== Sage Engine - Phase 4: Content Pipeline Demo ==="
+print "=== Forge Engine - Phase 4: Content Pipeline Demo ==="
 
 # ============================================================================
 # Asset Manager - load all meshes through it
@@ -57,7 +57,7 @@ print "Asset manager created"
 # ============================================================================
 # Renderer
 # ============================================================================
-let r = create_renderer(1280, 720, "Sage Engine - Content Pipeline")
+let r = create_renderer(1280, 720, "Forge Engine - Content Pipeline")
 if r == nil:
     raise "Failed to create renderer"
 print "GPU: " + gpu.device_name()
@@ -355,7 +355,7 @@ while running:
 
     end_frame(r, frame)
 
-    let title = "Sage Engine | Score:" + str(score["points"])
+    let title = "Forge Engine | Score:" + str(score["points"])
     title = title + " Entities:" + str(entity_count(world))
     update_title_fps(r, title)
 

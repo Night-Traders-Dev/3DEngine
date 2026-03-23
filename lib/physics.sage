@@ -171,16 +171,49 @@ proc create_physics_system(physics_world):
     let pw = physics_world
     proc physics_update(world, entities, dt):
         from ecs import get_component, has_component
-        # Integration
+        from spatial_grid import create_spatial_grid, insert_entity, get_collision_pairs, clear_grid
+        # Integration + ground collision
         let i = 0
         while i < len(entities):
             let e = entities[i]
             let rb = get_component(world, e, "rigidbody")
             let t = get_component(world, e, "transform")
             integrate_body(rb, t, pw["gravity"], dt)
-            # Ground collision
             if pw["ground_enabled"] and has_component(world, e, "collider"):
                 let col = get_component(world, e, "collider")
                 resolve_ground(rb, t, col, pw["ground_y"])
             i = i + 1
+        # Broadphase pair collision (spatial grid)
+        if len(entities) > 1:
+            let grid = create_spatial_grid(2.0)
+            i = 0
+            while i < len(entities):
+                let e = entities[i]
+                if has_component(world, e, "collider"):
+                    let t = get_component(world, e, "transform")
+                    let col = get_component(world, e, "collider")
+                    let half = vec3(0.5, 0.5, 0.5)
+                    if col["type"] == "aabb":
+                        half = col["half"]
+                    if col["type"] == "sphere":
+                        let r = col["radius"]
+                        half = vec3(r, r, r)
+                    insert_entity(grid, e, t["position"], half)
+                i = i + 1
+            let pairs = get_collision_pairs(grid)
+            let pi = 0
+            while pi < len(pairs):
+                let a = pairs[pi][0]
+                let b = pairs[pi][1]
+                if has_component(world, a, "rigidbody") and has_component(world, b, "rigidbody"):
+                    if has_component(world, a, "collider") and has_component(world, b, "collider"):
+                        let rb_a = get_component(world, a, "rigidbody")
+                        let rb_b = get_component(world, b, "rigidbody")
+                        let t_a = get_component(world, a, "transform")
+                        let t_b = get_component(world, b, "transform")
+                        let col_a = get_component(world, a, "collider")
+                        let col_b = get_component(world, b, "collider")
+                        if col_a["type"] == "aabb" and col_b["type"] == "aabb":
+                            resolve_aabb_pair(rb_a, t_a, col_a, rb_b, t_b, col_b)
+                pi = pi + 1
     return physics_update

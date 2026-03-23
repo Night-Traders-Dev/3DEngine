@@ -1,4 +1,4 @@
-# demo_world.sage - Sage Engine Phase 7 Demo
+# demo_world.sage - Forge Engine Phase 7 Demo
 # Terrain, water, foliage, day/night cycle
 #
 # Run: ./run.sh examples/demo_world.sage
@@ -37,12 +37,12 @@ from day_night import apply_day_cycle_to_sky, apply_day_cycle_to_lighting, get_h
 from mesh import cube_mesh, sphere_mesh, upload_mesh
 from game_loop import create_time_state, update_time
 
-print "=== Sage Engine - Phase 7: Terrain & World Demo ==="
+print "=== Forge Engine - Phase 7: Terrain & World Demo ==="
 
 # ============================================================================
 # Renderer
 # ============================================================================
-let r = create_renderer(1280, 720, "Sage Engine - World Demo")
+let r = create_renderer(1280, 720, "Forge Engine - World Demo")
 if r == nil:
     raise "Failed to create renderer"
 print "GPU: " + gpu.device_name()
@@ -253,7 +253,7 @@ while running:
 
     let hour = get_hour(day_cycle)
     let h_str = str(math.floor(hour))
-    let title = "Sage Engine | " + h_str + ":00"
+    let title = "Forge Engine | " + h_str + ":00"
     if day_cycle["paused"]:
         title = title + " [PAUSED]"
     update_title_fps(r, title)

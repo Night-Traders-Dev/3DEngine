@@ -15,8 +15,8 @@ layout(location = 1) out vec4 fragColor;
 
 void main() {
     // Convert pixel coords to NDC (-1..1)
+    // Vulkan: Y=-1 is top, Y=+1 is bottom (no flip needed for top-left origin)
     vec2 ndc = (inPos / ui.screenSize) * 2.0 - 1.0;
-    ndc.y = -ndc.y; // flip Y for top-left origin
     gl_Position = vec4(ndc, 0.0, 1.0);
     fragUV = inUV;
     fragColor = inColor;

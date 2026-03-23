@@ -1,4 +1,4 @@
-# demo_ui.sage - Sage Engine Phase 6 Demo
+# demo_ui.sage - Forge Engine Phase 6 Demo
 # Full HUD: health bar, crosshair, score, info panel, minimap, pause menu
 #
 # Run: ./run.sh examples/demo_ui.sage
@@ -47,12 +47,12 @@ proc rand():
     _rs[0] = _rs[0] - math.floor(_rs[0] / 2147483648.0) * 2147483648.0
     return _rs[0] / 2147483648.0
 
-print "=== Sage Engine - Phase 6: UI Framework Demo ==="
+print "=== Forge Engine - Phase 6: UI Framework Demo ==="
 
 # ============================================================================
 # Renderer
 # ============================================================================
-let r = create_renderer(1280, 720, "Sage Engine - UI Demo")
+let r = create_renderer(1280, 720, "Forge Engine - UI Demo")
 if r == nil:
     raise "Failed to create renderer"
 print "GPU: " + gpu.device_name()
@@ -341,7 +341,7 @@ while running:
         draw_ui(ui_renderer, cmd, active, sw, sh)
 
     end_frame(r, frame)
-    update_title_fps(r, "Sage Engine | Score:" + str(score["points"]))
+    update_title_fps(r, "Forge Engine | Score:" + str(score["points"]))
 
 gpu.device_wait_idle()
 shutdown_renderer(r)

@@ -1,4 +1,4 @@
-# demo_particles.sage - Sage Engine Phase 8 Demo
+# demo_particles.sage - Forge Engine Phase 8 Demo
 # Particles, VFX presets, post-processing effects
 #
 # Run: ./run.sh examples/demo_particles.sage
@@ -43,14 +43,14 @@ from gameplay import create_score, add_points, update_score
 from game_loop import create_time_state, update_time
 from math3d import mat4_identity
 
-print "=== Sage Engine - Phase 8: Particles & VFX Demo ==="
+print "=== Forge Engine - Phase 8: Particles & VFX Demo ==="
 
 seed_particles(sys.clock() * 1000.0)
 
 # ============================================================================
 # Renderer
 # ============================================================================
-let r = create_renderer(1280, 720, "Sage Engine - Particles & VFX")
+let r = create_renderer(1280, 720, "Forge Engine - Particles & VFX")
 if r == nil:
     raise "Failed to create renderer"
 print "GPU: " + gpu.device_name()
@@ -263,7 +263,7 @@ while running:
     end_frame(r, frame)
 
     let tp = total_alive_particles(ps)
-    let title = "Sage Engine | Particles:" + str(tp)
+    let title = "Forge Engine | Particles:" + str(tp)
     title = title + " Score:" + str(score["points"])
     update_title_fps(r, title)
 

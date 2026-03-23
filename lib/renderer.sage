@@ -75,6 +75,7 @@ proc create_renderer(width, height, title):
     r["fences"] = fences
     r["frame"] = 0
     r["start_time"] = clock()
+    r["clear_color"] = [0.02, 0.02, 0.06, 1.0]
     return r
 
 # ============================================================================
@@ -98,8 +99,8 @@ proc begin_frame(r):
 
     gpu.begin_commands(cmd)
 
-    # Default clear: dark blue + depth 1.0
-    gpu.cmd_begin_render_pass(cmd, r["render_pass"], r["framebuffers"][img_idx], [[0.02, 0.02, 0.06, 1.0], [1.0, 0.0, 0.0, 0.0]])
+    # Clear color (configurable via r["clear_color"]) + depth 1.0
+    gpu.cmd_begin_render_pass(cmd, r["render_pass"], r["framebuffers"][img_idx], [r["clear_color"], [1.0, 0.0, 0.0, 0.0]])
 
     gpu.cmd_set_viewport(cmd, 0, 0, r["width"], r["height"], 0.0, 1.0)
     gpu.cmd_set_scissor(cmd, 0, 0, r["width"], r["height"])

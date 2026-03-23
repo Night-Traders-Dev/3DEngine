@@ -1,4 +1,4 @@
-# demo.sage - Sage Engine Phase 1 Demo
+# demo.sage - Forge Engine Phase 1 Demo
 # Demonstrates: ECS, input system, fixed-timestep game loop, Vulkan rendering
 #
 # Run: ./run.sh examples/demo.sage
@@ -16,12 +16,12 @@ from math3d import mat4_identity, radians, pack_mvp
 from mesh import cube_mesh, plane_mesh, sphere_mesh, upload_mesh, mesh_vertex_binding, mesh_vertex_attribs
 import math
 
-print "=== Sage Engine - Phase 1 Demo ==="
+print "=== Forge Engine - Phase 1 Demo ==="
 
 # ============================================================================
 # Create engine
 # ============================================================================
-let eng = create_engine("Sage Engine Demo", 1280, 720)
+let eng = create_engine("Forge Engine Demo", 1280, 720)
 if eng == nil:
     raise "Failed to create engine"
 

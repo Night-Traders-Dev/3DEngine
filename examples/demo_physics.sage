@@ -1,4 +1,4 @@
-# demo_physics.sage - Sage Engine Phase 3 Demo
+# demo_physics.sage - Forge Engine Phase 3 Demo
 # Physics playground with FPS player, falling cubes, raycasting, health
 #
 # Run: ./run.sh examples/demo_physics.sage
@@ -43,12 +43,12 @@ from gameplay import HealthComponent, damage, is_dead, health_percent
 from gameplay import create_score, add_points, update_score
 from game_loop import create_time_state, update_time
 
-print "=== Sage Engine - Phase 3: Physics & Gameplay Demo ==="
+print "=== Forge Engine - Phase 3: Physics & Gameplay Demo ==="
 
 # ============================================================================
 # Renderer
 # ============================================================================
-let r = create_renderer(1280, 720, "Sage Engine - Physics Demo")
+let r = create_renderer(1280, 720, "Forge Engine - Physics Demo")
 if r == nil:
     raise "Failed to create renderer"
 print "GPU: " + gpu.device_name()
@@ -345,7 +345,7 @@ while running:
     end_frame(r, frame)
 
     # Title with score
-    let title = "Sage Engine | Score: " + str(score["points"])
+    let title = "Forge Engine | Score: " + str(score["points"])
     if score["combo"] > 1:
         title = title + " (x" + str(score["combo"]) + ")"
     update_title_fps(r, title)

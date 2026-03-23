@@ -1,4 +1,4 @@
-# demo_ai.sage - Sage Engine Phase 5 Demo
+# demo_ai.sage - Forge Engine Phase 5 Demo
 # AI entities with behavior trees, pathfinding, steering, tweened animations
 #
 # Run: ./run.sh examples/demo_ai.sage
@@ -54,12 +54,12 @@ from tween import create_tween_manager, create_tween, add_tween
 from tween import update_tweens, tween_value
 from game_loop import create_time_state, update_time
 
-print "=== Sage Engine - Phase 5: Animation & AI Demo ==="
+print "=== Forge Engine - Phase 5: Animation & AI Demo ==="
 
 # ============================================================================
 # Renderer & Lighting
 # ============================================================================
-let r = create_renderer(1280, 720, "Sage Engine - AI Demo")
+let r = create_renderer(1280, 720, "Forge Engine - AI Demo")
 if r == nil:
     raise "Failed to create renderer"
 print "GPU: " + gpu.device_name()
@@ -349,7 +349,7 @@ while running:
 
     end_frame(r, frame)
 
-    let title = "Sage Engine | Score:" + str(score["points"])
+    let title = "Forge Engine | Score:" + str(score["points"])
     title = title + " AI:" + str(len(query_tag(world, "ai")))
     update_title_fps(r, title)
 
