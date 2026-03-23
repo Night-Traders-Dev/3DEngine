@@ -1,0 +1,721 @@
+{
+    "name": "DemoScene",
+    "engine": "Sage Engine",
+    "version": 1,
+    "entities": [
+        {
+            "id": 20,
+            "components": {
+                "health": {
+                    "current": 15,
+                    "max": 15
+                },
+                "name": "Ball_0",
+                "transform": {
+                    "position": [
+                        7,
+                        0.5,
+                        0
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 3,
+            "components": {
+                "health": {
+                    "current": 80,
+                    "max": 80
+                },
+                "name": "Pillar_1",
+                "transform": {
+                    "position": [
+                        7.07107,
+                        1.5,
+                        7.07107
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        0.6,
+                        3,
+                        0.6
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 10,
+            "components": {
+                "health": {
+                    "current": 25,
+                    "max": 25
+                },
+                "name": "Crate_0",
+                "transform": {
+                    "position": [
+                        5,
+                        0.5,
+                        0
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 8,
+            "components": {
+                "health": {
+                    "current": 80,
+                    "max": 80
+                },
+                "name": "Pillar_6",
+                "transform": {
+                    "position": [
+                        -5.38469e-08,
+                        1.5,
+                        -10
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        0.6,
+                        3,
+                        0.6
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 6,
+            "components": {
+                "health": {
+                    "current": 80,
+                    "max": 80
+                },
+                "name": "Pillar_4",
+                "transform": {
+                    "position": [
+                        -10,
+                        1.5,
+                        3.58979e-08
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        0.6,
+                        3,
+                        0.6
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 15,
+            "components": {
+                "health": {
+                    "current": 25,
+                    "max": 25
+                },
+                "name": "Crate_5",
+                "transform": {
+                    "position": [
+                        -5,
+                        0.5,
+                        1.7949e-08
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 5,
+            "components": {
+                "health": {
+                    "current": 80,
+                    "max": 80
+                },
+                "name": "Pillar_3",
+                "transform": {
+                    "position": [
+                        -7.07107,
+                        1.5,
+                        7.07107
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        0.6,
+                        3,
+                        0.6
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 23,
+            "components": {
+                "health": {
+                    "current": 15,
+                    "max": 15
+                },
+                "name": "Ball_3",
+                "transform": {
+                    "position": [
+                        -5.66312,
+                        0.5,
+                        -4.1145
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 2,
+            "components": {
+                "health": {
+                    "current": 80,
+                    "max": 80
+                },
+                "name": "Pillar_0",
+                "transform": {
+                    "position": [
+                        10,
+                        1.5,
+                        0
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        0.6,
+                        3,
+                        0.6
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 11,
+            "components": {
+                "health": {
+                    "current": 25,
+                    "max": 25
+                },
+                "name": "Crate_1",
+                "transform": {
+                    "position": [
+                        4.04508,
+                        0.5,
+                        2.93893
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 1,
+            "components": {
+                "name": "Ground",
+                "transform": {
+                    "position": [
+                        0,
+                        0.1,
+                        0
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            },
+            "tags": []
+        },
+        {
+            "id": 16,
+            "components": {
+                "health": {
+                    "current": 25,
+                    "max": 25
+                },
+                "name": "Crate_6",
+                "transform": {
+                    "position": [
+                        -4.04508,
+                        0.5,
+                        -2.93893
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 4,
+            "components": {
+                "health": {
+                    "current": 80,
+                    "max": 80
+                },
+                "name": "Pillar_2",
+                "transform": {
+                    "position": [
+                        1.7949e-08,
+                        1.5,
+                        10
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        0.6,
+                        3,
+                        0.6
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 22,
+            "components": {
+                "health": {
+                    "current": 15,
+                    "max": 15
+                },
+                "name": "Ball_2",
+                "transform": {
+                    "position": [
+                        -5.66312,
+                        0.5,
+                        4.1145
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 12,
+            "components": {
+                "health": {
+                    "current": 25,
+                    "max": 25
+                },
+                "name": "Crate_2",
+                "transform": {
+                    "position": [
+                        1.54508,
+                        0.5,
+                        4.75528
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 18,
+            "components": {
+                "health": {
+                    "current": 25,
+                    "max": 25
+                },
+                "name": "Crate_8",
+                "transform": {
+                    "position": [
+                        1.54508,
+                        0.5,
+                        -4.75528
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 21,
+            "components": {
+                "health": {
+                    "current": 15,
+                    "max": 15
+                },
+                "name": "Ball_1",
+                "transform": {
+                    "position": [
+                        2.16312,
+                        0.5,
+                        6.6574
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 17,
+            "components": {
+                "health": {
+                    "current": 25,
+                    "max": 25
+                },
+                "name": "Crate_7",
+                "transform": {
+                    "position": [
+                        -1.54508,
+                        0.5,
+                        -4.75528
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 24,
+            "components": {
+                "health": {
+                    "current": 15,
+                    "max": 15
+                },
+                "name": "Ball_4",
+                "transform": {
+                    "position": [
+                        2.16312,
+                        0.5,
+                        -6.6574
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 9,
+            "components": {
+                "health": {
+                    "current": 80,
+                    "max": 80
+                },
+                "name": "Pillar_7",
+                "transform": {
+                    "position": [
+                        7.07107,
+                        1.5,
+                        -7.07107
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        0.6,
+                        3,
+                        0.6
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 7,
+            "components": {
+                "health": {
+                    "current": 80,
+                    "max": 80
+                },
+                "name": "Pillar_5",
+                "transform": {
+                    "position": [
+                        -7.07107,
+                        1.5,
+                        -7.07107
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        0.6,
+                        3,
+                        0.6
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 14,
+            "components": {
+                "health": {
+                    "current": 25,
+                    "max": 25
+                },
+                "name": "Crate_4",
+                "transform": {
+                    "position": [
+                        -4.04508,
+                        0.5,
+                        2.93893
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 13,
+            "components": {
+                "health": {
+                    "current": 25,
+                    "max": 25
+                },
+                "name": "Crate_3",
+                "transform": {
+                    "position": [
+                        -1.54508,
+                        0.5,
+                        4.75528
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        },
+        {
+            "id": 19,
+            "components": {
+                "health": {
+                    "current": 25,
+                    "max": 25
+                },
+                "name": "Crate_9",
+                "transform": {
+                    "position": [
+                        4.04508,
+                        0.5,
+                        -2.93893
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            },
+            "tags": [
+                "shootable"
+            ]
+        }
+    ]
+}

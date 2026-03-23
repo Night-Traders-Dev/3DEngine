@@ -1,0 +1,6 @@
+*.spv
+*.o
+*.so
+*.a
+build/
+.tmp/
