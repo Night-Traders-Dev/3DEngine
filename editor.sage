@@ -17,7 +17,7 @@ from renderer import create_renderer, begin_frame, end_frame
 from renderer import shutdown_renderer, check_resize, update_title_fps
 from ecs import create_world, spawn, add_component, get_component
 from ecs import has_component, query, tick_systems, flush_dead
-from ecs import entity_count, destroy, add_tag, has_tag
+from ecs import entity_count, destroy, add_tag, has_tag, remove_component
 from components import TransformComponent, NameComponent
 from input import create_input, update_input, bind_action
 from input import action_held, action_just_pressed
@@ -35,6 +35,10 @@ from editor_grid import create_editor_grid, draw_editor_grid
 from ui_renderer import create_ui_renderer, draw_ui, build_ui_vertices
 from ui_core import create_widget, create_rect, create_panel, add_child, collect_quads, compute_layout
 from font import create_font_renderer, load_font, begin_text, add_text, flush_text
+from ui_window import create_ui_window, get_windows_sorted, update_windows
+from ui_window import build_window_quads, window_content_area, bring_to_front
+from ui_window import open_menu, close_menu, is_menu_open, build_menu_quads
+from ui_window import get_menu_items, get_menu_pos, menu_item_at
 import ui_widgets
 
 # Theme colors (accessed via module to work around from-import limitation)
@@ -56,7 +60,10 @@ from gizmo import set_gizmo_mode, get_gizmo_visuals
 from gizmo import GIZMO_TRANSLATE, GIZMO_ROTATE, GIZMO_SCALE
 from inspector import create_inspector, inspect_entity, clear_inspection, refresh_inspector
 from codegen import generate_game_script
-from scene_serial import save_scene
+from scene_serial import save_scene, load_scene
+from physics import RigidbodyComponent, BoxColliderComponent, SphereColliderComponent
+from gameplay import HealthComponent
+import sys
 from game_loop import create_time_state, update_time
 from frustum import extract_frustum_planes, aabb_in_frustum
 from asset_import import import_gltf, scan_importable_assets
@@ -113,6 +120,11 @@ let layout = create_editor_layout(1440.0, 900.0)
 let font_r = create_font_renderer(r["render_pass"])
 # Single font atlas for all editor text (avoids multi-atlas batching issues)
 let font_ui = load_font(font_r, "ui", "assets/DejaVuSans.ttf", 18.0)
+
+# Floating windows
+let win_outliner = create_ui_window("Outliner", 10.0, 46.0, 200.0, 400.0)
+let win_details = create_ui_window("Details", 1180.0, 46.0, 250.0, 500.0)
+let win_content = create_ui_window("Content Browser", 220.0, 680.0, 740.0, 160.0)
 
 # ============================================================================
 # ECS World (editor scene)
@@ -182,6 +194,8 @@ bind_action(inp, "save_scene", [gpu.KEY_4])
 bind_action(inp, "generate_code", [gpu.KEY_5])
 bind_action(inp, "place_model", [gpu.KEY_E])
 bind_action(inp, "pan", [gpu.KEY_SHIFT])
+bind_action(inp, "toggle_physics", [gpu.KEY_TAB])
+bind_action(inp, "play", [gpu.KEY_ENTER])
 
 # ============================================================================
 # Main loop
@@ -200,9 +214,10 @@ let _ui_rebuild_timer = 0.0
 
 print ""
 print "Controls:"
-print "  E+Mouse=Orbit  SHIFT+Mouse=Pan  Scroll=Zoom"
-print "  R=Cube  F=Sphere  D=Delete  Q=Duplicate  ESC=Deselect"
-print "  1=Translate 2=Rotate 3=Scale  4=Save  5=Generate Code"
+print "  RMB=Orbit  MMB=Pan  Scroll=Zoom  Right-Click=Context Menu"
+print "  R=Cube  F=Sphere  E=Model  D=Delete  Q=Dup  TAB=Physics"
+print "  1/2/3=Move/Rotate/Scale  4=Save  5=Code  ENTER=Play"
+print "  Drag window title bars to reposition panels"
 print "  CTRL=Quit"
 print ""
 
@@ -276,8 +291,53 @@ while running:
     let sw_f = r["width"] + 0.0
     let sh_f = r["height"] + 0.0
 
+    # --- Floating window interaction ---
+    let left_pressed = gpu.mouse_just_pressed(gpu.MOUSE_LEFT)
+    let left_held = gpu.mouse_button(gpu.MOUSE_LEFT)
+    let left_released = gpu.mouse_just_released(gpu.MOUSE_LEFT)
+    let window_consumed = update_windows(mx, my, left_pressed, left_held, left_released)
+
+    # Handle right-click context menu
+    if gpu.mouse_just_pressed(gpu.MOUSE_RIGHT) and mouse_in_viewport:
+        if is_menu_open():
+            close_menu()
+        else:
+            open_menu(mx, my, ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Light", "---", "Select All", "Delete Selected"])
+
+    # Menu click
+    if left_pressed and is_menu_open():
+        let menu_idx = menu_item_at(mx, my)
+        if menu_idx >= 0:
+            let items = get_menu_items()
+            let item = items[menu_idx]
+            if item == "Add Cube":
+                entity_counter = entity_counter + 1
+                let pos = vec3(cam["target"][0], 0.5, cam["target"][2])
+                let eid = place_entity(editor, pos, "Cube_" + str(entity_counter), cube_gpu)
+                add_component(world, eid, "mesh_id", {"mesh": cube_gpu, "name": "cube"})
+            if item == "Add Sphere":
+                entity_counter = entity_counter + 1
+                let pos = vec3(cam["target"][0], 1.0, cam["target"][2])
+                let eid = place_entity(editor, pos, "Sphere_" + str(entity_counter), sphere_gpu)
+                add_component(world, eid, "mesh_id", {"mesh": sphere_gpu, "name": "sphere"})
+            if item == "Add Physics Cube":
+                entity_counter = entity_counter + 1
+                let pos = vec3(cam["target"][0], 2.0, cam["target"][2])
+                let eid = place_entity(editor, pos, "PhysCube_" + str(entity_counter), cube_gpu)
+                add_component(world, eid, "mesh_id", {"mesh": cube_gpu, "name": "cube"})
+                add_component(world, eid, "rigidbody", RigidbodyComponent(1.0))
+                add_component(world, eid, "collider", BoxColliderComponent(0.5, 0.5, 0.5))
+                add_component(world, eid, "health", HealthComponent(50.0))
+            if item == "Delete Selected":
+                delete_selected(editor)
+                flush_dead(world)
+            close_menu()
+            window_consumed = true
+        else:
+            close_menu()
+
     # --- Left click handler (routes based on mouse position) ---
-    if gpu.mouse_just_pressed(gpu.MOUSE_LEFT):
+    if left_pressed and window_consumed == false:
         let vp_bounds = get_viewport_bounds(layout)
         let in_vp = mx > vp_bounds["x"] and mx < vp_bounds["x"] + vp_bounds["w"] and my > vp_bounds["y"] and my < vp_bounds["y"] + vp_bounds["h"]
         let in_outliner = mx < layout["left_panel_w"] and my > 60.0 and my < sh_f - layout["bottom_panel_h"] - layout["statusbar_h"]
@@ -342,6 +402,36 @@ while running:
 
     if action_just_pressed(inp, "duplicate"):
         duplicate_selected(editor)
+
+    # Toggle physics on selected entity (TAB)
+    if action_just_pressed(inp, "toggle_physics"):
+        if editor["selected"] >= 0:
+            let sel = editor["selected"]
+            if has_component(world, sel, "rigidbody"):
+                # Remove physics
+                from ecs import remove_component
+                remove_component(world, sel, "rigidbody")
+                remove_component(world, sel, "collider")
+                print "Physics removed from #" + str(sel)
+            else:
+                # Add physics (1kg dynamic body with box collider)
+                add_component(world, sel, "rigidbody", RigidbodyComponent(1.0))
+                add_component(world, sel, "collider", BoxColliderComponent(0.5, 0.5, 0.5))
+                add_component(world, sel, "health", HealthComponent(50.0))
+                print "Physics + Health added to #" + str(sel)
+
+    # Play mode (ENTER) — generate game, save scene, print run command
+    if action_just_pressed(inp, "play"):
+        save_scene(world, "EditorScene", "assets/editor_scene.json")
+        let code = generate_game_script(world, "ForgeGame", {"width": 1280, "height": 720})
+        io.writefile("assets/generated_game.sage", code)
+        print ""
+        print "=== GAME GENERATED ==="
+        print "Scene saved: assets/editor_scene.json"
+        print "Game script: assets/generated_game.sage"
+        print "Run: ./run.sh assets/generated_game.sage"
+        print ""
+        gpu.set_title("Forge Engine Editor | Game Generated! Run: ./run.sh assets/generated_game.sage")
 
     # --- Keyboard nudge for selected entity (arrow keys) ---
     if editor["selected"] >= 0 and has_component(world, editor["selected"], "transform"):
@@ -529,6 +619,20 @@ while running:
         add_text(font_r, "ui", "Y " + _fn(st["scale"][1]), rp_x + 100.0, iy, 0.3, 0.9, 0.3, 1.0)
         add_text(font_r, "ui", "Z " + _fn(st["scale"][2]), rp_x + 186.0, iy, 0.3, 0.3, 0.9, 1.0)
         iy = iy + 28.0
+        # Physics info
+        if has_component(world, cur_sel, "rigidbody"):
+            let rb = get_component(world, cur_sel, "rigidbody")
+            add_text(font_r, "ui", "Physics", rp_x + 10.0, iy, 0.537, 0.863, 0.922, 1.0)
+            iy = iy + 22.0
+            if rb["is_kinematic"]:
+                add_text(font_r, "ui", "Static Body", rp_x + 14.0, iy, 0.5, 0.5, 0.5, 1.0)
+            else:
+                add_text(font_r, "ui", "Mass: " + _fn(rb["mass"]) + "  Bounce: " + _fn(rb["restitution"]), rp_x + 14.0, iy, 0.5, 0.5, 0.5, 1.0)
+            iy = iy + 18.0
+        if has_component(world, cur_sel, "health"):
+            let hp = get_component(world, cur_sel, "health")
+            add_text(font_r, "ui", "Health: " + _fn(hp["current"]) + " / " + _fn(hp["max"]), rp_x + 14.0, iy, 0.3, 0.9, 0.3, 1.0)
+            iy = iy + 22.0
         # Material info (if imported asset)
         if has_component(world, cur_sel, "imported_asset"):
             let ia = get_component(world, cur_sel, "imported_asset")
@@ -546,8 +650,8 @@ while running:
 
     let bp_y = sh - bp_h - sb_h
     add_text(font_r, "ui", "Content Browser", lw + 8.0, bp_y + 4.0, 0.75, 0.75, 0.8, 1.0)
-    add_text(font_r, "ui", "R=Cube  F=Sphere  E=Model  D=Del  Q=Dup  4=Save  5=Generate", lw + 10.0, bp_y + 28.0, 0.38, 0.38, 0.42, 1.0)
-    add_text(font_r, "ui", "LClick=Select  RMB=Orbit  MMB=Pan  Scroll=Zoom  Arrows=Nudge", lw + 10.0, bp_y + 48.0, 0.38, 0.38, 0.42, 1.0)
+    add_text(font_r, "ui", "R=Cube  F=Sphere  E=Model  D=Del  Q=Dup  TAB=Physics  ENTER=Play", lw + 10.0, bp_y + 28.0, 0.38, 0.38, 0.42, 1.0)
+    add_text(font_r, "ui", "LClick=Select  RMB=Orbit  MMB=Pan  Scroll=Zoom  4=Save  5=Code", lw + 10.0, bp_y + 48.0, 0.38, 0.38, 0.42, 1.0)
     # Show imported models
     let model_names = dict_keys(imported_models)
     if len(model_names) > 0:
@@ -567,6 +671,47 @@ while running:
     status = status + "  |  FPS: " + str(math.floor(ts["fps"]))
     add_text(font_r, "ui", status, 8.0, sh - sb_h + 5.0, 0.4, 0.4, 0.4, 1.0)
 
+    flush_text(font_r, cmd, sw, sh)
+
+    # --- Floating windows (rendered on top of everything) ---
+    let all_win_quads = []
+    let sorted_wins = get_windows_sorted()
+    let wi = 0
+    while wi < len(sorted_wins):
+        let wq = build_window_quads(sorted_wins[wi])
+        array_extend(all_win_quads, wq)
+        wi = wi + 1
+    # Add menu quads if open
+    if is_menu_open():
+        let mq = build_menu_quads()
+        array_extend(all_win_quads, mq)
+    if len(all_win_quads) > 0:
+        let wv = build_quad_verts(all_win_quads)
+        gpu.buffer_upload(ui_r["vbuf"], wv)
+        gpu.cmd_bind_graphics_pipeline(cmd, ui_r["pipeline"])
+        gpu.cmd_push_constants(cmd, ui_r["pipe_layout"], gpu.STAGE_VERTEX, [sw, sh, 0.0, 0.0])
+        gpu.cmd_bind_vertex_buffer(cmd, ui_r["vbuf"])
+        gpu.cmd_draw(cmd, len(all_win_quads) * 6, 1, 0, 0)
+
+    # Floating window title text
+    begin_text(font_r)
+    wi = 0
+    while wi < len(sorted_wins):
+        let fw = sorted_wins[wi]
+        if fw["visible"]:
+            add_text(font_r, "ui", fw["title"], fw["x"] + 8.0, fw["y"] + 4.0, 0.8, 0.84, 0.96, 1.0)
+            # Window content text (generated above — outliner/details/content are still in the fixed layout text)
+        wi = wi + 1
+    # Menu item text
+    if is_menu_open():
+        let mitems = get_menu_items()
+        let mpos = get_menu_pos()
+        let mii = 0
+        while mii < len(mitems):
+            let item_text = mitems[mii]
+            if item_text != "---":
+                add_text(font_r, "ui", item_text, mpos[0] + 12.0, mpos[1] + 6.0 + mii * 24.0, 0.8, 0.84, 0.96, 1.0)
+            mii = mii + 1
     flush_text(font_r, cmd, sw, sh)
 
     end_frame(r, frame)

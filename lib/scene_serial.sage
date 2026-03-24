@@ -86,14 +86,43 @@ proc serialize_health(comp):
 # ============================================================================
 # Component serializer registry
 # ============================================================================
+proc serialize_mesh_id(comp):
+    let obj = cJSON_CreateObject()
+    if dict_has(comp, "name"):
+        cJSON_AddStringToObject(obj, "mesh_type", comp["name"])
+    else:
+        cJSON_AddStringToObject(obj, "mesh_type", "cube")
+    return obj
+
+proc serialize_rigidbody(comp):
+    let obj = cJSON_CreateObject()
+    cJSON_AddNumberToObject(obj, "mass", comp["mass"])
+    cJSON_AddItemToObject(obj, "use_gravity", cJSON_CreateBool(comp["use_gravity"]))
+    cJSON_AddItemToObject(obj, "is_kinematic", cJSON_CreateBool(comp["is_kinematic"]))
+    cJSON_AddNumberToObject(obj, "restitution", comp["restitution"])
+    return obj
+
+proc serialize_collider(comp):
+    let obj = cJSON_CreateObject()
+    cJSON_AddStringToObject(obj, "type", comp["type"])
+    if comp["type"] == "aabb":
+        from scene_serial import vec3_to_json
+        cJSON_AddItemToObject(obj, "half", vec3_to_json(comp["half"]))
+    if comp["type"] == "sphere":
+        cJSON_AddNumberToObject(obj, "radius", comp["radius"])
+    return obj
+
 let _serializers = {}
 _serializers["transform"] = serialize_transform
 _serializers["name"] = serialize_name
 _serializers["velocity"] = serialize_velocity
 _serializers["camera"] = serialize_camera
 _serializers["light"] = serialize_light
+_serializers["mesh_id"] = serialize_mesh_id
 _serializers["mesh_renderer"] = serialize_mesh_renderer
 _serializers["health"] = serialize_health
+_serializers["rigidbody"] = serialize_rigidbody
+_serializers["collider"] = serialize_collider
 
 proc register_serializer(comp_type, serialize_fn):
     _serializers[comp_type] = serialize_fn
@@ -228,12 +257,48 @@ proc deserialize_health(node):
 # ============================================================================
 # Deserializer registry
 # ============================================================================
+proc deserialize_mesh_id(node):
+    let mesh_type = "cube"
+    let mt = cJSON_GetObjectItem(node, "mesh_type")
+    if mt != nil:
+        mesh_type = cJSON_GetStringValue(mt)
+    return {"mesh": nil, "name": mesh_type}
+
+proc deserialize_rigidbody(node):
+    from physics import RigidbodyComponent, StaticBodyComponent
+    let mass = cJSON_GetNumberValue(cJSON_GetObjectItem(node, "mass"))
+    if mass <= 0.0:
+        return StaticBodyComponent()
+    let rb = RigidbodyComponent(mass)
+    let grav = cJSON_GetObjectItem(node, "use_gravity")
+    if grav != nil:
+        rb["use_gravity"] = cJSON_IsTrue(grav)
+    let kin = cJSON_GetObjectItem(node, "is_kinematic")
+    if kin != nil:
+        rb["is_kinematic"] = cJSON_IsTrue(kin)
+    let rest = cJSON_GetObjectItem(node, "restitution")
+    if rest != nil:
+        rb["restitution"] = cJSON_GetNumberValue(rest)
+    return rb
+
+proc deserialize_collider(node):
+    from physics import BoxColliderComponent, SphereColliderComponent
+    let ctype = cJSON_GetStringValue(cJSON_GetObjectItem(node, "type"))
+    if ctype == "sphere":
+        let rad = cJSON_GetNumberValue(cJSON_GetObjectItem(node, "radius"))
+        return SphereColliderComponent(rad)
+    let half = json_to_vec3(cJSON_GetObjectItem(node, "half"))
+    return BoxColliderComponent(half[0], half[1], half[2])
+
 let _deserializers = {}
 _deserializers["transform"] = deserialize_transform
 _deserializers["name"] = deserialize_name
 _deserializers["velocity"] = deserialize_velocity
 _deserializers["camera"] = deserialize_camera
 _deserializers["health"] = deserialize_health
+_deserializers["mesh_id"] = deserialize_mesh_id
+_deserializers["rigidbody"] = deserialize_rigidbody
+_deserializers["collider"] = deserialize_collider
 
 proc register_deserializer(comp_type, deserialize_fn):
     _deserializers[comp_type] = deserialize_fn

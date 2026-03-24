@@ -41,8 +41,8 @@ check("contains renderer setup", contains(code, "create_renderer"))
 check("contains game loop", contains(code, "while running"))
 check("contains draw", contains(code, "draw_mesh_lit"))
 check("contains resolution", contains(code, "800"))
-check("contains scale override", contains(code, "scale"))
-check("ends with Done", contains(code, "Done"))
+check("contains game end", contains(code, "shutdown_renderer"))
+check("contains sky", contains(code, "draw_sky"))
 
 # Save and verify
 import io
