@@ -135,7 +135,7 @@ let consumed = dispatch_click(ui_root, 30.0, 30.0)
 check("dispatch_click consumed", consumed == true)
 check("dispatch_click fired callback", clicked[0] == true)
 clicked[0] = false
-let consumed2 = process_ui_input(ui_root, 400.0, 400.0, true)
+let consumed2 = process_ui_input(ui_root, 400.0, 400.0, true, false)
 check("process click outside not consumed", consumed2 == false)
 check("outside click did not fire callback", clicked[0] == false)
 

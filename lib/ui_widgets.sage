@@ -2,29 +2,32 @@ gc_disable()
 # -----------------------------------------
 # ui_widgets.sage - Advanced UI widgets for Sage Engine Editor
 # Scroll panels, tree views, sliders, checkboxes, dropdowns, text fields
+# All widgets use the centralized theme from ui_core
 # -----------------------------------------
 
+import gpu
 import ui_core
 from ui_core import create_widget, create_panel, create_rect, create_label
-from ui_core import add_child
+from ui_core import add_child, clamp
+from ui_core import rgba, color_brighten, color_with_alpha, color_lerp
+from ui_core import _push_border_quads, _push_inset_quads, _push_shadow_quads
 
 # ============================================================================
-# Color theme — Forge Engine (UE5-inspired neutral dark grey + blue accent)
+# Re-export theme from ui_core for backward compat
 # ============================================================================
-# BG: #191919  Panel: #242424  Header: #2D2D2D  Accent: #4A90D9
-let THEME_BG = ui_core.rgba(0.118, 0.118, 0.118, 1.0)
-let THEME_PANEL = ui_core.rgba(0.165, 0.165, 0.165, 1.0)
-let THEME_HEADER = ui_core.rgba(0.208, 0.208, 0.208, 1.0)
-let THEME_BUTTON = ui_core.rgba(0.247, 0.247, 0.247, 1.0)
-let THEME_BUTTON_HOVER = ui_core.rgba(0.290, 0.290, 0.290, 1.0)
-let THEME_ACCENT = ui_core.rgba(0.290, 0.565, 0.851, 1.0)
-let THEME_ACCENT_HOVER = ui_core.rgba(0.357, 0.627, 0.914, 1.0)
-let THEME_TEXT = ui_core.rgba(0.784, 0.784, 0.784, 1.0)
-let THEME_TEXT_DIM = ui_core.rgba(0.439, 0.439, 0.439, 1.0)
-let THEME_BORDER = ui_core.rgba(0.082, 0.082, 0.082, 1.0)
-let THEME_INPUT_BG = ui_core.rgba(0.110, 0.110, 0.110, 1.0)
-let THEME_SELECT = ui_core.rgba(0.290, 0.565, 0.851, 0.25)
-let THEME_SEPARATOR = ui_core.rgba(0.212, 0.212, 0.212, 1.0)
+let THEME_BG = ui_core.THEME_BG
+let THEME_PANEL = ui_core.THEME_PANEL
+let THEME_HEADER = ui_core.THEME_HEADER
+let THEME_BUTTON = ui_core.THEME_BUTTON
+let THEME_BUTTON_HOVER = ui_core.THEME_BUTTON_HOVER
+let THEME_ACCENT = ui_core.THEME_ACCENT
+let THEME_ACCENT_HOVER = ui_core.THEME_ACCENT_HOVER
+let THEME_TEXT = ui_core.THEME_TEXT
+let THEME_TEXT_DIM = ui_core.THEME_TEXT_SECONDARY
+let THEME_BORDER = ui_core.THEME_BORDER
+let THEME_INPUT_BG = ui_core.THEME_INPUT_BG
+let THEME_SELECT = ui_core.THEME_SELECT
+let THEME_SEPARATOR = ui_core.THEME_SEPARATOR
 
 # ============================================================================
 # Global focus state for text input
@@ -125,12 +128,10 @@ proc update_text_input(dt):
     if tf == nil:
         return
     tf["blink_timer"] = tf["blink_timer"] + dt
-    # Read all pending char input
     while gpu.text_input_available():
         let ch = gpu.text_input_read()
         if len(ch) > 0:
             text_field_insert_char(tf, ch)
-    # Keyboard controls
     if gpu.key_just_pressed(gpu.KEY_BACKSPACE):
         text_field_backspace(tf)
     if gpu.key_just_pressed(gpu.KEY_DELETE):
@@ -163,13 +164,15 @@ proc create_toolbar_button(x, y, width, label, tooltip, on_click):
     btn["y"] = y
     btn["width"] = width
     btn["height"] = 28.0
-    btn["bg_color"] = THEME_BUTTON
-    btn["hover_color"] = THEME_BUTTON_HOVER
-    btn["active_color"] = THEME_ACCENT
+    btn["bg_color"] = ui_core.THEME_BUTTON
+    btn["hover_color"] = ui_core.THEME_BUTTON_HOVER
+    btn["active_color"] = ui_core.THEME_ACCENT
     btn["text"] = label
     btn["tooltip"] = tooltip
     btn["on_click"] = on_click
     btn["is_active"] = false
+    btn["border_color"] = ui_core.THEME_BORDER
+    btn["border_width"] = ui_core.BORDER_THIN
     return btn
 
 # ============================================================================
@@ -181,7 +184,9 @@ proc create_scroll_panel(x, y, w, h, content_height):
     sp["y"] = y
     sp["width"] = w
     sp["height"] = h
-    sp["bg_color"] = THEME_PANEL
+    sp["bg_color"] = ui_core.THEME_PANEL
+    sp["border_color"] = ui_core.THEME_BORDER
+    sp["border_width"] = ui_core.BORDER_THIN
     sp["content_height"] = content_height
     sp["scroll_y"] = 0.0
     sp["max_scroll"] = 0.0
@@ -231,7 +236,6 @@ proc flatten_tree(node, result, filter_text):
         return nil
     if filter_text != "" and filter_text != nil:
         if contains(node["label"], filter_text) == false:
-            # Still check children
             let i = 0
             while i < len(node["children"]):
                 flatten_tree(node["children"][i], result, filter_text)
@@ -253,7 +257,9 @@ proc create_slider(x, y, width, min_val, max_val, value):
     sl["y"] = y
     sl["width"] = width
     sl["height"] = 18.0
-    sl["bg_color"] = THEME_INPUT_BG
+    sl["bg_color"] = ui_core.THEME_INPUT_BG
+    sl["border_color"] = ui_core.THEME_BORDER
+    sl["border_width"] = ui_core.BORDER_THIN
     sl["min_val"] = min_val
     sl["max_val"] = max_val
     sl["value"] = value
@@ -283,8 +289,10 @@ proc create_checkbox(x, y, label, checked):
     cb["y"] = y
     cb["width"] = 16.0
     cb["height"] = 16.0
-    cb["bg_color"] = THEME_INPUT_BG
-    cb["check_color"] = THEME_ACCENT
+    cb["bg_color"] = ui_core.THEME_INPUT_BG
+    cb["check_color"] = ui_core.THEME_ACCENT
+    cb["border_color"] = ui_core.THEME_BORDER_LIGHT
+    cb["border_width"] = ui_core.BORDER_THIN
     cb["checked"] = checked
     cb["label_text"] = label
     cb["on_change"] = nil
@@ -303,8 +311,10 @@ proc create_dropdown(x, y, width, options, selected_index):
     dd["x"] = x
     dd["y"] = y
     dd["width"] = width
-    dd["height"] = 22.0
-    dd["bg_color"] = THEME_INPUT_BG
+    dd["height"] = 24.0
+    dd["bg_color"] = ui_core.THEME_INPUT_BG
+    dd["border_color"] = ui_core.THEME_BORDER_LIGHT
+    dd["border_width"] = ui_core.BORDER_THIN
     dd["options"] = options
     dd["selected"] = selected_index
     dd["open"] = false
@@ -323,15 +333,17 @@ proc set_dropdown_index(dd, idx):
         dd["on_change"](idx)
 
 # ============================================================================
-# Text input field (display only for now, value set programmatically)
+# Text input field
 # ============================================================================
 proc create_text_field(x, y, width, value):
     let tf = create_widget("text_field")
     tf["x"] = x
     tf["y"] = y
     tf["width"] = width
-    tf["height"] = 20.0
-    tf["bg_color"] = THEME_INPUT_BG
+    tf["height"] = 22.0
+    tf["bg_color"] = ui_core.THEME_INPUT_BG
+    tf["border_color"] = ui_core.THEME_BORDER_LIGHT
+    tf["border_width"] = ui_core.BORDER_THIN
     tf["text_value"] = value
     tf["focused"] = false
     tf["cursor_pos"] = len(value)
@@ -353,8 +365,10 @@ proc create_number_field(x, y, width, value, step):
     nf["x"] = x
     nf["y"] = y
     nf["width"] = width
-    nf["height"] = 20.0
-    nf["bg_color"] = THEME_INPUT_BG
+    nf["height"] = 22.0
+    nf["bg_color"] = ui_core.THEME_INPUT_BG
+    nf["border_color"] = ui_core.THEME_BORDER_LIGHT
+    nf["border_width"] = ui_core.BORDER_THIN
     nf["value"] = value
     nf["step"] = step
     nf["min_val"] = -99999.0
@@ -376,7 +390,7 @@ proc adjust_number_field(nf, delta):
 # Separator line
 # ============================================================================
 proc create_separator(x, y, width):
-    return create_rect(x, y, width, 1.0, THEME_SEPARATOR)
+    return create_rect(x, y, width, 1.0, ui_core.THEME_SEPARATOR)
 
 # ============================================================================
 # Section header (collapsible)
@@ -386,11 +400,186 @@ proc create_section_header(x, y, width, title):
     sh["x"] = x
     sh["y"] = y
     sh["width"] = width
-    sh["height"] = 22.0
-    sh["bg_color"] = THEME_HEADER
+    sh["height"] = 24.0
+    sh["bg_color"] = ui_core.THEME_HEADER
+    sh["border_color"] = ui_core.THEME_BORDER
+    sh["border_width"] = ui_core.BORDER_THIN
     sh["text"] = title
     sh["expanded"] = true
     return sh
 
 proc toggle_section(sh):
     sh["expanded"] = sh["expanded"] == false
+
+# ============================================================================
+# Collect quads for advanced widgets (called from ui_renderer or manually)
+# These produce extra quads beyond what ui_core.collect_quads handles
+# ============================================================================
+
+proc collect_slider_quads(sl, quads):
+    let x = sl["computed_x"]
+    let y = sl["computed_y"]
+    let w = sl["width"]
+    let h = sl["height"]
+    # Track background
+    let track_h = 4.0
+    let track_y = y + (h - track_h) / 2.0
+    push(quads, {"x": x, "y": track_y, "w": w, "h": track_h, "color": ui_core.THEME_INPUT_BG})
+    _push_inset_quads(quads, x, track_y, w, track_h)
+    # Filled portion
+    let t = slider_normalized(sl)
+    let fill_w = w * t
+    if fill_w > 0.0:
+        push(quads, {"x": x, "y": track_y, "w": fill_w, "h": track_h, "color": ui_core.THEME_ACCENT})
+    # Thumb handle
+    let thumb_w = 12.0
+    let thumb_h = h
+    let thumb_x = x + fill_w - thumb_w / 2.0
+    if thumb_x < x:
+        thumb_x = x
+    if thumb_x + thumb_w > x + w:
+        thumb_x = x + w - thumb_w
+    push(quads, {"x": thumb_x, "y": y, "w": thumb_w, "h": thumb_h, "color": ui_core.THEME_ELEVATED})
+    _push_border_quads(quads, thumb_x, y, thumb_w, thumb_h, 1.0, ui_core.THEME_BORDER_LIGHT)
+    # Thumb highlight on hover
+    if sl["hovered"]:
+        push(quads, {"x": thumb_x, "y": y, "w": thumb_w, "h": 1.0, "color": [1.0, 1.0, 1.0, 0.08]})
+
+proc collect_checkbox_quads(cb, quads):
+    let x = cb["computed_x"]
+    let y = cb["computed_y"]
+    let s = 16.0
+    # Box background
+    let bg = ui_core.THEME_INPUT_BG
+    if cb["hovered"]:
+        bg = ui_core.THEME_INPUT_HOVER
+    push(quads, {"x": x, "y": y, "w": s, "h": s, "color": bg})
+    _push_border_quads(quads, x, y, s, s, 1.0, ui_core.THEME_BORDER_LIGHT)
+    # Check mark (filled inner square with accent color)
+    if cb["checked"]:
+        let pad = 3.0
+        push(quads, {"x": x + pad, "y": y + pad, "w": s - pad * 2.0, "h": s - pad * 2.0, "color": ui_core.THEME_ACCENT})
+        # Inner highlight
+        push(quads, {"x": x + pad, "y": y + pad, "w": s - pad * 2.0, "h": 1.0, "color": [1.0, 1.0, 1.0, 0.15]})
+    # Focus ring on hover
+    if cb["hovered"]:
+        let fc = ui_core.THEME_BORDER_FOCUS
+        _push_border_quads(quads, x - 1.0, y - 1.0, s + 2.0, s + 2.0, 1.0, [fc[0], fc[1], fc[2], fc[3] * 0.4])
+
+proc collect_dropdown_quads(dd, quads):
+    let x = dd["computed_x"]
+    let y = dd["computed_y"]
+    let w = dd["width"]
+    let h = dd["height"]
+    # Background
+    let bg = ui_core.THEME_INPUT_BG
+    if dd["hovered"] or dd["open"]:
+        bg = ui_core.THEME_INPUT_HOVER
+    push(quads, {"x": x, "y": y, "w": w, "h": h, "color": bg})
+    _push_border_quads(quads, x, y, w, h, 1.0, ui_core.THEME_BORDER_LIGHT)
+    # Arrow indicator (small chevron on right side)
+    let aw = 8.0
+    let ah = 4.0
+    let ax = x + w - aw - ui_core.SP_MD
+    let ay = y + (h - ah) / 2.0
+    push(quads, {"x": ax, "y": ay, "w": aw, "h": ah, "color": ui_core.THEME_TEXT_SECONDARY})
+    # Focus ring
+    if dd["hovered"]:
+        let fc = ui_core.THEME_BORDER_FOCUS
+        _push_border_quads(quads, x - 1.0, y - 1.0, w + 2.0, h + 2.0, 1.0, [fc[0], fc[1], fc[2], fc[3] * 0.4])
+    # Open dropdown items
+    if dd["open"]:
+        let item_h = 26.0
+        let opts = dd["options"]
+        let dh = len(opts) * item_h + ui_core.SP_SM * 2.0
+        let dy = y + h + 2.0
+        # Shadow under dropdown
+        _push_shadow_quads(quads, x, dy, w, dh)
+        # Dropdown panel bg
+        push(quads, {"x": x, "y": dy, "w": w, "h": dh, "color": ui_core.THEME_ELEVATED})
+        _push_border_quads(quads, x, dy, w, dh, 1.0, ui_core.THEME_BORDER)
+        # Accent top edge
+        push(quads, {"x": x, "y": dy, "w": w, "h": 2.0, "color": color_with_alpha(ui_core.THEME_ACCENT, 0.5)})
+        # Items
+        let oi = 0
+        while oi < len(opts):
+            let iy = dy + ui_core.SP_SM + oi * item_h
+            if oi == dd["selected"]:
+                push(quads, {"x": x + 2.0, "y": iy, "w": w - 4.0, "h": item_h, "color": ui_core.THEME_SELECT})
+            oi = oi + 1
+
+proc collect_text_field_quads(tf, quads):
+    let x = tf["computed_x"]
+    let y = tf["computed_y"]
+    let w = tf["width"]
+    let h = tf["height"]
+    # Background
+    let bg = ui_core.THEME_INPUT_BG
+    if tf["focused"]:
+        bg = ui_core.THEME_INPUT_FOCUS
+    else:
+        if tf["hovered"]:
+            bg = ui_core.THEME_INPUT_HOVER
+    push(quads, {"x": x, "y": y, "w": w, "h": h, "color": bg})
+    _push_inset_quads(quads, x, y, w, h)
+    # Border (accent when focused)
+    if tf["focused"]:
+        _push_border_quads(quads, x, y, w, h, 1.0, ui_core.THEME_BORDER_FOCUS)
+        # Cursor
+        let blink = tf["blink_timer"]
+        # Blink: visible for 0.5s, hidden for 0.3s
+        let blink_phase = blink - math.floor(blink / 0.8) * 0.8
+        if blink_phase < 0.5:
+            let char_w = 7.0
+            let cursor_x = x + ui_core.SP_SM + tf["cursor_pos"] * char_w
+            if cursor_x > x + w - 2.0:
+                cursor_x = x + w - 2.0
+            push(quads, {"x": cursor_x, "y": y + 3.0, "w": 1.5, "h": h - 6.0, "color": ui_core.THEME_TEXT})
+    else:
+        _push_border_quads(quads, x, y, w, h, 1.0, ui_core.THEME_BORDER_LIGHT)
+    # Focus glow
+    if tf["focused"]:
+        let fc = ui_core.THEME_ACCENT
+        _push_border_quads(quads, x - 1.0, y - 1.0, w + 2.0, h + 2.0, 1.0, [fc[0], fc[1], fc[2], 0.25])
+
+proc collect_section_header_quads(sh, quads):
+    let x = sh["computed_x"]
+    let y = sh["computed_y"]
+    let w = sh["width"]
+    let h = sh["height"]
+    push(quads, {"x": x, "y": y, "w": w, "h": h, "color": ui_core.THEME_HEADER})
+    # Accent left edge
+    push(quads, {"x": x, "y": y, "w": 3.0, "h": h, "color": color_with_alpha(ui_core.THEME_ACCENT, 0.6)})
+    # Bottom border
+    push(quads, {"x": x, "y": y + h - 1.0, "w": w, "h": 1.0, "color": ui_core.THEME_BORDER})
+    # Expand/collapse indicator
+    let ind_size = 6.0
+    let ind_x = x + ui_core.SP_MD
+    let ind_y = y + (h - ind_size) / 2.0
+    if sh["expanded"]:
+        # Down arrow (triangle approx with small rect)
+        push(quads, {"x": ind_x, "y": ind_y, "w": ind_size, "h": ind_size, "color": ui_core.THEME_TEXT_SECONDARY})
+    else:
+        # Right arrow
+        push(quads, {"x": ind_x, "y": ind_y, "w": ind_size * 0.6, "h": ind_size, "color": ui_core.THEME_TEXT_SECONDARY})
+
+proc collect_scrollbar_quads(sp, quads):
+    if sp["max_scroll"] < 1.0:
+        return nil
+    let x = sp["computed_x"] + sp["width"] - 6.0
+    let y = sp["computed_y"]
+    let h = sp["height"]
+    let sb_w = 4.0
+    # Track
+    push(quads, {"x": x, "y": y, "w": sb_w, "h": h, "color": color_with_alpha(ui_core.THEME_BG, 0.5)})
+    # Thumb
+    let visible_ratio = sp["height"] / sp["content_height"]
+    let thumb_h = h * visible_ratio
+    if thumb_h < 20.0:
+        thumb_h = 20.0
+    let scroll_ratio = sp["scroll_y"] / sp["max_scroll"]
+    let thumb_y = y + scroll_ratio * (h - thumb_h)
+    push(quads, {"x": x, "y": thumb_y, "w": sb_w, "h": thumb_h, "color": ui_core.THEME_ELEVATED})
+    _push_border_quads(quads, x, thumb_y, sb_w, thumb_h, 0.5, ui_core.THEME_BORDER_LIGHT)
+
+import math
