@@ -23,11 +23,6 @@ from input import action_just_pressed, default_fps_bindings
 from game_loop import create_time_state, update_time
 from hud import create_game_hud, update_game_hud
 from ui_renderer import create_ui_renderer, draw_ui
-from physics import RigidbodyComponent, StaticBodyComponent
-from physics import BoxColliderComponent, SphereColliderComponent
-from physics import create_physics_world, create_physics_system
-from gameplay import HealthComponent, damage, is_dead, health_percent
-from gameplay import create_score, add_points, update_score
 
 let r = create_renderer(1280, 720, "ForgeGame")
 if r == nil:
@@ -49,22 +44,25 @@ let sphere_gpu = upload_mesh(sphere_mesh(16, 16))
 let ground_gpu = upload_mesh(plane_mesh(40.0))
 
 let world = create_world()
-let pw = create_physics_world()
-register_system(world, "physics", ["rigidbody", "transform"], create_physics_system(pw))
 
 let ge = spawn(world)
 add_component(world, ge, "transform", TransformComponent(0.0, 0.0, 0.0))
 add_component(world, ge, "mesh_id", {"mesh": ground_gpu})
-add_component(world, ge, "rigidbody", StaticBodyComponent())
-add_component(world, ge, "collider", BoxColliderComponent(20.0, 0.1, 20.0))
 
 let e0 = spawn(world)
-add_component(world, e0, "transform", TransformComponent(0, 2, 0))
-add_component(world, e0, "name", NameComponent("PhysCube_6"))
+add_component(world, e0, "transform", TransformComponent(3, 0.5, 0))
+add_component(world, e0, "name", NameComponent("Cube_2"))
 add_component(world, e0, "mesh_id", {"mesh": cube_gpu})
-add_component(world, e0, "rigidbody", RigidbodyComponent(1))
-add_component(world, e0, "collider", BoxColliderComponent(0.5, 0.5, 0.5))
-add_component(world, e0, "health", HealthComponent(50))
+
+let e1 = spawn(world)
+add_component(world, e1, "transform", TransformComponent(-2, 1, 2))
+add_component(world, e1, "name", NameComponent("Sphere_1"))
+add_component(world, e1, "mesh_id", {"mesh": sphere_gpu})
+
+let e3 = spawn(world)
+add_component(world, e3, "transform", TransformComponent(0, 0.5, 0))
+add_component(world, e3, "name", NameComponent("Cube_1"))
+add_component(world, e3, "mesh_id", {"mesh": cube_gpu})
 
 let player = create_player_controller()
 player["position"] = vec3(0.0, 2.0, 15.0)
@@ -74,7 +72,6 @@ default_fps_bindings(inp)
 bind_action(inp, "quit", [gpu.KEY_Q])
 bind_action(inp, "toggle_capture", [gpu.KEY_ESCAPE])
 bind_action(inp, "sprint", [gpu.KEY_SHIFT])
-let score = create_score()
 let ts = create_time_state()
 let running = true
 
@@ -92,9 +89,6 @@ while running:
         running = false
         continue
     update_player(player, inp, dt)
-    tick_systems(world, dt)
-    flush_dead(world)
-    update_score(score, dt)
     set_view_position(ls, player_eye_position(player))
     update_light_ubo(ls)
     let frame = begin_frame(r)

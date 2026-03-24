@@ -4,23 +4,13 @@
     "version": 1,
     "entities": [
         {
-            "id": 6,
+            "id": 3,
             "components": {
-                "health": {
-                    "current": 50,
-                    "max": 50
-                },
-                "name": "PhysCube_6",
-                "rigidbody": {
-                    "mass": 1,
-                    "use_gravity": true,
-                    "is_kinematic": false,
-                    "restitution": 0.3
-                },
+                "name": "Cube_2",
                 "transform": {
                     "position": [
-                        0,
-                        2,
+                        3,
+                        0.5,
                         0
                     ],
                     "rotation": [
@@ -36,14 +26,90 @@
                 },
                 "mesh_id": {
                     "mesh_type": "cube"
-                },
-                "collider": {
-                    "type": "aabb",
-                    "half": [
-                        0.5,
-                        0.5,
-                        0.5
+                }
+            },
+            "tags": [
+                "editable"
+            ]
+        },
+        {
+            "id": 4,
+            "components": {
+                "name": "Sphere_1",
+                "transform": {
+                    "position": [
+                        -2,
+                        1,
+                        2
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
                     ]
+                },
+                "mesh_id": {
+                    "mesh_type": "sphere"
+                }
+            },
+            "tags": [
+                "editable"
+            ]
+        },
+        {
+            "id": 1,
+            "components": {
+                "name": "Ground",
+                "transform": {
+                    "position": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            },
+            "tags": [
+                "editable"
+            ]
+        },
+        {
+            "id": 2,
+            "components": {
+                "name": "Cube_1",
+                "transform": {
+                    "position": [
+                        0,
+                        0.5,
+                        0
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                },
+                "mesh_id": {
+                    "mesh_type": "cube"
                 }
             },
             "tags": [
