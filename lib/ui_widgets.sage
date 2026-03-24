@@ -27,6 +27,134 @@ let THEME_SELECT = ui_core.rgba(0.290, 0.565, 0.851, 0.25)
 let THEME_SEPARATOR = ui_core.rgba(0.212, 0.212, 0.212, 1.0)
 
 # ============================================================================
+# Global focus state for text input
+# ============================================================================
+let _focused_widget = [nil]
+let _focus_original_value = [""]
+
+proc focus_text_field(tf):
+    _focused_widget[0] = tf
+    _focus_original_value[0] = tf["text_value"]
+    tf["focused"] = true
+    tf["cursor_pos"] = len(tf["text_value"])
+    tf["blink_timer"] = 0.0
+
+proc unfocus_text_field():
+    if _focused_widget[0] != nil:
+        _focused_widget[0]["focused"] = false
+    _focused_widget[0] = nil
+
+proc get_focused_widget():
+    return _focused_widget[0]
+
+proc is_any_field_focused():
+    return _focused_widget[0] != nil
+
+proc text_field_insert_char(tf, ch):
+    let v = tf["text_value"]
+    let cp = tf["cursor_pos"]
+    if cp >= len(v):
+        tf["text_value"] = v + ch
+    else:
+        let before = ""
+        let bi = 0
+        while bi < cp:
+            before = before + char_at(v, bi)
+            bi = bi + 1
+        let after = ""
+        let ai = cp
+        while ai < len(v):
+            after = after + char_at(v, ai)
+            ai = ai + 1
+        tf["text_value"] = before + ch + after
+    tf["cursor_pos"] = cp + len(ch)
+
+proc text_field_backspace(tf):
+    if tf["cursor_pos"] > 0:
+        let v = tf["text_value"]
+        let cp = tf["cursor_pos"]
+        let before = ""
+        let bi = 0
+        while bi < cp - 1:
+            before = before + char_at(v, bi)
+            bi = bi + 1
+        let after = ""
+        let ai = cp
+        while ai < len(v):
+            after = after + char_at(v, ai)
+            ai = ai + 1
+        tf["text_value"] = before + after
+        tf["cursor_pos"] = cp - 1
+
+proc text_field_delete_char(tf):
+    let v = tf["text_value"]
+    let cp = tf["cursor_pos"]
+    if cp < len(v):
+        let before = ""
+        let bi = 0
+        while bi < cp:
+            before = before + char_at(v, bi)
+            bi = bi + 1
+        let after = ""
+        let ai = cp + 1
+        while ai < len(v):
+            after = after + char_at(v, ai)
+            ai = ai + 1
+        tf["text_value"] = before + after
+
+proc text_field_move_cursor(tf, delta):
+    tf["cursor_pos"] = tf["cursor_pos"] + delta
+    if tf["cursor_pos"] < 0:
+        tf["cursor_pos"] = 0
+    if tf["cursor_pos"] > len(tf["text_value"]):
+        tf["cursor_pos"] = len(tf["text_value"])
+
+proc text_field_commit(tf):
+    if tf["on_commit"] != nil:
+        tf["on_commit"](tf["text_value"])
+    unfocus_text_field()
+
+proc text_field_cancel(tf):
+    tf["text_value"] = _focus_original_value[0]
+    if tf["on_cancel"] != nil:
+        tf["on_cancel"]()
+    unfocus_text_field()
+
+proc update_text_input(dt):
+    let tf = _focused_widget[0]
+    if tf == nil:
+        return
+    tf["blink_timer"] = tf["blink_timer"] + dt
+    # Read all pending char input
+    while gpu.text_input_available():
+        let ch = gpu.text_input_read()
+        if len(ch) > 0:
+            text_field_insert_char(tf, ch)
+    # Keyboard controls
+    if gpu.key_just_pressed(gpu.KEY_BACKSPACE):
+        text_field_backspace(tf)
+    if gpu.key_just_pressed(gpu.KEY_DELETE):
+        text_field_delete_char(tf)
+    if gpu.key_just_pressed(gpu.KEY_LEFT):
+        text_field_move_cursor(tf, 0 - 1)
+    if gpu.key_just_pressed(gpu.KEY_RIGHT):
+        text_field_move_cursor(tf, 1)
+    if gpu.key_just_pressed(gpu.KEY_HOME):
+        tf["cursor_pos"] = 0
+    if gpu.key_just_pressed(gpu.KEY_END):
+        tf["cursor_pos"] = len(tf["text_value"])
+    if gpu.key_just_pressed(gpu.KEY_ENTER):
+        text_field_commit(tf)
+    if gpu.key_just_pressed(gpu.KEY_ESCAPE):
+        text_field_cancel(tf)
+
+proc parse_number(s):
+    let result = tonumber(s)
+    if result != nil:
+        return result
+    return 0.0
+
+# ============================================================================
 # Toolbar button
 # ============================================================================
 proc create_toolbar_button(x, y, width, label, tooltip, on_click):
@@ -208,6 +336,9 @@ proc create_text_field(x, y, width, value):
     tf["focused"] = false
     tf["cursor_pos"] = len(value)
     tf["on_change"] = nil
+    tf["on_commit"] = nil
+    tf["on_cancel"] = nil
+    tf["blink_timer"] = 0.0
     return tf
 
 proc set_text_field_value(tf, value):

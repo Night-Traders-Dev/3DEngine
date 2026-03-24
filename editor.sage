@@ -39,6 +39,9 @@ from ui_window import create_ui_window, get_windows_sorted, update_windows
 from ui_window import build_window_quads, window_content_area, bring_to_front
 from ui_window import open_menu, close_menu, is_menu_open, build_menu_quads
 from ui_window import get_menu_items, get_menu_pos, menu_item_at
+from ui_window import scroll_window, update_window_content_height, mouse_in_window_content
+from ui_window import set_screen_dims, snap_window_to_edge
+from ui_window import show_modal, close_modal, is_modal_open, get_modal, build_modal_quads, modal_click
 import ui_widgets
 
 # Theme colors (accessed via module to work around from-import limitation)
@@ -64,7 +67,7 @@ from codegen import generate_game_script
 from scene_serial import save_scene, load_scene, serialize_scene, load_scene_string
 from physics import RigidbodyComponent, BoxColliderComponent, SphereColliderComponent
 from physics import create_physics_world, create_physics_system
-from undo_redo import execute_command, undo, redo, cmd_set_vec3
+from undo_redo import execute_command, undo, redo, cmd_set_vec3, cmd_set_property
 from gameplay import HealthComponent
 import sys
 from game_loop import create_time_state, update_time
@@ -193,6 +196,8 @@ let entity_counter = 4
 let play_mode = false
 let play_snapshot = nil
 let active_details_field = nil
+let details_edit_tf = nil
+let show_shortcuts = false
 
 proc _rehydrate_mesh_refs(w):
     let mids = query(w, ["mesh_id"])
@@ -350,12 +355,29 @@ while running:
         continue
     if cur_w != layout["screen_w"] or cur_h != layout["screen_h"]:
         resize_editor_layout(layout, cur_w, cur_h)
+        set_screen_dims(cur_w, cur_h)
     gpu.update_input()
     update_input(inp)
 
-    # Global editor shortcuts
+    # Text input processing (when a field is focused, consume keyboard input)
+    ui_widgets.update_text_input(dt)
+    let text_editing = ui_widgets.is_any_field_focused()
+
+    # F1 = shortcuts overlay
+    if gpu.key_just_pressed(gpu.KEY_F1):
+        show_shortcuts = show_shortcuts == false
+
+    # Modal dialog input (blocks everything else)
+    if is_modal_open():
+        if left_pressed:
+            modal_click(mx, my, sw_f, sh_f)
+        if gpu.key_just_pressed(gpu.KEY_ESCAPE):
+            close_modal()
+        continue
+
+    # Global editor shortcuts (suppressed during text editing)
     if gpu.key_pressed(gpu.KEY_CTRL) and gpu.key_just_pressed(gpu.KEY_Q):
-        running = false
+        show_modal("Quit", "Are you sure you want to quit?", proc(): running = false, nil)
         continue
     if gpu.key_pressed(gpu.KEY_CTRL) and gpu.key_just_pressed(gpu.KEY_Z):
         if undo(editor["history"]):
@@ -412,7 +434,20 @@ while running:
     let vp_b = get_viewport_bounds(layout)
     let mouse_in_viewport = mp_temp[0] > vp_b["x"] and mp_temp[0] < vp_b["x"] + vp_b["w"] and mp_temp[1] > vp_b["y"] and mp_temp[1] < vp_b["y"] + vp_b["h"]
 
-    if mouse_in_viewport:
+    # Scroll in floating windows (intercept before viewport)
+    let scroll_consumed = false
+    if sv[1] != 0.0:
+        if mouse_in_window_content(win_outliner, mp_temp[0], mp_temp[1]):
+            scroll_window(win_outliner, sv[1] * -20.0)
+            scroll_consumed = true
+        if mouse_in_window_content(win_details, mp_temp[0], mp_temp[1]):
+            scroll_window(win_details, sv[1] * -20.0)
+            scroll_consumed = true
+        if mouse_in_window_content(win_content, mp_temp[0], mp_temp[1]):
+            scroll_window(win_content, sv[1] * -20.0)
+            scroll_consumed = true
+
+    if mouse_in_viewport and scroll_consumed == false:
         if gpu.mouse_button(gpu.MOUSE_RIGHT):
             cam["yaw"] = cam["yaw"] + md[0] * 0.005
             cam["pitch"] = cam["pitch"] + md[1] * 0.005
@@ -429,7 +464,7 @@ while running:
             cam["target"][2] = cam["target"][2] + md[0] * sy * pan_scale
             cam["target"][1] = cam["target"][1] + md[1] * pan_scale
 
-        if sv[1] != 0.0:
+        if sv[1] != 0.0 and scroll_consumed == false:
             cam["distance"] = cam["distance"] - sv[1] * 0.8
             if cam["distance"] < 1.0:
                 cam["distance"] = 1.0
@@ -437,11 +472,11 @@ while running:
                 cam["distance"] = 200.0
 
     # --- Gizmo mode ---
-    if action_just_pressed(inp, "mode_translate"):
+    if text_editing == false and action_just_pressed(inp, "mode_translate"):
         set_gizmo_mode(editor["gizmo"], GIZMO_TRANSLATE)
-    if action_just_pressed(inp, "mode_rotate"):
+    if text_editing == false and action_just_pressed(inp, "mode_rotate"):
         set_gizmo_mode(editor["gizmo"], GIZMO_ROTATE)
-    if action_just_pressed(inp, "mode_scale"):
+    if text_editing == false and action_just_pressed(inp, "mode_scale"):
         set_gizmo_mode(editor["gizmo"], GIZMO_SCALE)
 
     # --- Mouse picking and gizmo interaction ---
@@ -726,7 +761,7 @@ while running:
                 print "Generated: assets/generated_game.sage"
             # --- Help menu ---
             if item == "Controls":
-                print "Controls: RMB orbit | MMB pan | Wheel zoom | R/F place | D delete | Q duplicate | TAB physics | ENTER play"
+                show_shortcuts = show_shortcuts == false
             if item == "About Forge Engine":
                 print "Forge Engine Editor - UE-style SageLang editor (Vulkan backend)"
             close_menu()
@@ -772,14 +807,44 @@ while running:
                 col = 2
             if col >= 0 and my >= iy and my < iy + 20.0:
                 active_details_field = {"key": "position", "axis": col}
+                let cur_val = get_component(world, editor["selected"], "transform")["position"][col]
+                details_edit_tf = ui_widgets.create_text_field(0.0, 0.0, 80.0, str(math.floor(cur_val * 1000.0 + 0.5) / 1000.0))
+                details_edit_tf["on_commit"] = proc(val):
+                    let n = ui_widgets.parse_number(val)
+                    let t = get_component(world, editor["selected"], "transform")
+                    let cmd = cmd_set_vec3(t, "position", active_details_field["axis"], n)
+                    execute_command(editor["history"], cmd)
+                    active_details_field = nil
+                    details_edit_tf = nil
+                ui_widgets.focus_text_field(details_edit_tf)
             iy = iy + 26.0
             iy = iy + 22.0
             if col >= 0 and my >= iy and my < iy + 20.0:
                 active_details_field = {"key": "rotation", "axis": col}
+                let cur_val = get_component(world, editor["selected"], "transform")["rotation"][col]
+                details_edit_tf = ui_widgets.create_text_field(0.0, 0.0, 80.0, str(math.floor(cur_val * 1000.0 + 0.5) / 1000.0))
+                details_edit_tf["on_commit"] = proc(val):
+                    let n = ui_widgets.parse_number(val)
+                    let t = get_component(world, editor["selected"], "transform")
+                    let cmd = cmd_set_vec3(t, "rotation", active_details_field["axis"], n)
+                    execute_command(editor["history"], cmd)
+                    active_details_field = nil
+                    details_edit_tf = nil
+                ui_widgets.focus_text_field(details_edit_tf)
             iy = iy + 26.0
             iy = iy + 22.0
             if col >= 0 and my >= iy and my < iy + 20.0:
                 active_details_field = {"key": "scale", "axis": col}
+                let cur_val = get_component(world, editor["selected"], "transform")["scale"][col]
+                details_edit_tf = ui_widgets.create_text_field(0.0, 0.0, 80.0, str(math.floor(cur_val * 1000.0 + 0.5) / 1000.0))
+                details_edit_tf["on_commit"] = proc(val):
+                    let n = ui_widgets.parse_number(val)
+                    let t = get_component(world, editor["selected"], "transform")
+                    let cmd = cmd_set_vec3(t, "scale", active_details_field["axis"], n)
+                    execute_command(editor["history"], cmd)
+                    active_details_field = nil
+                    details_edit_tf = nil
+                ui_widgets.focus_text_field(details_edit_tf)
             window_consumed = true
         let cca_click = window_content_area(win_content)
         let in_content = win_content["visible"] and win_content["collapsed"] == false and mx >= cca_click["x"] and mx < cca_click["x"] + cca_click["w"] and my >= cca_click["y"] and my < cca_click["y"] + cca_click["h"]
@@ -835,19 +900,19 @@ while running:
         deselect(editor)
         active_details_field = nil
 
-    if play_mode == false and action_just_pressed(inp, "place_cube"):
+    if play_mode == false and text_editing == false and action_just_pressed(inp, "place_cube"):
         entity_counter = entity_counter + 1
         let pos = vec3(cam["target"][0], 0.5, cam["target"][2])
         let eid = place_entity(editor, pos, "Cube_" + str(entity_counter), cube_gpu)
         add_component(world, eid, "mesh_id", {"mesh": cube_gpu, "name": "cube"})
 
-    if play_mode == false and action_just_pressed(inp, "place_sphere"):
+    if play_mode == false and text_editing == false and action_just_pressed(inp, "place_sphere"):
         entity_counter = entity_counter + 1
         let pos = vec3(cam["target"][0], 1.0, cam["target"][2])
         let eid = place_entity(editor, pos, "Sphere_" + str(entity_counter), sphere_gpu)
         add_component(world, eid, "mesh_id", {"mesh": sphere_gpu, "name": "sphere"})
 
-    if play_mode == false and action_just_pressed(inp, "place_model"):
+    if play_mode == false and text_editing == false and action_just_pressed(inp, "place_model"):
         let model_keys = dict_keys(imported_models)
         if len(model_keys) > 0:
             let model_asset = imported_models[model_keys[0]]
@@ -862,16 +927,16 @@ while running:
         else:
             print "No imported models available. Place .gltf files in assets/"
 
-    if play_mode == false and action_just_pressed(inp, "delete"):
+    if play_mode == false and text_editing == false and action_just_pressed(inp, "delete"):
         delete_selected(editor)
         flush_dead(world)
         active_details_field = nil
 
-    if play_mode == false and action_just_pressed(inp, "duplicate"):
+    if play_mode == false and text_editing == false and action_just_pressed(inp, "duplicate"):
         duplicate_selected(editor)
 
     # Toggle physics on selected entity (TAB)
-    if play_mode == false and action_just_pressed(inp, "toggle_physics"):
+    if play_mode == false and text_editing == false and action_just_pressed(inp, "toggle_physics"):
         if editor["selected"] >= 0:
             let sel = editor["selected"]
             if has_component(world, sel, "rigidbody"):
@@ -1228,24 +1293,27 @@ while running:
     # --- Outliner content ---
     if win_outliner["visible"] and win_outliner["collapsed"] == false:
         let oca = window_content_area(win_outliner)
-        let oy = oca["y"]
+        update_window_content_height(win_outliner, len(ents) * 24.0)
+        let oy = oca["y"] - win_outliner["scroll_y"]
         let sel_out = selected_entities(editor)
         let oei = 0
-        while oei < len(ents) and oei < 25:
+        while oei < len(ents):
             let eid = ents[oei]
-            let ename = "Entity_" + str(eid)
-            if has_component(world, eid, "name"):
-                ename = get_component(world, eid, "name")["name"]
-            let is_sel_text = false
-            let so = 0
-            while so < len(sel_out):
-                if eid == sel_out[so]:
-                    is_sel_text = true
-                so = so + 1
-            if is_sel_text:
-                add_text(font_r, "ui", ename, oca["x"] + 6.0, oy, 1.0, 1.0, 1.0, 1.0)
-            else:
-                add_text(font_r, "ui", ename, oca["x"] + 6.0, oy, 0.55, 0.55, 0.55, 1.0)
+            # Only render if within visible content area
+            if oy + 24.0 > oca["y"] and oy < oca["y"] + oca["h"]:
+                let ename = "Entity_" + str(eid)
+                if has_component(world, eid, "name"):
+                    ename = get_component(world, eid, "name")["name"]
+                let is_sel_text = false
+                let so = 0
+                while so < len(sel_out):
+                    if eid == sel_out[so]:
+                        is_sel_text = true
+                    so = so + 1
+                if is_sel_text:
+                    add_text(font_r, "ui", ename, oca["x"] + 6.0, oy, 1.0, 1.0, 1.0, 1.0)
+                else:
+                    add_text(font_r, "ui", ename, oca["x"] + 6.0, oy, 0.55, 0.55, 0.55, 1.0)
             oy = oy + 24.0
             oei = oei + 1
 
@@ -1253,7 +1321,7 @@ while running:
     if win_details["visible"] and win_details["collapsed"] == false:
         let dca = window_content_area(win_details)
         let dx = dca["x"]
-        let dy = dca["y"]
+        let dy = dca["y"] - win_details["scroll_y"]
         let dw = dca["w"]
         let fw3 = (dw - 16.0) / 3.0
         if cur_sel >= 0 and has_component(world, cur_sel, "transform"):
@@ -1268,23 +1336,54 @@ while running:
             # Location
             add_text(font_r, "ui", "Location", dx + 4.0, iy + 1.0, 0.439, 0.439, 0.439, 1.0)
             iy = iy + 22.0
-            add_text(font_r, "ui", _fn(st["position"][0]), dx + 10.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
-            add_text(font_r, "ui", _fn(st["position"][1]), dx + fw3 + 14.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
-            add_text(font_r, "ui", _fn(st["position"][2]), dx + fw3 * 2.0 + 18.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
+            let edit_key = ""
+            let edit_axis = -1
+            if active_details_field != nil:
+                edit_key = active_details_field["key"]
+                edit_axis = active_details_field["axis"]
+            # Position X/Y/Z (show editing field if active)
+            let pxo = [dx + 10.0, dx + fw3 + 14.0, dx + fw3 * 2.0 + 18.0]
+            let pxi = 0
+            while pxi < 3:
+                if edit_key == "position" and edit_axis == pxi and details_edit_tf != nil:
+                    let ev = details_edit_tf["text_value"]
+                    let blink = details_edit_tf["blink_timer"]
+                    if math.floor(blink * 2.0) % 2 == 0:
+                        ev = ev + "|"
+                    add_text(font_r, "ui", ev, pxo[pxi], iy + 2.0, 0.290, 0.565, 0.851, 1.0)
+                else:
+                    add_text(font_r, "ui", _fn(st["position"][pxi]), pxo[pxi], iy + 2.0, 0.78, 0.78, 0.78, 1.0)
+                pxi = pxi + 1
             iy = iy + 26.0
             # Rotation
             add_text(font_r, "ui", "Rotation", dx + 4.0, iy + 1.0, 0.439, 0.439, 0.439, 1.0)
             iy = iy + 22.0
-            add_text(font_r, "ui", _fn(st["rotation"][0]), dx + 10.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
-            add_text(font_r, "ui", _fn(st["rotation"][1]), dx + fw3 + 14.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
-            add_text(font_r, "ui", _fn(st["rotation"][2]), dx + fw3 * 2.0 + 18.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
+            let rxi = 0
+            while rxi < 3:
+                if edit_key == "rotation" and edit_axis == rxi and details_edit_tf != nil:
+                    let ev = details_edit_tf["text_value"]
+                    let blink = details_edit_tf["blink_timer"]
+                    if math.floor(blink * 2.0) % 2 == 0:
+                        ev = ev + "|"
+                    add_text(font_r, "ui", ev, pxo[rxi], iy + 2.0, 0.290, 0.565, 0.851, 1.0)
+                else:
+                    add_text(font_r, "ui", _fn(st["rotation"][rxi]), pxo[rxi], iy + 2.0, 0.78, 0.78, 0.78, 1.0)
+                rxi = rxi + 1
             iy = iy + 26.0
             # Scale
             add_text(font_r, "ui", "Scale", dx + 4.0, iy + 1.0, 0.439, 0.439, 0.439, 1.0)
             iy = iy + 22.0
-            add_text(font_r, "ui", _fn(st["scale"][0]), dx + 10.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
-            add_text(font_r, "ui", _fn(st["scale"][1]), dx + fw3 + 14.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
-            add_text(font_r, "ui", _fn(st["scale"][2]), dx + fw3 * 2.0 + 18.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
+            let sxi = 0
+            while sxi < 3:
+                if edit_key == "scale" and edit_axis == sxi and details_edit_tf != nil:
+                    let ev = details_edit_tf["text_value"]
+                    let blink = details_edit_tf["blink_timer"]
+                    if math.floor(blink * 2.0) % 2 == 0:
+                        ev = ev + "|"
+                    add_text(font_r, "ui", ev, pxo[sxi], iy + 2.0, 0.290, 0.565, 0.851, 1.0)
+                else:
+                    add_text(font_r, "ui", _fn(st["scale"][sxi]), pxo[sxi], iy + 2.0, 0.78, 0.78, 0.78, 1.0)
+                sxi = sxi + 1
             iy = iy + 28.0
             if active_details_field != nil:
                 let axis_lbl = "X"
@@ -1374,7 +1473,99 @@ while running:
             mii = mii + 1
     flush_text(font_r, cmd, sw, sh)
 
+    # --- Modal dialog (rendered on top of everything) ---
+    if is_modal_open():
+        let modal_quads = build_modal_quads(sw, sh)
+        if len(modal_quads) > 0:
+            let mv = build_quad_verts(modal_quads)
+            gpu.buffer_upload(ui_r["vbuf"], mv)
+            gpu.cmd_bind_graphics_pipeline(cmd, ui_r["pipeline"])
+            gpu.cmd_push_constants(cmd, ui_r["pipe_layout"], gpu.STAGE_VERTEX, [sw, sh, 0.0, 0.0])
+            gpu.cmd_bind_vertex_buffer(cmd, ui_r["vbuf"])
+            gpu.cmd_draw(cmd, len(modal_quads) * 6, 1, 0, 0)
+        # Modal text
+        begin_text(font_r)
+        let modal = get_modal()
+        let mdw = 340.0
+        let mdx = (sw - mdw) / 2.0
+        let mdy = (sh - 140.0) / 2.0
+        add_text(font_r, "ui", modal["title"], mdx + 10.0, mdy + 5.0, 0.9, 0.9, 0.9, 1.0)
+        add_text(font_r, "ui", modal["message"], mdx + 16.0, mdy + 50.0, 0.7, 0.7, 0.7, 1.0)
+        add_text(font_r, "ui", "Yes", mdx + mdw - 145.0, mdy + 107.0, 0.9, 0.9, 0.9, 1.0)
+        add_text(font_r, "ui", "No", mdx + mdw - 58.0, mdy + 107.0, 0.78, 0.78, 0.78, 1.0)
+        flush_text(font_r, cmd, sw, sh)
+
+    # --- Shortcuts overlay (F1) ---
+    if show_shortcuts:
+        let skw = 360.0
+        let skh = 380.0
+        let skx = (sw - skw) / 2.0
+        let sky_pos = (sh - skh) / 2.0
+        let sk_quads = []
+        push(sk_quads, {"x": skx + 3.0, "y": sky_pos + 3.0, "w": skw, "h": skh, "color": [0.0, 0.0, 0.0, 0.4]})
+        push(sk_quads, {"x": skx, "y": sky_pos, "w": skw, "h": skh, "color": [0.141, 0.141, 0.141, 0.95]})
+        push(sk_quads, {"x": skx, "y": sky_pos, "w": skw, "h": 28.0, "color": [0.176, 0.176, 0.176, 1.0]})
+        let skv = build_quad_verts(sk_quads)
+        gpu.buffer_upload(ui_r["vbuf"], skv)
+        gpu.cmd_bind_graphics_pipeline(cmd, ui_r["pipeline"])
+        gpu.cmd_push_constants(cmd, ui_r["pipe_layout"], gpu.STAGE_VERTEX, [sw, sh, 0.0, 0.0])
+        gpu.cmd_bind_vertex_buffer(cmd, ui_r["vbuf"])
+        gpu.cmd_draw(cmd, len(sk_quads) * 6, 1, 0, 0)
+        begin_text(font_r)
+        add_text(font_r, "ui", "Keyboard Shortcuts", skx + 10.0, sky_pos + 5.0, 0.9, 0.9, 0.9, 1.0)
+        let ky = sky_pos + 36.0
+        let kx = skx + 12.0
+        let kx2 = skx + 180.0
+        add_text(font_r, "ui", "CTRL+Q", kx, ky, 0.290, 0.565, 0.851, 1.0)
+        add_text(font_r, "ui", "Quit", kx2, ky, 0.65, 0.65, 0.65, 1.0)
+        ky = ky + 20.0
+        add_text(font_r, "ui", "CTRL+S", kx, ky, 0.290, 0.565, 0.851, 1.0)
+        add_text(font_r, "ui", "Save Scene", kx2, ky, 0.65, 0.65, 0.65, 1.0)
+        ky = ky + 20.0
+        add_text(font_r, "ui", "CTRL+Z / CTRL+Y", kx, ky, 0.290, 0.565, 0.851, 1.0)
+        add_text(font_r, "ui", "Undo / Redo", kx2, ky, 0.65, 0.65, 0.65, 1.0)
+        ky = ky + 20.0
+        add_text(font_r, "ui", "R", kx, ky, 0.290, 0.565, 0.851, 1.0)
+        add_text(font_r, "ui", "Place Cube", kx2, ky, 0.65, 0.65, 0.65, 1.0)
+        ky = ky + 20.0
+        add_text(font_r, "ui", "F", kx, ky, 0.290, 0.565, 0.851, 1.0)
+        add_text(font_r, "ui", "Place Sphere", kx2, ky, 0.65, 0.65, 0.65, 1.0)
+        ky = ky + 20.0
+        add_text(font_r, "ui", "E", kx, ky, 0.290, 0.565, 0.851, 1.0)
+        add_text(font_r, "ui", "Place Model", kx2, ky, 0.65, 0.65, 0.65, 1.0)
+        ky = ky + 20.0
+        add_text(font_r, "ui", "D", kx, ky, 0.290, 0.565, 0.851, 1.0)
+        add_text(font_r, "ui", "Delete Selected", kx2, ky, 0.65, 0.65, 0.65, 1.0)
+        ky = ky + 20.0
+        add_text(font_r, "ui", "Q", kx, ky, 0.290, 0.565, 0.851, 1.0)
+        add_text(font_r, "ui", "Duplicate", kx2, ky, 0.65, 0.65, 0.65, 1.0)
+        ky = ky + 20.0
+        add_text(font_r, "ui", "TAB", kx, ky, 0.290, 0.565, 0.851, 1.0)
+        add_text(font_r, "ui", "Toggle Physics", kx2, ky, 0.65, 0.65, 0.65, 1.0)
+        ky = ky + 20.0
+        add_text(font_r, "ui", "ENTER", kx, ky, 0.290, 0.565, 0.851, 1.0)
+        add_text(font_r, "ui", "Play / Stop", kx2, ky, 0.65, 0.65, 0.65, 1.0)
+        ky = ky + 20.0
+        add_text(font_r, "ui", "1 / 2 / 3", kx, ky, 0.290, 0.565, 0.851, 1.0)
+        add_text(font_r, "ui", "Move / Rotate / Scale", kx2, ky, 0.65, 0.65, 0.65, 1.0)
+        ky = ky + 20.0
+        add_text(font_r, "ui", "RMB", kx, ky, 0.290, 0.565, 0.851, 1.0)
+        add_text(font_r, "ui", "Orbit Camera", kx2, ky, 0.65, 0.65, 0.65, 1.0)
+        ky = ky + 20.0
+        add_text(font_r, "ui", "MMB", kx, ky, 0.290, 0.565, 0.851, 1.0)
+        add_text(font_r, "ui", "Pan Camera", kx2, ky, 0.65, 0.65, 0.65, 1.0)
+        ky = ky + 20.0
+        add_text(font_r, "ui", "Scroll", kx, ky, 0.290, 0.565, 0.851, 1.0)
+        add_text(font_r, "ui", "Zoom / Scroll Panels", kx2, ky, 0.65, 0.65, 0.65, 1.0)
+        ky = ky + 20.0
+        add_text(font_r, "ui", "Right-Click", kx, ky, 0.290, 0.565, 0.851, 1.0)
+        add_text(font_r, "ui", "Context Menu", kx2, ky, 0.65, 0.65, 0.65, 1.0)
+        ky = ky + 24.0
+        add_text(font_r, "ui", "Press F1 to close", skx + skw / 2.0 - 70.0, ky, 0.4, 0.4, 0.4, 1.0)
+        flush_text(font_r, cmd, sw, sh)
+
     end_frame(r, frame)
+    gc_collect()
     update_title_fps(r, "Forge Engine Editor")
 
 try:

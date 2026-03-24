@@ -161,6 +161,8 @@ proc update_windows(mx, my, left_pressed, left_held, left_released):
             return true
     # End drag
     if left_released:
+        if _drag_window[0] != nil:
+            snap_window_to_edge(_drag_window[0])
         _drag_window[0] = nil
         _resize_window[0] = nil
         _resize_edge[0] = "none"
@@ -228,6 +230,52 @@ proc window_content_area(win):
     return ca
 
 # ============================================================================
+# Scroll support
+# ============================================================================
+proc scroll_window(win, delta):
+    win["scroll_y"] = win["scroll_y"] + delta
+    if win["scroll_y"] < 0.0:
+        win["scroll_y"] = 0.0
+    if win["scroll_y"] > win["max_scroll"]:
+        win["scroll_y"] = win["max_scroll"]
+
+proc update_window_content_height(win, content_height):
+    let ca = window_content_area(win)
+    let max_s = content_height - ca["h"]
+    if max_s < 0.0:
+        max_s = 0.0
+    win["max_scroll"] = max_s
+    if win["scroll_y"] > max_s:
+        win["scroll_y"] = max_s
+
+proc mouse_in_window_content(win, mx, my):
+    if win["visible"] == false or win["collapsed"]:
+        return false
+    let ca = window_content_area(win)
+    return mx >= ca["x"] and mx < ca["x"] + ca["w"] and my >= ca["y"] and my < ca["y"] + ca["h"]
+
+# Screen dimensions for snap-to-edge
+let _screen_dims = [1440.0, 900.0]
+
+proc set_screen_dims(w, h):
+    _screen_dims[0] = w
+    _screen_dims[1] = h
+
+proc snap_window_to_edge(win):
+    let snap = 20.0
+    let top_h = 60.0
+    let sw = _screen_dims[0]
+    let sh = _screen_dims[1]
+    if win["x"] < snap:
+        win["x"] = 0.0
+    if win["x"] + win["width"] > sw - snap:
+        win["x"] = sw - win["width"]
+    if win["y"] < top_h + snap:
+        win["y"] = top_h
+    if win["y"] + win["height"] > sh - snap:
+        win["y"] = sh - win["height"]
+
+# ============================================================================
 # Simple menu system
 # ============================================================================
 let _menu_open = [nil]
@@ -292,3 +340,67 @@ proc menu_item_at(mx, my):
     if idx < 0 or idx >= len(items):
         return -1
     return idx
+
+# ============================================================================
+# Modal dialog system
+# ============================================================================
+let _modal = [nil]
+
+proc show_modal(title, message, on_yes, on_no):
+    _modal[0] = {"title": title, "message": message, "on_yes": on_yes, "on_no": on_no}
+
+proc close_modal():
+    _modal[0] = nil
+
+proc is_modal_open():
+    return _modal[0] != nil
+
+proc get_modal():
+    return _modal[0]
+
+proc build_modal_quads(sw, sh):
+    if _modal[0] == nil:
+        return []
+    let quads = []
+    # Dark overlay
+    push(quads, {"x": 0.0, "y": 0.0, "w": sw, "h": sh, "color": [0.0, 0.0, 0.0, 0.5]})
+    # Centered dialog
+    let dw = 340.0
+    let dh = 140.0
+    let dx = (sw - dw) / 2.0
+    let dy = (sh - dh) / 2.0
+    # Shadow
+    push(quads, {"x": dx + 4.0, "y": dy + 4.0, "w": dw, "h": dh, "color": [0.0, 0.0, 0.0, 0.4]})
+    # Background
+    push(quads, {"x": dx, "y": dy, "w": dw, "h": dh, "color": ui_widgets.THEME_PANEL})
+    # Title bar
+    push(quads, {"x": dx, "y": dy, "w": dw, "h": 28.0, "color": ui_widgets.THEME_HEADER})
+    # Accent line
+    let acc = ui_widgets.THEME_ACCENT
+    push(quads, {"x": dx, "y": dy + 27.0, "w": dw, "h": 1.0, "color": [acc[0], acc[1], acc[2], 0.4]})
+    # Yes button
+    push(quads, {"x": dx + dw - 160.0, "y": dy + dh - 38.0, "w": 70.0, "h": 28.0, "color": [0.15, 0.45, 0.15, 1.0]})
+    # No button
+    push(quads, {"x": dx + dw - 80.0, "y": dy + dh - 38.0, "w": 70.0, "h": 28.0, "color": ui_widgets.THEME_BUTTON})
+    return quads
+
+proc modal_click(mx, my, sw, sh):
+    if _modal[0] == nil:
+        return false
+    let dw = 340.0
+    let dh = 140.0
+    let dx = (sw - dw) / 2.0
+    let dy = (sh - dh) / 2.0
+    # Yes button
+    if mx >= dx + dw - 160.0 and mx < dx + dw - 90.0 and my >= dy + dh - 38.0 and my < dy + dh - 10.0:
+        if _modal[0]["on_yes"] != nil:
+            _modal[0]["on_yes"]()
+        close_modal()
+        return true
+    # No button
+    if mx >= dx + dw - 80.0 and mx < dx + dw - 10.0 and my >= dy + dh - 38.0 and my < dy + dh - 10.0:
+        if _modal[0]["on_no"] != nil:
+            _modal[0]["on_no"]()
+        close_modal()
+        return true
+    return true

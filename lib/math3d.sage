@@ -251,3 +251,160 @@ proc mat4_to_floats(m):
 proc pack_mvp(model, view, proj):
     let mvp = mat4_mul(proj, mat4_mul(view, model))
     return mvp
+
+# ============================================================================
+# Matrix inverse (4x4, Cramer's rule)
+# ============================================================================
+proc mat4_inverse(m):
+    let s0 = m[0]*m[5] - m[4]*m[1]
+    let s1 = m[0]*m[9] - m[8]*m[1]
+    let s2 = m[0]*m[13] - m[12]*m[1]
+    let s3 = m[4]*m[9] - m[8]*m[5]
+    let s4 = m[4]*m[13] - m[12]*m[5]
+    let s5 = m[8]*m[13] - m[12]*m[9]
+    let c5 = m[10]*m[15] - m[14]*m[11]
+    let c4 = m[6]*m[15] - m[14]*m[7]
+    let c3 = m[6]*m[11] - m[10]*m[7]
+    let c2 = m[2]*m[15] - m[14]*m[3]
+    let c1 = m[2]*m[11] - m[10]*m[3]
+    let c0 = m[2]*m[7] - m[6]*m[3]
+    let det = s0*c5 - s1*c4 + s2*c3 + s3*c2 - s4*c1 + s5*c0
+    if math.abs(det) < 0.0000000001:
+        return nil
+    let inv_det = 1.0 / det
+    let r = [0.0,0.0,0.0,0.0, 0.0,0.0,0.0,0.0, 0.0,0.0,0.0,0.0, 0.0,0.0,0.0,0.0]
+    r[0]  = ( m[5]*c5 - m[9]*c4 + m[13]*c3) * inv_det
+    r[1]  = (0.0 - m[1]*c5 + m[9]*c2 - m[13]*c1) * inv_det
+    r[2]  = ( m[1]*c4 - m[5]*c2 + m[13]*c0) * inv_det
+    r[3]  = (0.0 - m[1]*c3 + m[5]*c1 - m[9]*c0) * inv_det
+    r[4]  = (0.0 - m[4]*c5 + m[8]*c4 - m[12]*c3) * inv_det
+    r[5]  = ( m[0]*c5 - m[8]*c2 + m[12]*c1) * inv_det
+    r[6]  = (0.0 - m[0]*c4 + m[4]*c2 - m[12]*c0) * inv_det
+    r[7]  = ( m[0]*c3 - m[4]*c1 + m[8]*c0) * inv_det
+    r[8]  = ( m[7]*s5 - m[11]*s4 + m[15]*s3) * inv_det
+    r[9]  = (0.0 - m[3]*s5 + m[11]*s2 - m[15]*s1) * inv_det
+    r[10] = ( m[3]*s4 - m[7]*s2 + m[15]*s0) * inv_det
+    r[11] = (0.0 - m[3]*s3 + m[7]*s1 - m[11]*s0) * inv_det
+    r[12] = (0.0 - m[6]*s5 + m[10]*s4 - m[14]*s3) * inv_det
+    r[13] = ( m[2]*s5 - m[10]*s2 + m[14]*s1) * inv_det
+    r[14] = (0.0 - m[2]*s4 + m[6]*s2 - m[14]*s0) * inv_det
+    r[15] = ( m[2]*s3 - m[6]*s1 + m[10]*s0) * inv_det
+    return r
+
+proc mat4_inverse_safe(m):
+    let r = mat4_inverse(m)
+    if r == nil:
+        return mat4_identity()
+    return r
+
+# ============================================================================
+# Quaternion math — stored as [w, x, y, z]
+# ============================================================================
+proc quat(w, x, y, z):
+    return [w, x, y, z]
+
+proc quat_identity():
+    return [1.0, 0.0, 0.0, 0.0]
+
+proc quat_dot(a, b):
+    return a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3]
+
+proc quat_length(q):
+    return math.sqrt(quat_dot(q, q))
+
+proc quat_normalize(q):
+    let l = quat_length(q)
+    if l < 0.000001:
+        return quat_identity()
+    let inv = 1.0 / l
+    return [q[0]*inv, q[1]*inv, q[2]*inv, q[3]*inv]
+
+proc quat_conjugate(q):
+    return [q[0], 0.0 - q[1], 0.0 - q[2], 0.0 - q[3]]
+
+proc quat_inverse(q):
+    let d = quat_dot(q, q)
+    if d < 0.000001:
+        return quat_identity()
+    let inv = 1.0 / d
+    return [q[0]*inv, (0.0 - q[1])*inv, (0.0 - q[2])*inv, (0.0 - q[3])*inv]
+
+proc quat_mul(a, b):
+    return [
+        a[0]*b[0] - a[1]*b[1] - a[2]*b[2] - a[3]*b[3],
+        a[0]*b[1] + a[1]*b[0] + a[2]*b[3] - a[3]*b[2],
+        a[0]*b[2] - a[1]*b[3] + a[2]*b[0] + a[3]*b[1],
+        a[0]*b[3] + a[1]*b[2] - a[2]*b[1] + a[3]*b[0]
+    ]
+
+proc quat_from_axis_angle(axis, angle):
+    let half = angle * 0.5
+    let s = math.sin(half)
+    let na = v3_normalize(axis)
+    return [math.cos(half), na[0]*s, na[1]*s, na[2]*s]
+
+proc quat_from_euler(rx, ry, rz):
+    let qx = quat_from_axis_angle(vec3(1.0, 0.0, 0.0), rx)
+    let qy = quat_from_axis_angle(vec3(0.0, 1.0, 0.0), ry)
+    let qz = quat_from_axis_angle(vec3(0.0, 0.0, 1.0), rz)
+    return quat_mul(quat_mul(qy, qx), qz)
+
+proc quat_to_euler(q):
+    let sinr_cosp = 2.0 * (q[0]*q[1] + q[2]*q[3])
+    let cosr_cosp = 1.0 - 2.0 * (q[1]*q[1] + q[2]*q[2])
+    let rx = math.atan2(sinr_cosp, cosr_cosp)
+    let sinp = 2.0 * (q[0]*q[2] - q[3]*q[1])
+    let ry = 0.0
+    if math.abs(sinp) >= 1.0:
+        if sinp > 0.0:
+            ry = 1.5707963
+        else:
+            ry = 0.0 - 1.5707963
+    else:
+        ry = math.asin(sinp)
+    let siny_cosp = 2.0 * (q[0]*q[3] + q[1]*q[2])
+    let cosy_cosp = 1.0 - 2.0 * (q[2]*q[2] + q[3]*q[3])
+    let rz = math.atan2(siny_cosp, cosy_cosp)
+    return [rx, ry, rz]
+
+proc quat_to_matrix(q):
+    let xx = q[1]*q[1]
+    let yy = q[2]*q[2]
+    let zz = q[3]*q[3]
+    let xy = q[1]*q[2]
+    let xz = q[1]*q[3]
+    let yz = q[2]*q[3]
+    let wx = q[0]*q[1]
+    let wy = q[0]*q[2]
+    let wz = q[0]*q[3]
+    let m = mat4_identity()
+    m[0] = 1.0 - 2.0*(yy + zz)
+    m[1] = 2.0*(xy + wz)
+    m[2] = 2.0*(xz - wy)
+    m[4] = 2.0*(xy - wz)
+    m[5] = 1.0 - 2.0*(xx + zz)
+    m[6] = 2.0*(yz + wx)
+    m[8] = 2.0*(xz + wy)
+    m[9] = 2.0*(yz - wx)
+    m[10] = 1.0 - 2.0*(xx + yy)
+    return m
+
+proc quat_rotate_vec3(q, v):
+    let qv = [0.0, v[0], v[1], v[2]]
+    let r = quat_mul(quat_mul(q, qv), quat_conjugate(q))
+    return [r[1], r[2], r[3]]
+
+proc quat_slerp(a, b, t):
+    let d = quat_dot(a, b)
+    let b2 = [b[0], b[1], b[2], b[3]]
+    if d < 0.0:
+        b2 = [0.0 - b[0], 0.0 - b[1], 0.0 - b[2], 0.0 - b[3]]
+        d = 0.0 - d
+    if d > 0.9995:
+        let r = [a[0] + t*(b2[0] - a[0]), a[1] + t*(b2[1] - a[1]), a[2] + t*(b2[2] - a[2]), a[3] + t*(b2[3] - a[3])]
+        return quat_normalize(r)
+    let theta = math.acos(d)
+    let sin_theta = math.sin(theta)
+    let wa = math.sin((1.0 - t) * theta) / sin_theta
+    let wb = math.sin(t * theta) / sin_theta
+    return [wa*a[0] + wb*b2[0], wa*a[1] + wb*b2[1], wa*a[2] + wb*b2[2], wa*a[3] + wb*b2[3]]
