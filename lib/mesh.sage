@@ -414,3 +414,22 @@ proc load_obj(path):
     result["has_normals"] = len(normals) > 0
     result["has_uvs"] = len(uvs) > 0
     return result
+
+# ============================================================================
+# Efficient GPU buffer uploads (device-local memory)
+# ============================================================================
+proc upload_mesh_device_local(mesh_data):
+    let verts = mesh_data["vertices"]
+    let indices = mesh_data["indices"]
+    let vbuf = gpu.upload_device_local(verts, gpu.BUFFER_VERTEX)
+    let ibuf = gpu.upload_device_local(indices, gpu.BUFFER_INDEX)
+    if vbuf < 0 or ibuf < 0:
+        print "WARNING: Device-local upload failed, falling back to host-visible"
+        return upload_mesh(mesh_data)
+    let result = {}
+    result["vbuf"] = vbuf
+    result["ibuf"] = ibuf
+    result["vertex_count"] = len(verts) / 8
+    result["index_count"] = len(indices)
+    result["device_local"] = true
+    return result

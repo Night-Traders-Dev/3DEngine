@@ -162,3 +162,61 @@ proc scan_importable_assets(dir_path):
                 push(assets, {"name": f, "type": "font", "path": dir_path + "/" + f})
         i = i + 1
     return assets
+
+# ============================================================================
+# Async asset loading (non-blocking)
+# ============================================================================
+let _async_load_queue = []
+let _async_load_results = []
+
+proc request_async_load(path, asset_type):
+    push(_async_load_queue, {"path": path, "type": asset_type, "status": "pending"})
+
+proc process_async_loads():
+    # Process one load per frame to avoid blocking
+    if len(_async_load_queue) == 0:
+        return nil
+    let req = _async_load_queue[0]
+    # Remove from queue
+    let new_queue = []
+    let i = 1
+    while i < len(_async_load_queue):
+        push(new_queue, _async_load_queue[i])
+        i = i + 1
+    _async_load_queue = new_queue
+    # Process the load
+    let result = nil
+    if req["type"] == "gltf":
+        result = import_gltf(req["path"])
+    if req["type"] == "texture":
+        result = gpu.load_texture(req["path"])
+    if result != nil:
+        push(_async_load_results, {"path": req["path"], "type": req["type"], "result": result})
+        print "Async loaded: " + req["path"]
+    return result
+
+proc get_async_results():
+    let results = _async_load_results
+    _async_load_results = []
+    return results
+
+proc has_pending_loads():
+    return len(_async_load_queue) > 0
+
+# ============================================================================
+# Remote asset downloading
+# ============================================================================
+proc download_asset(url, local_path):
+    # Uses SageLang's http module if available
+    try:
+        import http
+        let result = http.download(url, local_path)
+        if result:
+            print "Downloaded: " + url + " -> " + local_path
+            return true
+        else:
+            print "Download failed: " + url
+            return false
+    catch e:
+        print "HTTP not available: " + str(e)
+        return false

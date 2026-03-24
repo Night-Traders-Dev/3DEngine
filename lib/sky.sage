@@ -174,3 +174,21 @@ proc draw_sky(s, cmd, view_matrix, aspect, fov, time):
 
     # Draw fullscreen triangle (3 vertices, no vertex buffer)
     gpu.cmd_draw(cmd, 3, 1, 0, 0)
+
+# ============================================================================
+# Cubemap skybox loading
+# ============================================================================
+proc create_cubemap_sky(face_paths):
+    # face_paths = [right, left, top, bottom, front, back]
+    let cm = {}
+    cm["type"] = "cubemap"
+    if len(face_paths) == 6:
+        cm["cubemap"] = gpu.create_cubemap(face_paths[0], face_paths[1], face_paths[2], face_paths[3], face_paths[4], face_paths[5])
+        cm["sampler"] = gpu.create_sampler(gpu.FILTER_LINEAR, gpu.FILTER_LINEAR, gpu.ADDRESS_CLAMP_EDGE)
+    else:
+        cm["cubemap"] = -1
+        cm["sampler"] = -1
+    return cm
+
+proc has_cubemap_sky(cm):
+    return cm["cubemap"] >= 0

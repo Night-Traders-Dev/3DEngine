@@ -140,3 +140,73 @@ proc draw_mesh_unlit(cmd, mat, mesh_gpu, mvp_data, color):
     gpu.cmd_bind_vertex_buffer(cmd, mesh_gpu["vbuf"])
     gpu.cmd_bind_index_buffer(cmd, mesh_gpu["ibuf"])
     gpu.cmd_draw_indexed(cmd, mesh_gpu["index_count"], 1, 0, 0, 0)
+
+# ============================================================================
+# Compute shader dispatch helpers
+# ============================================================================
+proc create_compute_pipeline(shader_path, desc_layout, push_size):
+    let shader = gpu.load_shader(shader_path, gpu.STAGE_COMPUTE)
+    if shader < 0:
+        print "ERROR: Failed to load compute shader: " + shader_path
+        return nil
+    let pipe_layout = gpu.create_pipeline_layout([desc_layout], push_size, gpu.STAGE_COMPUTE)
+    let pipeline = gpu.create_compute_pipeline(shader, pipe_layout)
+    if pipeline < 0:
+        print "ERROR: Failed to create compute pipeline"
+        return nil
+    let cp = {}
+    cp["pipeline"] = pipeline
+    cp["pipe_layout"] = pipe_layout
+    cp["shader"] = shader
+    return cp
+
+proc dispatch_compute(cmd, cp, groups_x, groups_y, groups_z, desc_set, push_data):
+    gpu.cmd_bind_compute_pipeline(cmd, cp["pipeline"])
+    if desc_set >= 0:
+        gpu.cmd_bind_descriptor_set(cmd, cp["pipe_layout"], 0, desc_set, 1)
+    if push_data != nil:
+        gpu.cmd_push_constants(cmd, cp["pipe_layout"], gpu.STAGE_COMPUTE, push_data)
+    gpu.cmd_dispatch(cmd, groups_x, groups_y, groups_z)
+
+# ============================================================================
+# Advanced samplers
+# ============================================================================
+proc create_anisotropic_sampler(max_anisotropy):
+    return gpu.create_sampler_advanced(gpu.FILTER_LINEAR, gpu.FILTER_LINEAR, gpu.ADDRESS_REPEAT, max_anisotropy)
+
+# ============================================================================
+# Indirect draw support (GPU-driven rendering)
+# ============================================================================
+proc create_indirect_buffer(max_commands):
+    # Each indirect draw command is 5 uint32s = 20 bytes
+    let size = max_commands * 20
+    return gpu.create_buffer(size, gpu.BUFFER_STORAGE | gpu.BUFFER_VERTEX)
+
+proc draw_mesh_lit_indirect(cmd, mat, indirect_buf, draw_count, stride):
+    gpu.cmd_bind_graphics_pipeline(cmd, mat["pipeline"])
+    gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 0, mat["desc_set"], 0)
+    gpu.cmd_draw_indirect(cmd, indirect_buf, 0, draw_count, stride)
+
+proc create_indexed_indirect_buffer(max_commands):
+    # Each indexed indirect command is 5 uint32s = 20 bytes
+    let size = max_commands * 20
+    return gpu.create_buffer(size, gpu.BUFFER_STORAGE | gpu.BUFFER_INDEX)
+
+proc draw_mesh_lit_indexed_indirect(cmd, mat, mesh_gpu, indirect_buf, draw_count, stride):
+    gpu.cmd_bind_graphics_pipeline(cmd, mat["pipeline"])
+    gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 0, mat["desc_set"], 0)
+    gpu.cmd_bind_vertex_buffer(cmd, mesh_gpu["vbuf"])
+    gpu.cmd_bind_index_buffer(cmd, mesh_gpu["ibuf"])
+    gpu.cmd_draw_indexed_indirect(cmd, indirect_buf, 0, draw_count, stride)
+
+# ============================================================================
+# Pipeline barriers for compute-to-graphics synchronization
+# ============================================================================
+proc barrier_compute_to_graphics(cmd):
+    gpu.cmd_pipeline_barrier(cmd, gpu.PIPE_COMPUTE, gpu.PIPE_FRAGMENT, gpu.ACCESS_SHADER_WRITE, gpu.ACCESS_SHADER_READ)
+
+proc barrier_transfer_to_shader(cmd):
+    gpu.cmd_pipeline_barrier(cmd, gpu.PIPE_TRANSFER, gpu.PIPE_FRAGMENT, gpu.ACCESS_TRANSFER_WRITE, gpu.ACCESS_SHADER_READ)
+
+proc barrier_graphics_to_transfer(cmd):
+    gpu.cmd_pipeline_barrier(cmd, gpu.PIPE_COLOR_OUTPUT, gpu.PIPE_TRANSFER, gpu.ACCESS_SHADER_WRITE, gpu.ACCESS_TRANSFER_READ)

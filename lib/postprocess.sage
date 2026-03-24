@@ -107,3 +107,12 @@ proc draw_fullscreen(cmd, fp, push_data, desc_set):
     if desc_set >= 0:
         gpu.cmd_bind_descriptor_set(cmd, fp["pipe_layout"], 0, desc_set, 0)
     gpu.cmd_draw(cmd, 3, 1, 0, 0)
+
+# ============================================================================
+# Convenience: create post-process render target with format selection
+# ============================================================================
+proc create_postprocess_target(width, height, hdr):
+    let format = gpu.FORMAT_RGBA8
+    if hdr:
+        format = gpu.FORMAT_RGBA16F
+    return gpu.create_offscreen_target(width, height, format, true)

@@ -653,13 +653,51 @@ process_level_queue(lm, world)
 The editor generates complete SageLang game scripts:
 
 ```python
-from codegen import generate_game_script
+from codegen import generate_game_script, compile_game_native
 
+# Generate script
 let code = generate_game_script(world, "MyGame", {"width": 1280, "height": 720})
 io.writefile("my_game.sage", code)
 
-# Run the generated game:
+# Run interpreted:
 # ./run.sh my_game.sage
+
+# Or compile to native executable via LLVM (~10x faster):
+compile_game_native(world, "MyGame", {"width": 1280, "height": 720})
+# Then: sage --compile assets/generated_game.sage -o MyGame
+```
+
+### GPU-Driven Rendering
+
+```python
+from render_system import create_indirect_buffer, draw_mesh_lit_indirect
+from render_system import create_compute_pipeline, dispatch_compute
+from render_system import barrier_compute_to_graphics
+
+# Indirect draw (GPU fills draw commands, no CPU bottleneck)
+let indirect_buf = create_indirect_buffer(1024)
+draw_mesh_lit_indirect(cmd, material, indirect_buf, draw_count, 20)
+
+# Compute shader dispatch
+let cp = create_compute_pipeline("shaders/cull.comp.spv", desc_layout, 16)
+dispatch_compute(cmd, cp, 64, 1, 1, desc_set, push_data)
+barrier_compute_to_graphics(cmd)  # Sync before drawing
+```
+
+### Async Asset Loading
+
+```python
+from asset_import import request_async_load, process_async_loads, get_async_results
+
+# Queue assets for non-blocking loading
+request_async_load("assets/character.gltf", "gltf")
+request_async_load("assets/terrain.png", "texture")
+
+# Process one load per frame (no freeze):
+process_async_loads()
+
+# Check results:
+let loaded = get_async_results()
 ```
 
 ---
@@ -669,6 +707,13 @@ io.writefile("my_game.sage", code)
 1. **Use frustum culling** — `extract_frustum_planes` + `aabb_in_frustum` to skip off-screen objects
 2. **Use the spatial grid** — `create_spatial_grid` for broadphase collision instead of O(n^2) pair checks
 3. **Batch text rendering** — use `begin_text` / `add_text` / `flush_text` instead of individual `draw_text` calls
+4. **Use indirect rendering** — `cmd_draw_indirect` for GPU-driven draw calls (10K+ objects)
+5. **Use pipeline cache** — `create_pipeline_cache` reduces pipeline compilation stutter
+6. **Use device-local uploads** — `upload_mesh_device_local` for optimal GPU memory placement
+7. **Compile to native** — `sage --compile` uses LLVM for ~10x interpreter speedup
+8. **Use async loading** — `request_async_load` prevents frame stalls during asset loading
+9. **Use LOD** — `compute_lod` skips distant objects automatically
+10. **GC tuning** — `gc_disable()` at file top, `gc_collect()` at frame boundary
 4. **Use native functions** — `build_quad_verts` and `array_extend` are C-native and 50x faster than SageLang equivalents
 5. **Cache when possible** — only rebuild UI/text when state changes, not every frame
 6. **Limit entity count** — the ECS uses dict-based storage; keep entity counts reasonable (<1000)

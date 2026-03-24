@@ -9,6 +9,19 @@ import gpu
 let MAX_FRAMES = 2
 
 # ============================================================================
+# Pipeline cache
+# ============================================================================
+let _pipeline_cache = [-1]
+
+proc init_pipeline_cache():
+    _pipeline_cache[0] = gpu.create_pipeline_cache()
+    if _pipeline_cache[0] >= 0:
+        print "Pipeline cache initialized"
+
+proc get_pipeline_cache():
+    return _pipeline_cache[0]
+
+# ============================================================================
 # Create a renderer context dict
 # ============================================================================
 proc create_renderer(width, height, title):
@@ -39,6 +52,8 @@ proc create_renderer(width, height, title):
     depth_attach["final_layout"] = gpu.LAYOUT_DEPTH_ATTACH
 
     let rp = gpu.create_render_pass([color_attach, depth_attach])
+
+    init_pipeline_cache()
 
     # Framebuffers (color + depth)
     let framebuffers = gpu.create_swapchain_framebuffers_depth(rp, depth)
@@ -189,3 +204,15 @@ proc update_title_fps(r, base_title):
         let m = frames - (frames / 30) * 30
         if m == 0:
             gpu.set_title(base_title + " | " + str(fps) + " FPS")
+
+# ============================================================================
+# Secondary command buffers
+# ============================================================================
+proc create_secondary_cmd(r):
+    return gpu.create_secondary_command_buffer(r["cmd_pool"])
+
+proc begin_secondary(cmd, render_pass, framebuffer):
+    gpu.begin_secondary(cmd, render_pass, framebuffer)
+
+proc execute_secondary(primary_cmd, secondary_cmds):
+    gpu.cmd_execute_commands(primary_cmd, secondary_cmds)

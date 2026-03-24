@@ -563,7 +563,7 @@ while running:
                 menubar_active = clicked_menu
                 let menu_items_list = []
                 if clicked_menu == 0:
-                    menu_items_list = ["New Scene", "Open Scene...", "Save Scene", "---", "Export Game", "---", "Quit"]
+                    menu_items_list = ["New Scene", "Open Scene...", "Save Scene", "Save Screenshot", "---", "Export Game", "Compile Native", "---", "Quit"]
                 if clicked_menu == 1:
                     menu_items_list = ["Undo", "Redo", "---", "Delete", "Duplicate", "Select All"]
                 if clicked_menu == 2:
@@ -752,10 +752,16 @@ while running:
             if item == "Save Scene":
                 save_scene(world, "EditorScene", "assets/editor_scene.json")
                 print "Scene saved: assets/editor_scene.json"
+            if item == "Save Screenshot":
+                gpu.screenshot("assets/screenshot.png")
+                print "Screenshot saved: assets/screenshot.png"
             if item == "Export Game":
                 let code = generate_game_script(world, "ForgeGame", {"width": 1280, "height": 720})
                 io.writefile("assets/generated_game.sage", code)
                 print "Game exported: assets/generated_game.sage"
+            if item == "Compile Native":
+                from codegen import compile_game_native
+                compile_game_native(world, "ForgeGame", {"width": 1280, "height": 720})
             if item == "Quit":
                 proc _menu_quit():
                     running = false

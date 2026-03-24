@@ -35,6 +35,8 @@ The Forge Editor is a visual scene editor for building 3D games. Place objects, 
 - **Undo/Redo** — CTRL+Z / CTRL+Y with full command history (100 levels)
 - **Modal dialogs** — Quit confirmation, About dialog
 - **Play-in-Editor** — Press ENTER to generate and run your game
+- **Save Screenshot** — Capture viewport to PNG from File menu
+- **Compile Native** — Generate LLVM-compiled standalone executables (~10x faster)
 - **Keyboard shortcuts** — Press F1 to see all shortcuts
 
 ### Controls
@@ -61,7 +63,7 @@ The Forge Editor is a visual scene editor for building 3D games. Place objects, 
 
 | Menu | Actions |
 |------|---------|
-| **File** | New Scene, Open Scene, Save Scene, Export Game, Quit |
+| **File** | New Scene, Open Scene, Save Scene, Save Screenshot, Export Game, Compile Native, Quit |
 | **Edit** | Undo, Redo, Delete, Duplicate, Select All |
 | **Window** | Show/hide Outliner, Details, Content Browser, Reset Layout |
 | **Tools** | Add Cube/Sphere/Physics/Light, Apply Materials (Metal/Wood/Glass/Gold), Save as Prefab, Toggle Physics, Generate Code |
@@ -107,7 +109,7 @@ forge-engine/
 `math3d` — vec2/3/4, mat4 (multiply, translate, scale, rotate, perspective, look_at, ortho, inverse), quaternions (mul, slerp, from_euler, to_matrix, rotate_vec3)
 
 ### Rendering
-`renderer` (Vulkan swapchain, frame sync) · `render_system` · `lighting` (16 lights, fog, UBO) · `sky` (procedural, day/sunset/night presets) · `pbr_material` (Cook-Torrance BRDF) · `textures` · `shadow_map` (depth pass, PCF) · `frustum` (culling) · `lod` (5 distance levels) · `editor_grid` · `post_fx` (vignette, color grading, fade) · `postprocess` (bloom, tone mapping: Reinhard/ACES/Uncharted2, fullscreen pass pipeline)
+`renderer` (Vulkan swapchain, frame sync, **pipeline cache**, **secondary command buffers**) · `render_system` (**indirect draw**, **compute dispatch**, **anisotropic samplers**, **pipeline barriers**) · `lighting` (16 lights, fog, UBO) · `sky` (procedural presets, **cubemap skybox**) · `pbr_material` (Cook-Torrance BRDF) · `textures` · `shadow_map` (depth pass, PCF) · `frustum` (culling) · `lod` (5 distance levels) · `editor_grid` · `post_fx` (vignette, color grading, fade) · `postprocess` (bloom, tone mapping: Reinhard/ACES/Uncharted2, fullscreen pass pipeline, **offscreen targets**)
 
 ### Physics
 `collision` (AABB/sphere/ray/capsule, collision callbacks/events) · `physics` (rigidbody, gravity, restitution, fixed/distance/hinge constraints, constraint solver) · `spatial_grid` (broadphase)
@@ -116,7 +118,7 @@ forge-engine/
 `player_controller` (FPS, ground check, step climbing, slope limits) · `gameplay` (health, damage/heal, timers, state machines, spawners, scoring with combos)
 
 ### Content
-`asset_manager` (caching) · `asset_cache` · `scene_serial` (JSON save/load, prefab save/load) · `asset_import` (glTF 2.0 via cgltf) · `asset_browser` (search, filter, categories) · `audio` (OpenAL FFI) · `hot_reload` (directory watching, change detection) · `codegen` (full game script generation) · `material` (8 PBR presets: Metal, Wood, Concrete, Glass, Plastic, Gold, Rubber, Emissive)
+`asset_manager` (caching) · `asset_cache` · `scene_serial` (JSON save/load, prefab save/load) · `asset_import` (glTF 2.0, **async loading queue**, **HTTP download**) · `asset_browser` (search, filter, categories) · `audio` (OpenAL FFI) · `hot_reload` (directory watching) · `codegen` (game script generation, **LLVM native compilation**) · `material` (8 PBR presets) · `mesh` (**device-local GPU uploads**)
 
 ### Animation & AI
 `tween` (18 easings) · `animation` (skeletal, keyframes, blend trees, state machine, two-bone IK solver, animation events) · `navigation` (A* pathfinding, steering: seek/flee/arrive/wander/avoid) · `behavior_tree` (action/condition/sequence/selector/inverter/repeater/wait)
@@ -176,18 +178,33 @@ forge-engine/
 ./run.sh tests/test_ecs.sage  # Run individual suite
 ```
 
-## SageLang Enhancements
+## SageLang Features Used
 
-Forge Engine includes improvements to the SageLang interpreter and GPU module:
+Forge Engine leverages these SageLang capabilities:
 
-- **Text input** — GLFW char callback + ring buffer for keyboard text entry
-- **`str()` for arrays** — arrays display as `[1, 2, 3]` instead of nil
-- **Better runtime errors** — shows function name and value type on call failures
-- **Native C performance** — `build_quad_verts`, `array_extend`, `build_line_quads`
-- **Font rendering** — stb_truetype integration with atlas-based text pipeline
-- **glTF import** — cgltf integration for model/material/animation loading
-- **Extended key constants** — KEY_Z/Y/X/C/V/N/O, BACKSPACE, DELETE, HOME, END, F1
-- **CMake build fix** — graphics.c added to CMakeLists.txt with Vulkan/GLFW linking
+**Interpreter Enhancements:**
+- Text input via GLFW char callback + ring buffer
+- `str()` for arrays, better runtime error messages
+- Native C functions: `build_quad_verts`, `array_extend`, `build_line_quads`
+- stb_truetype font rendering, cgltf model loading
+- Extended key constants (KEY_Z/Y/X, BACKSPACE, DELETE, F1, etc.)
+
+**LLVM Backend:**
+- Native compilation via `sage --compile` for ~10x speedup
+- 100+ GPU runtime functions linked directly via C ABI
+- Bytecode VM with 21 GPU hot-path opcodes for game loops
+
+**GPU Module (135 functions):**
+- Vulkan rendering pipeline (swapchain, render passes, pipelines, command buffers)
+- Compute shader dispatch (`cmd_dispatch`, `cmd_dispatch_indirect`)
+- Indirect rendering (`cmd_draw_indirect`, `cmd_draw_indexed_indirect`)
+- Secondary command buffers for parallel recording
+- Pipeline caching, advanced samplers, cubemaps
+- Offscreen targets, MRT render passes, pipeline barriers
+- Screenshot capture, device-local memory uploads
+
+**Networking:**
+- TCP/UDP sockets, HTTP client (get/post/download), SSL/TLS
 
 ## Known Issues
 
