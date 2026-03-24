@@ -70,8 +70,10 @@ proc build_update_messages(rm, world, threshold):
             let should_send = true
             if dict_has(rm["last_snapshot"], snap_key):
                 let last = rm["last_snapshot"][snap_key]
-                let dist = v3_length(v3_sub(pos, last["pos"]))
-                if dist < threshold:
+                let pos_dist = v3_length(v3_sub(pos, last["pos"]))
+                let rot_dist = v3_length(v3_sub(rot, last["rot"]))
+                # Send if either position or rotation changed enough
+                if pos_dist < threshold and rot_dist < threshold:
                     should_send = false
             if should_send:
                 let msg = msg_entity_update(net_id, [pos[0], pos[1], pos[2]], [rot[0], rot[1], rot[2]])
@@ -148,6 +150,14 @@ proc handle_replication_message(rm, world, msg, time):
         return true
     if mtype == MSG_ENTITY_SPAWN:
         let p = msg["payload"]
+        let existing = get_local_id(rm, p["eid"])
+        if existing >= 0:
+            # Idempotent spawn handling: don't duplicate entities for the same net id
+            if has_component(world, existing, "transform"):
+                let et = get_component(world, existing, "transform")
+                et["position"] = vec3(p["pos"][0], p["pos"][1], p["pos"][2])
+                et["dirty"] = true
+            return true
         let local_eid = spawn(world)
         add_component(world, local_eid, "transform", TransformComponent(p["pos"][0], p["pos"][1], p["pos"][2]))
         add_component(world, local_eid, "name", NameComponent(p["type"] + "_" + str(p["eid"])))
@@ -162,6 +172,8 @@ proc handle_replication_message(rm, world, msg, time):
             destroy(world, local_eid)
             dict_delete(rm["net_to_local"], str(p["eid"]))
             dict_delete(rm["local_to_net"], str(local_eid))
+            dict_delete(rm["interp_buffers"], str(p["eid"]))
+            dict_delete(rm["last_snapshot"], str(p["eid"]))
         return true
     return false
 

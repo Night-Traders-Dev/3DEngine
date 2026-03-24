@@ -32,15 +32,15 @@ check("msg payload", msg["payload"]["name"] == "Alice")
 # --- Serialize ---
 let data = serialize_message(msg)
 check("serialized not nil", data != nil)
-check("serialized has length prefix", len(data) > 4)
-# First 4 chars are the length
+check("serialized has length prefix", len(data) > 8)
+# First 8 chars are the length
 let prefix = ""
 let pi = 0
-while pi < 4:
+while pi < 8:
     prefix = prefix + data[pi]
     pi = pi + 1
 let body_len = tonumber(prefix)
-check("length prefix matches", body_len + 4 == len(data))
+check("length prefix matches", body_len + 8 == len(data))
 
 # --- Deserialize ---
 let msg2 = deserialize_message(data)

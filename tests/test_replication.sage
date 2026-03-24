@@ -5,7 +5,7 @@ from net_replication import create_replication_manager, register_entity
 from net_replication import get_net_id, get_local_id, build_update_messages
 from net_replication import apply_remote_update, interpolate_remotes
 from net_replication import handle_replication_message, replication_stats
-from ecs import create_world, spawn, add_component, get_component, has_component
+from ecs import create_world, spawn, add_component, get_component, has_component, entity_count
 from components import TransformComponent
 from net_protocol import msg_entity_update, msg_entity_spawn, msg_entity_destroy
 from math3d import vec3, v3_length, v3_sub
@@ -58,6 +58,11 @@ t1["position"] = vec3(10.0, 2.0, 3.0)
 let msgs3 = build_update_messages(rm, w, 0.01)
 check("moved entity sends update", len(msgs3) > 0)
 
+# Rotate entity -> also sends update
+t1["rotation"] = vec3(0.0, 1.0, 0.0)
+let msgs4 = build_update_messages(rm, w, 0.01)
+check("rotated entity sends update", len(msgs4) > 0)
+
 # --- Apply remote update ---
 let rm2 = create_replication_manager()
 let w2 = create_world()
@@ -94,6 +99,11 @@ let spawn_msg = msg_entity_spawn(50, "cube", [3.0, 4.0, 5.0])
 let handled = handle_replication_message(rm3, w3, spawn_msg, 0.0)
 check("spawn msg handled", handled == true)
 check("spawned entity exists", get_local_id(rm3, 50) > 0)
+
+# Duplicate spawn message should be idempotent (no extra local entity)
+let ecount_before_dup = entity_count(w3)
+handle_replication_message(rm3, w3, spawn_msg, 0.1)
+check("duplicate spawn does not add entity", entity_count(w3) == ecount_before_dup)
 
 # Update message
 let upd_msg = msg_entity_update(50, [8.0, 4.0, 5.0], [0.0, 1.0, 0.0])

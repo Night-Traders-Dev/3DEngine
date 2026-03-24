@@ -165,13 +165,80 @@ proc resolve_aabb_pair(rb_a, t_a, col_a, rb_b, t_b, col_b):
     return hit
 
 # ============================================================================
+# Sphere vs Sphere collision response
+# ============================================================================
+proc resolve_sphere_pair(rb_a, t_a, col_a, rb_b, t_b, col_b):
+    let pos_a = v3_add(t_a["position"], col_a["offset"])
+    let pos_b = v3_add(t_b["position"], col_b["offset"])
+    let hit = sphere_vs_sphere(pos_a, col_a["radius"], pos_b, col_b["radius"])
+    if hit == nil:
+        return nil
+    let normal = hit["normal"]
+    let depth = hit["depth"]
+    let total_inv = rb_a["inv_mass"] + rb_b["inv_mass"]
+    if total_inv < 0.0001:
+        return hit
+    let ratio_a = rb_a["inv_mass"] / total_inv
+    let ratio_b = rb_b["inv_mass"] / total_inv
+    t_a["position"] = v3_add(t_a["position"], v3_scale(normal, depth * ratio_a))
+    t_b["position"] = v3_sub(t_b["position"], v3_scale(normal, depth * ratio_b))
+    t_a["dirty"] = true
+    t_b["dirty"] = true
+    let rel_vel = v3_sub(rb_a["velocity"], rb_b["velocity"])
+    let vel_along = v3_dot(rel_vel, normal)
+    if vel_along > 0.0:
+        return hit
+    let e = (rb_a["restitution"] + rb_b["restitution"]) * 0.5
+    let j = (0.0 - (1.0 + e) * vel_along) / total_inv
+    let impulse = v3_scale(normal, j)
+    if rb_a["inv_mass"] > 0.0:
+        rb_a["velocity"] = v3_add(rb_a["velocity"], v3_scale(impulse, rb_a["inv_mass"]))
+    if rb_b["inv_mass"] > 0.0:
+        rb_b["velocity"] = v3_sub(rb_b["velocity"], v3_scale(impulse, rb_b["inv_mass"]))
+    return hit
+
+# ============================================================================
+# Sphere vs AABB collision response
+# Sphere must be passed as A, AABB as B
+# ============================================================================
+proc resolve_sphere_aabb_pair(rb_s, t_s, col_s, rb_b, t_b, col_b):
+    let pos_s = v3_add(t_s["position"], col_s["offset"])
+    let pos_b = v3_add(t_b["position"], col_b["offset"])
+    let hit = sphere_vs_aabb(pos_s, col_s["radius"], pos_b, col_b["half"])
+    if hit == nil:
+        return nil
+    let normal = hit["normal"]
+    let depth = hit["depth"]
+    let total_inv = rb_s["inv_mass"] + rb_b["inv_mass"]
+    if total_inv < 0.0001:
+        return hit
+    let ratio_s = rb_s["inv_mass"] / total_inv
+    let ratio_b = rb_b["inv_mass"] / total_inv
+    t_s["position"] = v3_add(t_s["position"], v3_scale(normal, depth * ratio_s))
+    t_b["position"] = v3_sub(t_b["position"], v3_scale(normal, depth * ratio_b))
+    t_s["dirty"] = true
+    t_b["dirty"] = true
+    let rel_vel = v3_sub(rb_s["velocity"], rb_b["velocity"])
+    let vel_along = v3_dot(rel_vel, normal)
+    if vel_along > 0.0:
+        return hit
+    let e = (rb_s["restitution"] + rb_b["restitution"]) * 0.5
+    let j = (0.0 - (1.0 + e) * vel_along) / total_inv
+    let impulse = v3_scale(normal, j)
+    if rb_s["inv_mass"] > 0.0:
+        rb_s["velocity"] = v3_add(rb_s["velocity"], v3_scale(impulse, rb_s["inv_mass"]))
+    if rb_b["inv_mass"] > 0.0:
+        rb_b["velocity"] = v3_sub(rb_b["velocity"], v3_scale(impulse, rb_b["inv_mass"]))
+    return hit
+
+# ============================================================================
 # Physics system (register with ECS)
 # ============================================================================
 proc create_physics_system(physics_world):
     let pw = physics_world
     proc physics_update(world, entities, dt):
         from ecs import get_component, has_component
-        from spatial_grid import create_spatial_grid, insert_entity, get_collision_pairs, clear_grid
+        from spatial_grid import create_spatial_grid, insert_entity, get_collision_pairs
         # Integration + ground collision
         let i = 0
         while i < len(entities):
@@ -215,5 +282,11 @@ proc create_physics_system(physics_world):
                         let col_b = get_component(world, b, "collider")
                         if col_a["type"] == "aabb" and col_b["type"] == "aabb":
                             resolve_aabb_pair(rb_a, t_a, col_a, rb_b, t_b, col_b)
+                        if col_a["type"] == "sphere" and col_b["type"] == "sphere":
+                            resolve_sphere_pair(rb_a, t_a, col_a, rb_b, t_b, col_b)
+                        if col_a["type"] == "sphere" and col_b["type"] == "aabb":
+                            resolve_sphere_aabb_pair(rb_a, t_a, col_a, rb_b, t_b, col_b)
+                        if col_a["type"] == "aabb" and col_b["type"] == "sphere":
+                            resolve_sphere_aabb_pair(rb_b, t_b, col_b, rb_a, t_a, col_a)
                 pi = pi + 1
     return physics_update

@@ -23,17 +23,19 @@ proc watch_file(fw, path):
     if io.exists(path) == false:
         return false
     let size = io.filesize(path)
-    fw["watched"][path] = {"size": size, "last_size": size, "changed": false}
+    let snapshot = io.readfile(path)
+    fw["watched"][path] = {"size": size, "last_size": size, "changed": false, "snapshot": snapshot}
     return true
 
 proc watch_directory(fw, dir_path, extension):
-    # Watch known files in a directory by convention
-    # Since we can't list directories, watch specific patterns
-    let patterns = ["engine", "ecs", "events", "input", "components"]
+    let files = io.listdir(dir_path)
+    if files == nil:
+        return nil
     let i = 0
-    while i < len(patterns):
-        let path = dir_path + "/" + patterns[i] + extension
-        if io.exists(path):
+    while i < len(files):
+        let fname = files[i]
+        if extension == "" or endswith(fname, extension):
+            let path = dir_path + "/" + fname
             watch_file(fw, path)
         i = i + 1
 
@@ -57,15 +59,23 @@ proc poll_changes(fw):
         let entry = fw["watched"][path]
         if io.exists(path):
             let current_size = io.filesize(path)
-            if current_size != entry["size"]:
+            let current_snapshot = io.readfile(path)
+            if current_size != entry["size"] or current_snapshot != entry["snapshot"]:
                 entry["last_size"] = entry["size"]
                 entry["size"] = current_size
+                entry["snapshot"] = current_snapshot
                 entry["changed"] = true
                 push(changes, path)
                 if fw["on_change"] != nil:
                     fw["on_change"](path)
             else:
                 entry["changed"] = false
+        else:
+            # Deleted file counts as a change
+            entry["changed"] = true
+            push(changes, path)
+            if fw["on_change"] != nil:
+                fw["on_change"](path)
         i = i + 1
     fw["changes"] = changes
     return changes

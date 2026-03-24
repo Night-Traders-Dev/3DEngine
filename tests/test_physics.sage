@@ -4,9 +4,10 @@
 from physics import RigidbodyComponent, StaticBodyComponent
 from physics import BoxColliderComponent, SphereColliderComponent
 from physics import apply_force, apply_impulse
-from physics import create_physics_world, integrate_body, resolve_ground
+from physics import create_physics_world, create_physics_system, integrate_body, resolve_ground
 from components import TransformComponent
-from math3d import vec3
+from math3d import vec3, v3_sub, v3_length
+from ecs import create_world, spawn, add_component, register_system, tick_systems, get_component
 
 import math
 
@@ -130,6 +131,34 @@ let col9 = BoxColliderComponent(0.5, 0.5, 0.5)
 resolve_ground(rb9, t9, col9, 0.0)
 check("bounce reverses velocity", rb9["velocity"][1] > 0.0)
 check("bounce loses energy", rb9["velocity"][1] < 10.0)
+
+# --- Sphere pair collision in physics system ---
+let wcol = create_world()
+let pwcol = create_physics_world()
+register_system(wcol, "physics", ["rigidbody", "transform"], create_physics_system(pwcol))
+
+let sa = spawn(wcol)
+add_component(wcol, sa, "transform", TransformComponent(0.0, 2.0, 0.0))
+let rbsa = RigidbodyComponent(1.0)
+rbsa["use_gravity"] = false
+add_component(wcol, sa, "rigidbody", rbsa)
+add_component(wcol, sa, "collider", SphereColliderComponent(1.0))
+
+let sb2 = spawn(wcol)
+add_component(wcol, sb2, "transform", TransformComponent(0.5, 2.0, 0.0))
+let rbsb = RigidbodyComponent(1.0)
+rbsb["use_gravity"] = false
+add_component(wcol, sb2, "rigidbody", rbsb)
+add_component(wcol, sb2, "collider", SphereColliderComponent(1.0))
+
+let ta_before = get_component(wcol, sa, "transform")
+let tb_before = get_component(wcol, sb2, "transform")
+let dist_before = v3_length(v3_sub(ta_before["position"], tb_before["position"]))
+tick_systems(wcol, 0.016)
+let ta_after = get_component(wcol, sa, "transform")
+let tb_after = get_component(wcol, sb2, "transform")
+let dist_after = v3_length(v3_sub(ta_after["position"], tb_after["position"]))
+check("sphere collision separates bodies", dist_after > dist_before)
 
 # --- Results ---
 print ""

@@ -62,16 +62,52 @@ proc serialize_message(msg):
     cJSON_Delete(root)
     if json_str == nil:
         return nil
-    # Length prefix: 4-char zero-padded length
+    # Length prefix: 8-char zero-padded length
     let body_len = len(json_str)
     let prefix = _pad_length(body_len)
     return prefix + json_str
 
 proc _pad_length(n):
     let s = str(n)
-    while len(s) < 4:
+    while len(s) < 8:
         s = "0" + s
     return s
+
+proc _all_digits(data, start, count):
+    let i = 0
+    while i < count:
+        if start + i >= len(data):
+            return false
+        let ch = data[start + i]
+        if ch < "0" or ch > "9":
+            return false
+        i = i + 1
+    return true
+
+proc _parse_length_at(data, pos):
+    # Preferred: 8-char prefix (current format)
+    if pos + 8 <= len(data):
+        if _all_digits(data, pos, 8):
+            let s8 = ""
+            let i = 0
+            while i < 8:
+                s8 = s8 + data[pos + i]
+                i = i + 1
+            let n8 = tonumber(s8)
+            if n8 > 0:
+                return [n8, 8]
+    # Backward compatibility: 4-char prefix (legacy format)
+    if pos + 4 <= len(data):
+        if _all_digits(data, pos, 4):
+            let s4 = ""
+            let i = 0
+            while i < 4:
+                s4 = s4 + data[pos + i]
+                i = i + 1
+            let n4 = tonumber(s4)
+            if n4 > 0:
+                return [n4, 4]
+    return [0, 0]
 
 # ============================================================================
 # Deserialize message from string
@@ -79,17 +115,16 @@ proc _pad_length(n):
 proc deserialize_message(data):
     if len(data) < 5:
         return nil
-    let len_str = ""
-    let i = 0
-    while i < 4:
-        len_str = len_str + data[i]
-        i = i + 1
-    let body_len = tonumber(len_str)
-    if body_len <= 0:
+    let parsed = _parse_length_at(data, 0)
+    let body_len = parsed[0]
+    let prefix_len = parsed[1]
+    if body_len <= 0 or prefix_len <= 0:
+        return nil
+    if len(data) < prefix_len + body_len:
         return nil
     let body = ""
-    i = 4
-    while i < len(data) and i < 4 + body_len:
+    let i = prefix_len
+    while i < len(data) and i < prefix_len + body_len:
         body = body + data[i]
         i = i + 1
     let root = cJSON_Parse(body)
@@ -127,16 +162,13 @@ proc extract_messages(buffer):
     let messages = []
     let pos = 0
     while pos + 4 <= len(buffer):
-        let len_str = ""
-        let i = 0
-        while i < 4:
-            len_str = len_str + buffer[pos + i]
-            i = i + 1
-        let body_len = tonumber(len_str)
-        if body_len <= 0:
+        let parsed = _parse_length_at(buffer, pos)
+        let body_len = parsed[0]
+        let prefix_len = parsed[1]
+        if body_len <= 0 or prefix_len <= 0:
             pos = pos + 1
             continue
-        if pos + 4 + body_len > len(buffer):
+        if pos + prefix_len + body_len > len(buffer):
             # Incomplete message, keep in buffer
             let remaining = ""
             let ri = pos
@@ -146,13 +178,13 @@ proc extract_messages(buffer):
             return [messages, remaining]
         let msg_data = ""
         let mi = pos
-        while mi < pos + 4 + body_len:
+        while mi < pos + prefix_len + body_len:
             msg_data = msg_data + buffer[mi]
             mi = mi + 1
         let msg = deserialize_message(msg_data)
         if msg != nil:
             push(messages, msg)
-        pos = pos + 4 + body_len
+        pos = pos + prefix_len + body_len
     let remaining = ""
     if pos < len(buffer):
         let ri = pos

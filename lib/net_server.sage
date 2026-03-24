@@ -67,6 +67,10 @@ proc poll_server(srv):
     # Accept new connections
     let new_sock = tcp.accept(srv["socket"])
     if new_sock != nil and new_sock >= 0:
+        if client_count(srv) >= srv["max_clients"]:
+            print "Server: Rejecting connection (max clients reached)"
+            tcp.close(new_sock)
+            return nil
         let cid = srv["next_client_id"]
         srv["next_client_id"] = cid + 1
         let client = _create_client(new_sock, cid)
@@ -89,7 +93,11 @@ proc poll_server(srv):
 
 proc _read_client(srv, client):
     let data = tcp.recv(client["socket"], 4096)
-    if data == nil or len(data) == 0:
+    if data == nil:
+        return nil
+    # Zero-length read means remote closed connection
+    if len(data) == 0:
+        _disconnect_client(srv, client)
         return nil
     client["buffer"] = client["buffer"] + data
     let result = extract_messages(client["buffer"])

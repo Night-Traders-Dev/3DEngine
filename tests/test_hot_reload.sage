@@ -2,6 +2,7 @@
 import io
 import sys
 from hot_reload import create_file_watcher, watch_file, unwatch_file
+from hot_reload import watch_directory
 from hot_reload import poll_changes, has_changes, clear_changes
 from hot_reload import create_hot_reload_manager, register_reload_handler
 from hot_reload import update_hot_reload, reload_stats
@@ -43,13 +44,32 @@ let changes2 = poll_changes(fw)
 check("detected change", len(changes2) > 0)
 check("has_changes true", has_changes(fw))
 
+# Same-size modify should still count as change
+io.writefile("/tmp/sage_hr_same.txt", "abc123")
+watch_file(fw, "/tmp/sage_hr_same.txt")
+poll_changes(fw)
+io.writefile("/tmp/sage_hr_same.txt", "xyz789")
+let changes_same = poll_changes(fw)
+let saw_same = false
+let si = 0
+while si < len(changes_same):
+    if changes_same[si] == "/tmp/sage_hr_same.txt":
+        saw_same = true
+    si = si + 1
+check("same-size content change detected", saw_same)
+
 # Clear changes
 clear_changes(fw)
 check("cleared changes", has_changes(fw) == false)
 
 # Unwatch
 unwatch_file(fw, "/tmp/sage_hr_test.txt")
+unwatch_file(fw, "/tmp/sage_hr_same.txt")
 check("unwatched", len(dict_keys(fw["watched"])) == 0)
+
+# Watch directory by extension
+watch_directory(fw, "lib", ".sage")
+check("watch_directory adds files", len(dict_keys(fw["watched"])) > 0)
 
 # --- Hot reload manager ---
 let hrm = create_hot_reload_manager()
@@ -68,6 +88,7 @@ check("stats reload count 0", rs["reload_count"] == 0)
 
 # Cleanup
 io.remove("/tmp/sage_hr_test.txt")
+io.remove("/tmp/sage_hr_same.txt")
 
 print ""
 print "Results: " + str(p) + " passed, " + str(f) + " failed"

@@ -58,7 +58,11 @@ proc poll_client(cl):
     if cl["connected"] == false:
         return nil
     let data = tcp.recv(cl["socket"], 4096)
-    if data == nil or len(data) == 0:
+    if data == nil:
+        return nil
+    # Zero-length read means server closed the connection
+    if len(data) == 0:
+        _handle_disconnect(cl)
         return nil
     cl["buffer"] = cl["buffer"] + data
     let result = extract_messages(cl["buffer"])
@@ -124,5 +128,4 @@ proc disconnect(cl):
     let msg = create_message(MSG_DISCONNECT, nil)
     send_message(cl, msg)
     tcp.close(cl["socket"])
-    cl["connected"] = false
-    print "Client: Disconnected"
+    _handle_disconnect(cl)
