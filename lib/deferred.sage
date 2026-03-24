@@ -107,3 +107,32 @@ proc pack_ssr_params(ssr):
     push(data, 0.0)
     push(data, 0.0)
     return data
+
+# ============================================================================
+# G-Buffer pipeline creation helper
+# ============================================================================
+proc create_gbuffer_pipeline(gb, vert_path, frag_path, push_size):
+    let vert = gpu.load_shader(vert_path, gpu.STAGE_VERTEX)
+    let frag = gpu.load_shader(frag_path, gpu.STAGE_FRAGMENT)
+    if vert < 0 or frag < 0:
+        return nil
+    let pipe_layout = gpu.create_pipeline_layout([], push_size, gpu.STAGE_VERTEX)
+    let cfg = {}
+    cfg["layout"] = pipe_layout
+    cfg["render_pass"] = gb["render_pass"]
+    cfg["vertex_shader"] = vert
+    cfg["fragment_shader"] = frag
+    cfg["topology"] = gpu.TOPO_TRIANGLE_LIST
+    cfg["cull_mode"] = gpu.CULL_BACK
+    cfg["depth_test"] = true
+    cfg["depth_write"] = true
+    from mesh import mesh_vertex_binding, mesh_vertex_attribs
+    cfg["vertex_bindings"] = [mesh_vertex_binding()]
+    cfg["vertex_attribs"] = mesh_vertex_attribs()
+    let pipeline = gpu.create_graphics_pipeline(cfg)
+    if pipeline < 0:
+        return nil
+    let result = {}
+    result["pipeline"] = pipeline
+    result["pipe_layout"] = pipe_layout
+    return result

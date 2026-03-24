@@ -702,6 +702,70 @@ let loaded = get_async_results()
 
 ---
 
+## Coroutines
+
+SageLang generators enable game sequences without blocking the frame loop:
+
+```python
+from game_loop import start_coroutine, update_coroutines, is_coroutine_running
+
+# Define a sequence using yield
+proc cutscene_intro():
+    print "Camera panning..."
+    yield true   # Wait one frame
+    print "Title appears..."
+    yield true
+    yield true   # Wait two more frames
+    print "Cutscene done"
+
+# Start and update each frame
+start_coroutine("intro", cutscene_intro())
+
+# In game loop:
+update_coroutines(dt)
+if is_coroutine_running("intro"):
+    # Still playing
+```
+
+## Octree Spatial Queries
+
+For large scenes with many entities, the octree provides efficient spatial queries:
+
+```python
+from spatial_grid import create_octree, octree_insert, octree_query_sphere
+
+let tree = create_octree([0.0, 0.0, 0.0], 500.0, 6)  # center, half_size, max_depth
+octree_insert(tree, entity_id, position)
+
+# Find all entities within radius of a point
+let nearby = octree_query_sphere(tree, player_pos, 10.0)
+```
+
+## Secure Networking
+
+```python
+from net_server import create_secure_server
+from net_client import connect_secure
+
+# Server with SSL/TLS
+let srv = create_secure_server(8443, "cert.pem", "key.pem")
+
+# Client with SSL
+let client = connect_secure("game.example.com", 8443)
+```
+
+## Environment Configuration
+
+Set engine parameters via environment variables:
+
+```bash
+FORGE_WIDTH=1920 FORGE_HEIGHT=1080 FORGE_FULLSCREEN=1 ./editor.sh
+```
+
+Supported: `FORGE_WIDTH`, `FORGE_HEIGHT`, `FORGE_FULLSCREEN`, `FORGE_VSYNC`, `FORGE_DEBUG`
+
+---
+
 ## Performance Tips
 
 1. **Use frustum culling** — `extract_frustum_planes` + `aabb_in_frustum` to skip off-screen objects

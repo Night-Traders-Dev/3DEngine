@@ -83,3 +83,46 @@ proc run_loop(config, time_state, world, fixed_update_fn, render_fn, should_cont
         render_fn(world, alpha)
 
         config["frame"] = config["frame"] + 1
+
+# ============================================================================
+# Coroutine system for game sequences (cutscenes, tutorials, etc.)
+# Uses SageLang generators (yield)
+# ============================================================================
+let _active_coroutines = []
+
+proc start_coroutine(name, generator):
+    push(_active_coroutines, {"name": name, "gen": generator, "done": false})
+
+proc update_coroutines(dt):
+    let still_active = []
+    let i = 0
+    while i < len(_active_coroutines):
+        let co = _active_coroutines[i]
+        if co["done"] == false:
+            let result = next(co["gen"])
+            if result == nil:
+                co["done"] = true
+            else:
+                push(still_active, co)
+        i = i + 1
+    _active_coroutines = still_active
+
+proc stop_coroutine(name):
+    let remaining = []
+    let i = 0
+    while i < len(_active_coroutines):
+        if _active_coroutines[i]["name"] != name:
+            push(remaining, _active_coroutines[i])
+        i = i + 1
+    _active_coroutines = remaining
+
+proc active_coroutine_count():
+    return len(_active_coroutines)
+
+proc is_coroutine_running(name):
+    let i = 0
+    while i < len(_active_coroutines):
+        if _active_coroutines[i]["name"] == name:
+            return true
+        i = i + 1
+    return false

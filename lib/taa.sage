@@ -108,3 +108,23 @@ proc pack_taa_params(taa):
     push(data, 0.0)
     push(data, 0.0)
     return data
+
+# ============================================================================
+# TAA frame integration
+# ============================================================================
+proc taa_jitter_projection_indexed(taa, proj_matrix, frame_index):
+    # Apply sub-pixel jitter to projection matrix for temporal sampling
+    let jitter_x = taa["jitters"][frame_index % len(taa["jitters"])][0]
+    let jitter_y = taa["jitters"][frame_index % len(taa["jitters"])][1]
+    let jittered = [0.0,0.0,0.0,0.0, 0.0,0.0,0.0,0.0, 0.0,0.0,0.0,0.0, 0.0,0.0,0.0,0.0]
+    let i = 0
+    while i < 16:
+        jittered[i] = proj_matrix[i]
+        i = i + 1
+    # Offset the projection by sub-pixel jitter
+    jittered[8] = jittered[8] + jitter_x
+    jittered[9] = jittered[9] + jitter_y
+    return jittered
+
+proc taa_should_resolve(taa):
+    return taa["frame_index"] > 0

@@ -129,3 +129,22 @@ proc disconnect(cl):
     send_message(cl, msg)
     tcp.close(cl["socket"])
     _handle_disconnect(cl)
+
+# ============================================================================
+# Secure client (SSL/TLS)
+# ============================================================================
+proc connect_secure(host, port):
+    let client = connect_to_server(create_client(), host, port, "Player")
+    if client == nil:
+        return nil
+    client["secure"] = true
+    try:
+        import ssl
+        client["ssl_ctx"] = ssl.context()
+        client["ssl_sock"] = ssl.wrap(client["ssl_ctx"], client["socket"])
+        ssl.connect(client["ssl_sock"], host)
+        print "SSL connected to " + host + ":" + str(port)
+    catch e:
+        print "SSL not available, using plain TCP: " + str(e)
+        client["secure"] = false
+    return client

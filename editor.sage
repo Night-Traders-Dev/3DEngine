@@ -81,9 +81,22 @@ import io
 print "=== Forge Engine Editor ==="
 
 # ============================================================================
+# Engine config (supports FORGE_WIDTH, FORGE_HEIGHT env vars)
+# ============================================================================
+import sys
+let _init_w = 1440
+let _init_h = 900
+let _env_w = sys.getenv("FORGE_WIDTH")
+let _env_h = sys.getenv("FORGE_HEIGHT")
+if _env_w != nil and _env_w != "":
+    _init_w = tonumber(_env_w)
+if _env_h != nil and _env_h != "":
+    _init_h = tonumber(_env_h)
+
+# ============================================================================
 # Renderer
 # ============================================================================
-let r = create_renderer(1440, 900, "Forge Engine Editor")
+let r = create_renderer(_init_w, _init_h, "Forge Engine Editor")
 if r == nil:
     raise "Failed to create renderer"
 # Dark gray background (Unreal-style viewport)

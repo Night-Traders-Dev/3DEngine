@@ -211,3 +211,23 @@ proc stop_server(srv):
         i = i + 1
     tcp.close(srv["socket"])
     print "Server stopped"
+
+# ============================================================================
+# Secure server (SSL/TLS)
+# ============================================================================
+proc create_secure_server(port, cert_path, key_path):
+    let srv = create_server(port)
+    if srv == nil:
+        return nil
+    srv["secure"] = true
+    srv["cert_path"] = cert_path
+    srv["key_path"] = key_path
+    try:
+        import ssl
+        srv["ssl_ctx"] = ssl.context()
+        ssl.load_cert(srv["ssl_ctx"], cert_path, key_path)
+        print "SSL server initialized on port " + str(port)
+    catch e:
+        print "SSL not available: " + str(e)
+        srv["secure"] = false
+    return srv

@@ -126,3 +126,34 @@ proc fg_print(fg):
             status = "disabled"
         print "    " + str(i) + ". " + p["name"] + " (" + status + ")"
         i = i + 1
+
+# ============================================================================
+# Frame graph GPU integration
+# ============================================================================
+proc fg_add_graphics_pass(fg, name, render_pass, framebuffer, execute_fn):
+    let pass_data = create_pass(name, PASS_GRAPHICS)
+    pass_data["render_pass"] = render_pass
+    pass_data["framebuffer"] = framebuffer
+    pass_data["execute"] = execute_fn
+    fg_add_pass(fg, pass_data)
+    return pass_data
+
+proc fg_add_compute_pass(fg, name, execute_fn):
+    let pass_data = create_pass(name, PASS_COMPUTE)
+    pass_data["execute"] = execute_fn
+    fg_add_pass(fg, pass_data)
+    return pass_data
+
+proc fg_execute_with_barriers(fg, cmd):
+    let order = fg_compile(fg)
+    let passes = fg["passes"]
+    let i = 0
+    while i < len(order):
+        let pass_data = passes[order[i]]
+        if pass_data["enabled"]:
+            if pass_data["type"] == PASS_COMPUTE:
+                pass_data["execute"](cmd, fg["resources"])
+                gpu.cmd_pipeline_barrier(cmd, gpu.PIPE_COMPUTE, gpu.PIPE_FRAGMENT, gpu.ACCESS_SHADER_WRITE, gpu.ACCESS_SHADER_READ)
+            else:
+                pass_data["execute"](cmd, fg["resources"])
+        i = i + 1

@@ -103,22 +103,22 @@ forge-engine/
 ## Engine Systems
 
 ### Core
-`engine` · `ecs` (dict-based, queries, systems, tags) · `events` · `game_loop` · `components` (Transform, Name, Camera, Light, Material, Audio, TriggerVolume) · `engine_math` · `input`
+`engine` (**env var config**: FORGE_WIDTH/HEIGHT/FULLSCREEN/VSYNC/DEBUG) · `ecs` (dict-based, queries, systems, tags) · `events` · `game_loop` (**coroutine system** via generators) · `components` (Transform, Name, Camera, Light, Material, Audio, TriggerVolume) · `engine_math` · `input`
 
 ### Math
 `math3d` — vec2/3/4, mat4 (multiply, translate, scale, rotate, perspective, look_at, ortho, inverse), quaternions (mul, slerp, from_euler, to_matrix, rotate_vec3)
 
 ### Rendering
-`renderer` (Vulkan swapchain, frame sync, **pipeline cache**, **secondary command buffers**) · `render_system` (**indirect draw**, **compute dispatch**, **anisotropic samplers**, **pipeline barriers**) · `lighting` (16 lights, fog, UBO) · `sky` (procedural presets, **cubemap skybox**) · `pbr_material` (Cook-Torrance BRDF) · `textures` · `shadow_map` (depth pass, PCF) · `frustum` (culling) · `lod` (5 distance levels) · `editor_grid` · `post_fx` (vignette, color grading, fade) · `postprocess` (bloom, tone mapping: Reinhard/ACES/Uncharted2, fullscreen pass pipeline, **offscreen targets**)
+`renderer` (Vulkan swapchain, frame sync, **pipeline cache**, **secondary command buffers**) · `render_system` (**indirect draw**, **compute dispatch**, **anisotropic samplers**, **pipeline barriers**) · `lighting` (16 lights, fog, UBO) · `sky` (procedural presets, **cubemap skybox**) · `pbr_material` (Cook-Torrance BRDF) · `textures` · `shadow_map` (depth pass, PCF) · `deferred` (G-buffer MRT, **G-buffer pipeline builder**) · `frustum` (culling) · `lod` (5 distance levels) · `taa` (temporal anti-aliasing, **jitter projection**) · `frame_graph` (pass dependencies, **GPU barrier integration**) · `editor_grid` · `post_fx` (vignette, color grading, fade) · `postprocess` (bloom, tone mapping, fullscreen passes, **offscreen targets**)
 
 ### Physics
-`collision` (AABB/sphere/ray/capsule, collision callbacks/events) · `physics` (rigidbody, gravity, restitution, fixed/distance/hinge constraints, constraint solver) · `spatial_grid` (broadphase)
+`collision` (AABB/sphere/ray/capsule, collision callbacks/events) · `physics` (rigidbody, gravity, restitution, fixed/distance/hinge constraints, constraint solver) · `spatial_grid` (broadphase, **octree** for large scenes)
 
 ### Gameplay
 `player_controller` (FPS, ground check, step climbing, slope limits) · `gameplay` (health, damage/heal, timers, state machines, spawners, scoring with combos)
 
 ### Content
-`asset_manager` (caching) · `asset_cache` · `scene_serial` (JSON save/load, prefab save/load) · `asset_import` (glTF 2.0, **async loading queue**, **HTTP download**) · `asset_browser` (search, filter, categories) · `audio` (OpenAL FFI) · `hot_reload` (directory watching) · `codegen` (game script generation, **LLVM native compilation**) · `material` (8 PBR presets) · `mesh` (**device-local GPU uploads**)
+`asset_manager` (caching) · `asset_cache` · `scene_serial` (JSON save/load, prefab save/load) · `asset_import` (glTF 2.0, **async loading queue**, **HTTP download**) · `asset_browser` (search, filter, categories) · `audio` (OpenAL FFI) · `hot_reload` (directory watching) · `codegen` (game script generation, **LLVM native compilation**) · `material` (8 PBR presets) · `mesh` (**device-local uploads**, **struct vertex packing**)
 
 ### Animation & AI
 `tween` (18 easings) · `animation` (skeletal, keyframes, blend trees, state machine, two-bone IK solver, animation events) · `navigation` (A* pathfinding, steering: seek/flee/arrive/wander/avoid) · `behavior_tree` (action/condition/sequence/selector/inverter/repeater/wait)
@@ -133,7 +133,7 @@ forge-engine/
 `particles` (CPU pool, emitter shapes) · `vfx_presets` (fire/smoke/sparks/rain/magic) · `particle_renderer` · `post_fx` (vignette, color grading, fade, presets) · `postprocess` (bloom extract/blur/composite, HDR tone mapping, fullscreen pass infrastructure)
 
 ### Networking
-`net_protocol` (binary messages) · `net_server` (TCP, 16 clients) · `net_client` · `net_replication` · `lobby`
+`net_protocol` (binary messages) · `net_server` (TCP, 16 clients, **SSL/TLS**) · `net_client` (**secure connect**) · `net_replication` · `lobby`
 
 ### Editor Tools
 `undo_redo` (command pattern, 100 levels) · `inspector` · `gizmo` (translate/rotate/scale) · `asset_browser` · `scene_editor` (multi-select, raycast picking) · `editor_viewport` · `editor_layout` · `codegen` · `editor_grid` · `debug_ui` (overlay, frame stats)

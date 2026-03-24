@@ -177,3 +177,93 @@ proc grid_stats(sg):
     s["cells"] = len(dict_keys(sg["cells"]))
     s["entities"] = len(dict_keys(sg["entity_cells"]))
     return s
+
+# ============================================================================
+# Octree integration (for large scenes)
+# ============================================================================
+proc create_octree(center, half_size, max_depth):
+    let node = {}
+    node["center"] = center
+    node["half_size"] = half_size
+    node["depth"] = 0
+    node["max_depth"] = max_depth
+    node["entities"] = []
+    node["children"] = nil
+    return node
+
+proc octree_insert(node, entity_id, pos):
+    if node["children"] == nil and len(node["entities"]) < 8:
+        push(node["entities"], {"id": entity_id, "pos": pos})
+        return true
+    # Subdivide if needed
+    if node["children"] == nil and node["depth"] < node["max_depth"]:
+        _octree_subdivide(node)
+    if node["children"] != nil:
+        let idx = _octree_child_index(node, pos)
+        return octree_insert(node["children"][idx], entity_id, pos)
+    push(node["entities"], {"id": entity_id, "pos": pos})
+    return true
+
+proc _octree_child_index(node, pos):
+    let cx = node["center"]
+    let idx = 0
+    if pos[0] >= cx[0]:
+        idx = idx + 1
+    if pos[1] >= cx[1]:
+        idx = idx + 2
+    if pos[2] >= cx[2]:
+        idx = idx + 4
+    return idx
+
+proc _octree_subdivide(node):
+    let hs = node["half_size"] * 0.5
+    let cx = node["center"]
+    node["children"] = []
+    let i = 0
+    while i < 8:
+        let ox = cx[0] + hs * (((i) % 2) * 2.0 - 1.0)
+        let oy = cx[1] + hs * (((math.floor(i / 2)) % 2) * 2.0 - 1.0)
+        let oz = cx[2] + hs * (((math.floor(i / 4)) % 2) * 2.0 - 1.0)
+        let child = create_octree([ox, oy, oz], hs, node["max_depth"])
+        child["depth"] = node["depth"] + 1
+        push(node["children"], child)
+        i = i + 1
+    # Re-insert existing entities
+    let old = node["entities"]
+    node["entities"] = []
+    let j = 0
+    while j < len(old):
+        let cidx = _octree_child_index(node, old[j]["pos"])
+        octree_insert(node["children"][cidx], old[j]["id"], old[j]["pos"])
+        j = j + 1
+
+proc octree_query_sphere(node, center, radius):
+    let results = []
+    _octree_query_sphere_impl(node, center, radius, results)
+    return results
+
+proc _octree_query_sphere_impl(node, center, radius, results):
+    # Check if sphere intersects this node's AABB
+    let nc = node["center"]
+    let hs = node["half_size"]
+    let dx = math.max(0.0, math.abs(center[0] - nc[0]) - hs)
+    let dy = math.max(0.0, math.abs(center[1] - nc[1]) - hs)
+    let dz = math.max(0.0, math.abs(center[2] - nc[2]) - hs)
+    if dx*dx + dy*dy + dz*dz > radius*radius:
+        return nil
+    # Check entities in this node
+    let i = 0
+    while i < len(node["entities"]):
+        let e = node["entities"][i]
+        let ex = e["pos"][0] - center[0]
+        let ey = e["pos"][1] - center[1]
+        let ez = e["pos"][2] - center[2]
+        if ex*ex + ey*ey + ez*ez <= radius*radius:
+            push(results, e["id"])
+        i = i + 1
+    # Recurse into children
+    if node["children"] != nil:
+        let ci = 0
+        while ci < 8:
+            _octree_query_sphere_impl(node["children"][ci], center, radius, results)
+            ci = ci + 1

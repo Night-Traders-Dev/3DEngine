@@ -151,3 +151,27 @@ proc run(eng):
 # ============================================================================
 proc shutdown(eng):
     eng["loop"]["running"] = false
+
+# ============================================================================
+# Engine configuration from environment variables
+# ============================================================================
+proc get_engine_config():
+    import sys
+    let config = {}
+    let width = sys.getenv("FORGE_WIDTH")
+    if width != nil and width != "":
+        config["width"] = tonumber(width)
+    else:
+        config["width"] = 1280
+    let height = sys.getenv("FORGE_HEIGHT")
+    if height != nil and height != "":
+        config["height"] = tonumber(height)
+    else:
+        config["height"] = 720
+    let fullscreen = sys.getenv("FORGE_FULLSCREEN")
+    config["fullscreen"] = fullscreen == "1" or fullscreen == "true"
+    let vsync = sys.getenv("FORGE_VSYNC")
+    config["vsync"] = vsync != "0" and vsync != "false"
+    let debug = sys.getenv("FORGE_DEBUG")
+    config["debug"] = debug == "1" or debug == "true"
+    return config

@@ -433,3 +433,21 @@ proc upload_mesh_device_local(mesh_data):
     result["index_count"] = len(indices)
     result["device_local"] = true
     return result
+
+# ============================================================================
+# Struct-based vertex format for efficient GPU uploads
+# ============================================================================
+proc create_vertex_struct():
+    return struct_def([["px","f64"],["py","f64"],["pz","f64"],["nx","f64"],["ny","f64"],["nz","f64"],["u","f64"],["v","f64"]])
+
+proc pack_vertex_struct(vdef, px, py, pz, nx, ny, nz, u, v):
+    let vert = struct_new(vdef)
+    struct_set(vert, vdef, "px", px)
+    struct_set(vert, vdef, "py", py)
+    struct_set(vert, vdef, "pz", pz)
+    struct_set(vert, vdef, "nx", nx)
+    struct_set(vert, vdef, "ny", ny)
+    struct_set(vert, vdef, "nz", nz)
+    struct_set(vert, vdef, "u", u)
+    struct_set(vert, vdef, "v", v)
+    return vert
