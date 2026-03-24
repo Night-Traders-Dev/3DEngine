@@ -33,8 +33,8 @@ from render_system import create_lit_material, draw_mesh_lit
 from sky import create_sky, sky_preset_day, init_sky_gpu, draw_sky
 from editor_grid import create_editor_grid, draw_editor_grid
 from ui_renderer import create_ui_renderer, draw_ui, build_ui_vertices
-from ui_text import build_text_quads, measure_text
 from ui_core import create_widget, create_rect, create_panel, add_child, collect_quads, compute_layout
+from font import create_font_renderer, load_font, draw_text
 import ui_widgets
 
 # Theme colors (accessed via module to work around from-import limitation)
@@ -105,6 +105,13 @@ let ground_gpu = upload_mesh(plane_mesh(40.0))
 let ui_r = create_ui_renderer(r["render_pass"])
 let layout = create_editor_layout(1440.0, 900.0)
 
+# Load TrueType fonts
+let font_r = create_font_renderer(r["render_pass"])
+let font_regular = load_font(font_r, "regular", "assets/DejaVuSans.ttf", 14.0)
+let font_bold = load_font(font_r, "bold", "assets/DejaVuSans-Bold.ttf", 14.0)
+let font_small = load_font(font_r, "small", "assets/DejaVuSans.ttf", 11.0)
+let font_title = load_font(font_r, "title", "assets/DejaVuSans-Bold.ttf", 16.0)
+
 # ============================================================================
 # ECS World (editor scene)
 # ============================================================================
@@ -162,6 +169,15 @@ bind_action(inp, "pan", [gpu.KEY_SHIFT])
 # ============================================================================
 let ts = create_time_state()
 let running = true
+# UI text cache - rebuilt only when state changes
+let _cached_text_quads = []
+let _cached_text_verts = []
+let _cached_text_vert_count = 0
+let _cache_dirty = true
+let _last_selected = -1
+let _last_entity_count = 0
+let _last_mode = ""
+let _ui_rebuild_timer = 0.0
 
 print ""
 print "Controls:"
@@ -380,140 +396,118 @@ while running:
             draw_mesh_lit(cmd, lit_mat, cube_gpu, gmvp, gmodel, ls["desc_set"])
             gi = gi + 1
 
-    # --- Editor UI overlay ---
-    let text_quads = []
-    let psize = 3.0
+
+    # --- Editor UI (TrueType font rendering) ---
     let lw = layout["left_panel_w"]
     let rw = layout["right_panel_w"]
     let tb_h = layout["toolbar_h"]
     let sb_h = layout["statusbar_h"]
     let bp_h = layout["bottom_panel_h"]
     let rp_x = sw - rw
+    let cur_sel = editor["selected"]
+    let cur_mode = editor["gizmo"]["mode"]
 
-    # Helper: add text to quads
-    proc _txt(x, y, text, color):
-        let q = build_text_quads(text, x, y, psize, color)
-        let i = 0
-        while i < len(q):
-            push(text_quads, q[i])
-            i = i + 1
+    # Draw panel backgrounds
+    draw_ui(ui_r, cmd, layout["root"], sw, sh)
 
-    # Helper: format number
-    proc _fn(n):
-        return str(math.floor(n * 100.0 + 0.5) / 100.0)
-
-    # ---- Toolbar ----
-    let mode_name = editor["gizmo"]["mode"]
-    # Mode indicator buttons (visual)
+    # Mode button backgrounds + separators + selection highlight
+    let ui_quads = []
     let modes = ["translate", "rotate", "scale"]
-    let mode_labels = ["W Move", "E Rotate", "R Scale"]
-    let mx_btn = 200.0
-    let mi_btn = 0
-    while mi_btn < 3:
-        let btn_color = [0.22, 0.22, 0.25, 1.0]
-        if mode_name == modes[mi_btn]:
-            btn_color = [0.2, 0.45, 0.85, 1.0]
-        push(text_quads, {"x": mx_btn, "y": 4.0, "w": 90.0, "h": 24.0, "color": btn_color})
-        _txt(mx_btn + 6.0, 8.0, mode_labels[mi_btn], [0.9, 0.9, 0.9, 1.0])
-        mx_btn = mx_btn + 96.0
-        mi_btn = mi_btn + 1
-    _txt(8.0, 8.0, "FORGE", [0.3, 0.6, 1.0, 1.0])
-    _txt(mx_btn + 20.0, 8.0, "4=Save  5=Generate", THEME_TEXT_DIM)
-
-    # ---- Left Panel: Scene Hierarchy ----
-    _txt(8.0, tb_h + 4.0, "Outliner", THEME_TEXT)
-    # Separator line under header
-    push(text_quads, {"x": 0.0, "y": tb_h + 23.0, "w": lw, "h": 1.0, "color": [0.08, 0.08, 0.1, 1.0]})
-
+    let mx_b = 130.0
+    let mi_b = 0
+    while mi_b < 3:
+        let bc = [0.22, 0.22, 0.25, 1.0]
+        if cur_mode == modes[mi_b]:
+            bc = [0.2, 0.45, 0.85, 1.0]
+        push(ui_quads, {"x": mx_b, "y": 4.0, "w": 85.0, "h": 24.0, "color": bc})
+        mx_b = mx_b + 90.0
+        mi_b = mi_b + 1
+    push(ui_quads, {"x": 0.0, "y": tb_h + 23.0, "w": lw, "h": 1.0, "color": [0.06, 0.06, 0.08, 1.0]})
+    push(ui_quads, {"x": rp_x, "y": tb_h + 23.0, "w": rw, "h": 1.0, "color": [0.06, 0.06, 0.08, 1.0]})
+    let bp_y_s = sh - bp_h - sb_h
+    push(ui_quads, {"x": lw, "y": bp_y_s + 23.0, "w": sw - lw - rw, "h": 1.0, "color": [0.06, 0.06, 0.08, 1.0]})
     let ents = query(world, ["transform"])
     let ey = tb_h + 28.0
     let ei = 0
-    while ei < len(ents) and ei < 30:
+    while ei < len(ents) and ei < 25:
+        if ents[ei] == cur_sel:
+            push(ui_quads, {"x": 2.0, "y": ey - 1.0, "w": lw - 4.0, "h": 18.0, "color": [0.18, 0.35, 0.65, 0.5]})
+        ey = ey + 19.0
+        ei = ei + 1
+    if len(ui_quads) > 0:
+        let uv = build_quad_verts(ui_quads)
+        gpu.buffer_upload(ui_r["vbuf"], uv)
+        gpu.cmd_bind_graphics_pipeline(cmd, ui_r["pipeline"])
+        gpu.cmd_push_constants(cmd, ui_r["pipe_layout"], gpu.STAGE_VERTEX, [sw, sh, 0.0, 0.0])
+        gpu.cmd_bind_vertex_buffer(cmd, ui_r["vbuf"])
+        gpu.cmd_draw(cmd, len(ui_quads) * 6, 1, 0, 0)
+
+    # --- TrueType text ---
+    proc _fn(n):
+        return str(math.floor(n * 100.0 + 0.5) / 100.0)
+
+    draw_text(font_r, cmd, "title", "FORGE", 10.0, 6.0, 0.3, 0.6, 1.0, 1.0, sw, sh)
+    draw_text(font_r, cmd, "regular", "Move", 140.0, 8.0, 0.9, 0.9, 0.9, 1.0, sw, sh)
+    draw_text(font_r, cmd, "regular", "Rotate", 230.0, 8.0, 0.9, 0.9, 0.9, 1.0, sw, sh)
+    draw_text(font_r, cmd, "regular", "Scale", 320.0, 8.0, 0.9, 0.9, 0.9, 1.0, sw, sh)
+    draw_text(font_r, cmd, "small", "4=Save  5=Generate Code", 430.0, 10.0, 0.45, 0.45, 0.45, 1.0, sw, sh)
+
+    draw_text(font_r, cmd, "bold", "Outliner", 8.0, tb_h + 4.0, 0.8, 0.8, 0.8, 1.0, sw, sh)
+    ey = tb_h + 28.0
+    ei = 0
+    while ei < len(ents) and ei < 25:
         let eid = ents[ei]
         let ename = "Entity_" + str(eid)
         if has_component(world, eid, "name"):
             ename = get_component(world, eid, "name")["name"]
-        let ecolor = THEME_TEXT_DIM
-        if eid == editor["selected"]:
-            ecolor = [0.9, 0.9, 0.9, 1.0]
-            push(text_quads, {"x": 2.0, "y": ey - 1.0, "w": lw - 4.0, "h": 18.0, "color": [0.18, 0.35, 0.65, 0.6]})
-        _txt(20.0, ey + 2.0, ename, ecolor)
-        ey = ey + 20.0
+        if eid == cur_sel:
+            draw_text(font_r, cmd, "regular", ename, 16.0, ey + 1.0, 1.0, 1.0, 1.0, 1.0, sw, sh)
+        else:
+            draw_text(font_r, cmd, "small", ename, 16.0, ey + 2.0, 0.55, 0.55, 0.55, 1.0, sw, sh)
+        ey = ey + 19.0
         ei = ei + 1
 
-    # ---- Right Panel: Details ----
-    _txt(rp_x + 8.0, tb_h + 4.0, "Details", THEME_TEXT)
-    push(text_quads, {"x": rp_x, "y": tb_h + 23.0, "w": rw, "h": 1.0, "color": [0.08, 0.08, 0.1, 1.0]})
-
-    if editor["selected"] >= 0:
-        let sel_eid = editor["selected"]
+    draw_text(font_r, cmd, "bold", "Details", rp_x + 8.0, tb_h + 4.0, 0.8, 0.8, 0.8, 1.0, sw, sh)
+    if cur_sel >= 0 and has_component(world, cur_sel, "transform"):
+        let st = get_component(world, cur_sel, "transform")
         let iy = tb_h + 30.0
-        if has_component(world, sel_eid, "name"):
-            let n = get_component(world, sel_eid, "name")
-            # Name section header
-            push(text_quads, {"x": rp_x + 2.0, "y": iy, "w": rw - 4.0, "h": 20.0, "color": [0.2, 0.22, 0.26, 1.0]})
-            _txt(rp_x + 8.0, iy + 3.0, n["name"], [1.0, 1.0, 1.0, 1.0])
-            iy = iy + 24.0
-        if has_component(world, sel_eid, "transform"):
-            let t = get_component(world, sel_eid, "transform")
-            # Transform section
-            push(text_quads, {"x": rp_x + 2.0, "y": iy, "w": rw - 4.0, "h": 20.0, "color": [0.2, 0.22, 0.26, 1.0]})
-            _txt(rp_x + 8.0, iy + 3.0, "Transform", [0.7, 0.85, 1.0, 1.0])
-            iy = iy + 24.0
-            _txt(rp_x + 12.0, iy, "Location", THEME_TEXT_DIM)
-            iy = iy + 18.0
-            _txt(rp_x + 16.0, iy, "X " + _fn(t["position"][0]), [0.9, 0.4, 0.4, 1.0])
-            _txt(rp_x + 100.0, iy, "Y " + _fn(t["position"][1]), [0.4, 0.9, 0.4, 1.0])
-            _txt(rp_x + 184.0, iy, "Z " + _fn(t["position"][2]), [0.4, 0.4, 0.9, 1.0])
-            iy = iy + 20.0
-            _txt(rp_x + 12.0, iy, "Rotation", THEME_TEXT_DIM)
-            iy = iy + 18.0
-            _txt(rp_x + 16.0, iy, "X " + _fn(t["rotation"][0]), [0.9, 0.4, 0.4, 1.0])
-            _txt(rp_x + 100.0, iy, "Y " + _fn(t["rotation"][1]), [0.4, 0.9, 0.4, 1.0])
-            _txt(rp_x + 184.0, iy, "Z " + _fn(t["rotation"][2]), [0.4, 0.4, 0.9, 1.0])
-            iy = iy + 20.0
-            _txt(rp_x + 12.0, iy, "Scale", THEME_TEXT_DIM)
-            iy = iy + 18.0
-            _txt(rp_x + 16.0, iy, "X " + _fn(t["scale"][0]), [0.9, 0.4, 0.4, 1.0])
-            _txt(rp_x + 100.0, iy, "Y " + _fn(t["scale"][1]), [0.4, 0.9, 0.4, 1.0])
-            _txt(rp_x + 184.0, iy, "Z " + _fn(t["scale"][2]), [0.4, 0.4, 0.9, 1.0])
+        if has_component(world, cur_sel, "name"):
+            draw_text(font_r, cmd, "bold", get_component(world, cur_sel, "name")["name"], rp_x + 10.0, iy, 1.0, 1.0, 1.0, 1.0, sw, sh)
+            iy = iy + 22.0
+        draw_text(font_r, cmd, "regular", "Transform", rp_x + 10.0, iy, 0.6, 0.8, 1.0, 1.0, sw, sh)
+        iy = iy + 20.0
+        draw_text(font_r, cmd, "small", "Location", rp_x + 12.0, iy, 0.5, 0.5, 0.5, 1.0, sw, sh)
+        iy = iy + 16.0
+        draw_text(font_r, cmd, "small", "X " + _fn(st["position"][0]), rp_x + 14.0, iy, 0.9, 0.3, 0.3, 1.0, sw, sh)
+        draw_text(font_r, cmd, "small", "Y " + _fn(st["position"][1]), rp_x + 100.0, iy, 0.3, 0.9, 0.3, 1.0, sw, sh)
+        draw_text(font_r, cmd, "small", "Z " + _fn(st["position"][2]), rp_x + 186.0, iy, 0.3, 0.3, 0.9, 1.0, sw, sh)
+        iy = iy + 18.0
+        draw_text(font_r, cmd, "small", "Rotation", rp_x + 12.0, iy, 0.5, 0.5, 0.5, 1.0, sw, sh)
+        iy = iy + 16.0
+        draw_text(font_r, cmd, "small", "X " + _fn(st["rotation"][0]), rp_x + 14.0, iy, 0.9, 0.3, 0.3, 1.0, sw, sh)
+        draw_text(font_r, cmd, "small", "Y " + _fn(st["rotation"][1]), rp_x + 100.0, iy, 0.3, 0.9, 0.3, 1.0, sw, sh)
+        draw_text(font_r, cmd, "small", "Z " + _fn(st["rotation"][2]), rp_x + 186.0, iy, 0.3, 0.3, 0.9, 1.0, sw, sh)
+        iy = iy + 18.0
+        draw_text(font_r, cmd, "small", "Scale", rp_x + 12.0, iy, 0.5, 0.5, 0.5, 1.0, sw, sh)
+        iy = iy + 16.0
+        draw_text(font_r, cmd, "small", "X " + _fn(st["scale"][0]), rp_x + 14.0, iy, 0.9, 0.3, 0.3, 1.0, sw, sh)
+        draw_text(font_r, cmd, "small", "Y " + _fn(st["scale"][1]), rp_x + 100.0, iy, 0.3, 0.9, 0.3, 1.0, sw, sh)
+        draw_text(font_r, cmd, "small", "Z " + _fn(st["scale"][2]), rp_x + 186.0, iy, 0.3, 0.3, 0.9, 1.0, sw, sh)
     else:
-        _txt(rp_x + 8.0, tb_h + 34.0, "Select an entity", THEME_TEXT_DIM)
+        draw_text(font_r, cmd, "small", "Select an entity to view details", rp_x + 10.0, tb_h + 34.0, 0.4, 0.4, 0.4, 1.0, sw, sh)
 
-    # ---- Bottom Panel: Content Browser ----
     let bp_y = sh - bp_h - sb_h
-    _txt(lw + 8.0, bp_y + 4.0, "Content Browser", THEME_TEXT)
-    push(text_quads, {"x": lw, "y": bp_y + 23.0, "w": sw - lw - rw, "h": 1.0, "color": [0.08, 0.08, 0.1, 1.0]})
-    _txt(lw + 12.0, bp_y + 30.0, "R = Cube   F = Sphere   D = Delete   Q = Duplicate", THEME_TEXT_DIM)
-    _txt(lw + 12.0, bp_y + 50.0, "4 = Save Scene   5 = Generate SageLang", THEME_TEXT_DIM)
-    _txt(lw + 12.0, bp_y + 70.0, "Left Click = Select   ESC = Deselect", THEME_TEXT_DIM)
-    _txt(lw + 12.0, bp_y + 90.0, "Right Mouse = Orbit   Middle = Pan   Scroll = Zoom", THEME_TEXT_DIM)
-    _txt(lw + 12.0, bp_y + 110.0, "WASD = Nudge Selected   1/2/3 = Gizmo Mode", THEME_TEXT_DIM)
+    draw_text(font_r, cmd, "bold", "Content Browser", lw + 8.0, bp_y + 4.0, 0.8, 0.8, 0.8, 1.0, sw, sh)
+    draw_text(font_r, cmd, "small", "R=Cube  F=Sphere  D=Delete  Q=Duplicate", lw + 10.0, bp_y + 28.0, 0.4, 0.4, 0.4, 1.0, sw, sh)
+    draw_text(font_r, cmd, "small", "4=Save Scene  5=Generate SageLang Code", lw + 10.0, bp_y + 44.0, 0.4, 0.4, 0.4, 1.0, sw, sh)
+    draw_text(font_r, cmd, "small", "LMB=Select  RMB=Orbit  MMB=Pan  Scroll=Zoom", lw + 10.0, bp_y + 60.0, 0.4, 0.4, 0.4, 1.0, sw, sh)
 
-    # ---- Status Bar ----
     let stats = editor_stats(editor)
-    let status = "Entities: " + str(stats["entities"]) + "  Drawn: " + str(draw_count)
-    status = status + "  |  " + stats["mode"]
+    let status = str(stats["entities"]) + " entities  " + str(draw_count) + " drawn  " + stats["mode"]
     if stats["selected"] >= 0:
-        status = status + "  |  Selected: #" + str(stats["selected"])
+        status = status + "  |  #" + str(stats["selected"])
     status = status + "  |  FPS: " + str(math.floor(ts["fps"]))
-    _txt(8.0, sh - sb_h + 4.0, status, THEME_TEXT_DIM)
-
-    # ---- Draw all UI ----
-    draw_ui(ui_r, cmd, layout["root"], sw, sh)
-
-    if len(text_quads) > 0:
-        let tverts = build_ui_vertices(text_quads)
-        let tvc = len(text_quads) * 6
-        if tvc > 3072:
-            tvc = 3072
-        gpu.buffer_upload(ui_r["vbuf"], tverts)
-        gpu.cmd_bind_graphics_pipeline(cmd, ui_r["pipeline"])
-        let push_data = [sw, sh, 0.0, 0.0]
-        gpu.cmd_push_constants(cmd, ui_r["pipe_layout"], gpu.STAGE_VERTEX, push_data)
-        gpu.cmd_bind_vertex_buffer(cmd, ui_r["vbuf"])
-        gpu.cmd_draw(cmd, tvc, 1, 0, 0)
-
+    draw_text(font_r, cmd, "small", status, 8.0, sh - sb_h + 5.0, 0.4, 0.4, 0.4, 1.0, sw, sh)
     end_frame(r, frame)
     update_title_fps(r, "Forge Engine Editor")
 

@@ -1,8 +1,8 @@
 gc_disable()
 # -----------------------------------------
-# ui_text.sage - Bitmap text rendering for Sage Engine Editor
-# Renders text as colored quads using a hardcoded 4x6 pixel font
-# Each character generates tiny filled rectangles
+# ui_text.sage - Text rendering for Sage Engine Editor
+# Fast mode: 1 quad per character (solid block with gaps for readability)
+# Detailed mode: pixel-accurate bitmap font (slower, for static text)
 # -----------------------------------------
 
 # ============================================================================
@@ -241,3 +241,69 @@ proc measure_text(text, pixel_size):
     if cur_w > max_w:
         max_w = cur_w
     return [max_w, char_h * lines]
+
+# ============================================================================
+# FAST text rendering: 1 quad per character (row-merged)
+# Much faster than per-pixel, good enough for editor UI
+# Merges consecutive lit pixels in each row into single quads
+# ============================================================================
+proc build_text_quads_fast(text, start_x, start_y, char_size, color):
+    let quads = []
+    let char_w = char_size * 5
+    let char_h = char_size * 7
+    let px_w = char_size
+    let px_h = char_size
+    let cx = start_x
+    let ci = 0
+    while ci < len(text):
+        let ch = text[ci]
+        if ch == " ":
+            cx = cx + char_w
+            ci = ci + 1
+            continue
+        if ch == chr(10):
+            cx = start_x
+            start_y = start_y + char_h
+            ci = ci + 1
+            continue
+        let glyph = _get_glyph(ch)
+        let row = 0
+        while row < 6:
+            let bits = glyph[row]
+            if bits > 0:
+                # Find runs of consecutive set bits and merge into one quad
+                let col = 0
+                while col < 4:
+                    let bit = bits >> (3 - col)
+                    if bit - (bit >> 1) * 2 == 1:
+                        let run_start = col
+                        col = col + 1
+                        while col < 4:
+                            let nb = bits >> (3 - col)
+                            if nb - (nb >> 1) * 2 == 1:
+                                col = col + 1
+                            else:
+                                col = 4
+                        let run_len = col - run_start
+                        if col > 4:
+                            col = 4
+                            run_len = 4 - run_start
+                        push(quads, {"x": cx + run_start * px_w, "y": start_y + row * px_h, "w": run_len * px_w, "h": px_h, "color": color})
+                    col = col + 1
+            row = row + 1
+        cx = cx + char_w
+        ci = ci + 1
+    return quads
+
+# ============================================================================
+# VECTOR text rendering using line-segment font (smooth, readable)
+# Uses text_render.sage glyphs + native build_line_quads for speed
+# ============================================================================
+proc build_text_quads_vector(text, start_x, start_y, char_height, color):
+    from text_render import build_text_lines
+    let char_width = char_height * 0.6
+    let lines = build_text_lines(text, start_x, start_y, char_width, char_height)
+    let thickness = char_height * 0.13
+    if thickness < 1.0:
+        thickness = 1.0
+    return build_line_quads(lines, thickness, color[0], color[1], color[2], color[3])

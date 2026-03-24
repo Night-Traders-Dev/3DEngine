@@ -171,8 +171,8 @@ proc draw_ui(ur, cmd, root_widget, screen_w, screen_h):
     if len(quads) == 0:
         return nil
 
-    # Build vertex data
-    let verts = build_ui_vertices(quads)
+    # Build vertex data (native C for performance)
+    let verts = build_quad_verts(quads)
     let vert_count = len(quads) * 6
     if vert_count > ur["max_verts"]:
         vert_count = ur["max_verts"]
