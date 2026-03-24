@@ -325,18 +325,18 @@ proc build_menu_quads():
     let item_h = 24.0
     let h = len(items) * item_h + 8.0
     let quads = []
-    # Shadow
-    push(quads, {"x": x + 3.0, "y": y + 3.0, "w": w, "h": h, "color": [0.0, 0.0, 0.0, 0.45]})
-    # Background
-    push(quads, {"x": x, "y": y, "w": w, "h": h, "color": ui_widgets.THEME_HEADER})
+    # Shadow (strong, offset)
+    push(quads, {"x": x + 4.0, "y": y + 4.0, "w": w, "h": h, "color": [0.0, 0.0, 0.0, 0.6]})
+    push(quads, {"x": x + 2.0, "y": y + 2.0, "w": w, "h": h, "color": [0.0, 0.0, 0.0, 0.3]})
+    # Background (bright so it stands out from toolbar)
+    push(quads, {"x": x, "y": y, "w": w, "h": h, "color": [0.28, 0.28, 0.28, 1.0]})
     # Accent top edge
     let macc = ui_widgets.THEME_ACCENT
-    push(quads, {"x": x, "y": y, "w": w, "h": 1.0, "color": [macc[0], macc[1], macc[2], 0.4]})
-    # Border
-    let mbc = ui_widgets.THEME_BORDER
-    push(quads, {"x": x, "y": y + h - 1.0, "w": w, "h": 1.0, "color": mbc})
-    push(quads, {"x": x, "y": y, "w": 1.0, "h": h, "color": mbc})
-    push(quads, {"x": x + w - 1.0, "y": y, "w": 1.0, "h": h, "color": mbc})
+    push(quads, {"x": x, "y": y, "w": w, "h": 2.0, "color": [macc[0], macc[1], macc[2], 0.6]})
+    # Border (dark for contrast)
+    push(quads, {"x": x, "y": y + h - 1.0, "w": w, "h": 1.0, "color": [0.06, 0.06, 0.06, 1.0]})
+    push(quads, {"x": x, "y": y, "w": 1.0, "h": h, "color": [0.06, 0.06, 0.06, 1.0]})
+    push(quads, {"x": x + w - 1.0, "y": y, "w": 1.0, "h": h, "color": [0.06, 0.06, 0.06, 1.0]})
     return quads
 
 proc get_menu_items():

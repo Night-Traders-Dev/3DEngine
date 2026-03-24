@@ -45,15 +45,13 @@ proc _build_all(layout):
     let sb = layout["statusbar_h"]
     let top_h = mb + tb
 
-    # --- Menu bar (topmost row — must be clearly distinct from viewport) ---
-    let MENU_BG = ui_core.rgba(0.22, 0.22, 0.22, 1.0)
-    let TOOLBAR_BG = ui_core.rgba(0.18, 0.18, 0.18, 1.0)
-    add_child(layout["root"], create_rect(0.0, 0.0, sw, mb, MENU_BG))
-    add_child(layout["root"], create_rect(0.0, mb - 1.0, sw, 1.0, COL_SHADOW))
+    # --- Menu bar (topmost row — bright, clearly visible) ---
+    add_child(layout["root"], create_rect(0.0, 0.0, sw, mb, ui_core.rgba(0.30, 0.30, 0.30, 1.0)))
+    add_child(layout["root"], create_rect(0.0, mb - 1.0, sw, 1.0, ui_core.rgba(0.10, 0.10, 0.10, 1.0)))
 
-    # --- Toolbar (below menu bar) ---
-    add_child(layout["root"], create_rect(0.0, mb, sw, tb, TOOLBAR_BG))
-    add_child(layout["root"], create_rect(0.0, mb + tb - 1.0, sw, 1.0, COL_SHADOW))
+    # --- Toolbar (below menu bar, slightly darker) ---
+    add_child(layout["root"], create_rect(0.0, mb, sw, tb, ui_core.rgba(0.22, 0.22, 0.22, 1.0)))
+    add_child(layout["root"], create_rect(0.0, mb + tb - 1.0, sw, 1.0, ui_core.rgba(0.10, 0.10, 0.10, 1.0)))
     add_child(layout["root"], create_rect(0.0, mb + tb - 1.0, sw, 1.0, COL_ACCENT_LINE))
 
     # Viewport fills area between toolbar and statusbar

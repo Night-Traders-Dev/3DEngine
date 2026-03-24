@@ -1363,10 +1363,7 @@ while running:
                 push(all_win_quads, {"x": oca_h["x"], "y": hey - 1.0, "w": oca_h["w"], "h": 20.0, "color": [0.290, 0.565, 0.851, 0.15]})
             hey = hey + 24.0
             hei = hei + 1
-    # Add menu quads if open
-    if is_menu_open():
-        let mq = build_menu_quads()
-        array_extend(all_win_quads, mq)
+    # Menu quads rendered separately AFTER all window text (see below)
     if len(all_win_quads) > 0:
         let wv = build_quad_verts(all_win_quads)
         gpu.buffer_upload(ui_r["vbuf"], wv)
@@ -1566,17 +1563,42 @@ while running:
                     add_text(font_r, "ui", _clip_text_line(row_text, cb_max_chars), cca["x"] + 4.0, cy, rc[0], rc[1], rc[2], 1.0)
                 cy = cy + 18.0
                 cbi = cbi + 1
-    # Menu item text
+    flush_text(font_r, cmd, sw, sh)
+
+    # --- Menu dropdown (rendered ON TOP of all window text) ---
     if is_menu_open():
+        let menu_quads = build_menu_quads()
+        # Hover highlight
+        let hover_idx = menu_item_at(mx, my)
+        if hover_idx >= 0:
+            let mitems_hov = get_menu_items()
+            if mitems_hov[hover_idx] != "---":
+                let mpos_hov = get_menu_pos()
+                push(menu_quads, {"x": mpos_hov[0] + 2.0, "y": mpos_hov[1] + 4.0 + hover_idx * 24.0, "w": 176.0, "h": 22.0, "color": [0.290, 0.565, 0.851, 0.4]})
+        if len(menu_quads) > 0:
+            let mqv = build_quad_verts(menu_quads)
+            gpu.buffer_upload(ui_r["vbuf"], mqv)
+            gpu.cmd_bind_graphics_pipeline(cmd, ui_r["pipeline"])
+            gpu.cmd_push_constants(cmd, ui_r["pipe_layout"], gpu.STAGE_VERTEX, [sw, sh, 0.0, 0.0])
+            gpu.cmd_bind_vertex_buffer(cmd, ui_r["vbuf"])
+            gpu.cmd_draw(cmd, len(menu_quads) * 6, 1, 0, 0)
+        # Menu text (on top of menu quads)
+        begin_text(font_r)
         let mitems = get_menu_items()
         let mpos = get_menu_pos()
         let mii = 0
         while mii < len(mitems):
             let item_text = mitems[mii]
-            if item_text != "---":
-                add_text(font_r, "ui", item_text, mpos[0] + 12.0, mpos[1] + 6.0 + mii * 24.0, 0.8, 0.84, 0.96, 1.0)
+            if item_text == "---":
+                # Separator: just skip (line drawn via quads if needed)
+                mii = mii + 1
+                continue
+            let mtc = [0.92, 0.92, 0.92, 1.0]
+            if hover_idx == mii:
+                mtc = [1.0, 1.0, 1.0, 1.0]
+            add_text(font_r, "ui", item_text, mpos[0] + 12.0, mpos[1] + 6.0 + mii * 24.0, mtc[0], mtc[1], mtc[2], 1.0)
             mii = mii + 1
-    flush_text(font_r, cmd, sw, sh)
+        flush_text(font_r, cmd, sw, sh)
 
     # --- Modal dialog (rendered on top of everything) ---
     if is_modal_open():
