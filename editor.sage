@@ -15,6 +15,7 @@ import math
 import sys
 from renderer import create_renderer, begin_frame, end_frame
 from renderer import shutdown_renderer, check_resize, update_title_fps
+from launch_screen import run_launch_screen
 from ecs import create_world, spawn, add_component, get_component
 from ecs import has_component, query, tick_systems, flush_dead
 from ecs import entity_count, destroy, add_tag, has_tag, remove_component, register_system
@@ -61,7 +62,10 @@ from scene_editor import place_entity, delete_selected, duplicate_selected
 from scene_editor import apply_gizmo_delta, editor_stats
 from scene_editor import select_all_entities, selected_entities, toggle_entity_selection
 from gizmo import set_gizmo_mode, get_gizmo_visuals
-from gizmo import GIZMO_TRANSLATE, GIZMO_ROTATE, GIZMO_SCALE
+# Inline gizmo mode constants (avoids LLVM cross-module resolution issue)
+let GIZMO_TRANSLATE = "translate"
+let GIZMO_ROTATE = "rotate"
+let GIZMO_SCALE = "scale"
 from inspector import create_inspector, inspect_entity, clear_inspection, refresh_inspector
 from codegen import generate_game_script
 from scene_serial import save_scene, load_scene, serialize_scene, load_scene_string
@@ -99,10 +103,25 @@ if _env_h != nil and _env_h != "":
 let r = create_renderer(_init_w, _init_h, "Forge Engine Editor")
 if r == nil:
     raise "Failed to create renderer"
-# Dark gray background (Unreal-style viewport)
-# Viewport is brighter than panels (key design principle from UE5/Blender)
-r["clear_color"] = [THEME_BG[0], THEME_BG[1], THEME_BG[2], 1.0]
+# Very dark viewport so lit 3D objects stand out clearly
+r["clear_color"] = [0.028, 0.028, 0.032, 1.0]
 print "GPU: " + gpu.device_name()
+
+# ============================================================================
+# Launch Screen (project browser — runs before editor)
+# ============================================================================
+let _launch_result = run_launch_screen(r)
+if _launch_result["action"] == "exit":
+    gpu.device_wait_idle()
+    shutdown_renderer(r)
+    print "Exited from launcher."
+    raise "exit"
+let _launch_template = _launch_result["template"]
+let _launch_action = _launch_result["action"]
+if _launch_template != nil:
+    print "Template: " + str(_launch_template)
+if _launch_action == "open":
+    print "Opening existing project..."
 
 # ============================================================================
 # Lighting & Sky
@@ -368,6 +387,23 @@ bind_action(inp, "toggle_physics", [gpu.KEY_TAB])
 bind_action(inp, "play", [gpu.KEY_ENTER])
 
 # ============================================================================
+# Hoisted procs (LLVM backend requires module-level proc definitions)
+# ============================================================================
+proc _quit_callback():
+    running = false
+
+proc _commit_field(val):
+    let n = ui_widgets.parse_number(val)
+    let t = get_component(world, editor["selected"], "transform")
+    let cmd = cmd_set_vec3(t, active_details_field["key"], active_details_field["axis"], n)
+    execute_command(editor["history"], cmd)
+    active_details_field = nil
+    details_edit_tf = nil
+
+proc _fmt_num(n):
+    return str(math.floor(n * 100.0 + 0.5) / 100.0)
+
+# ============================================================================
 # Main loop
 # ============================================================================
 let ts = create_time_state()
@@ -432,9 +468,7 @@ while running:
 
     # Global editor shortcuts (suppressed during text editing)
     if gpu.key_pressed(gpu.KEY_CTRL) and gpu.key_just_pressed(gpu.KEY_Q):
-        proc _quit_yes():
-            running = false
-        show_modal("Quit", "Are you sure you want to quit?", _quit_yes, nil)
+        show_modal("Quit", "Are you sure you want to quit?", _quit_callback, nil)
         continue
     if gpu.key_pressed(gpu.KEY_CTRL) and gpu.key_just_pressed(gpu.KEY_Z):
         if undo(editor["history"]):
@@ -777,9 +811,7 @@ while running:
                 from codegen import compile_game_native
                 compile_game_native(world, "ForgeGame", {"width": 1280, "height": 720})
             if item == "Quit":
-                proc _menu_quit():
-                    running = false
-                show_modal("Quit", "Are you sure you want to quit?", _menu_quit, nil)
+                show_modal("Quit", "Are you sure you want to quit?", _quit_callback, nil)
             # --- Edit menu ---
             if item == "Undo":
                 if undo(editor["history"]):
@@ -888,13 +920,6 @@ while running:
                 col = 1
             if mx >= dx + fw3 * 2.0 + 10.0 and mx < dx + fw3 * 2.0 + 10.0 + fw3:
                 col = 2
-            proc _commit_field(val):
-                let n = ui_widgets.parse_number(val)
-                let t = get_component(world, editor["selected"], "transform")
-                let cmd = cmd_set_vec3(t, active_details_field["key"], active_details_field["axis"], n)
-                execute_command(editor["history"], cmd)
-                active_details_field = nil
-                details_edit_tf = nil
             if col >= 0 and my >= iy and my < iy + 20.0:
                 active_details_field = {"key": "position", "axis": col}
                 let cur_val = get_component(world, editor["selected"], "transform")["position"][col]
@@ -1238,8 +1263,7 @@ while running:
     # --- TrueType text (batched: begin -> add_text calls -> flush) ---
     begin_text(font_r)
 
-    proc _fn(n):
-        return str(math.floor(n * 100.0 + 0.5) / 100.0)
+    # _fmt_num is defined at module level for LLVM compat
 
     # Menu bar text (bright white on dark header)
     let mti = 0
@@ -1434,7 +1458,7 @@ while running:
                         ev = ev + "|"
                     add_text(font_r, "ui", ev, pxo[pxi], iy + 2.0, 0.290, 0.565, 0.851, 1.0)
                 else:
-                    add_text(font_r, "ui", _fn(st["position"][pxi]), pxo[pxi], iy + 2.0, 0.78, 0.78, 0.78, 1.0)
+                    add_text(font_r, "ui", _fmt_num(st["position"][pxi]), pxo[pxi], iy + 2.0, 0.78, 0.78, 0.78, 1.0)
                 pxi = pxi + 1
             iy = iy + 26.0
             # Rotation
@@ -1449,7 +1473,7 @@ while running:
                         ev = ev + "|"
                     add_text(font_r, "ui", ev, pxo[rxi], iy + 2.0, 0.290, 0.565, 0.851, 1.0)
                 else:
-                    add_text(font_r, "ui", _fn(st["rotation"][rxi]), pxo[rxi], iy + 2.0, 0.78, 0.78, 0.78, 1.0)
+                    add_text(font_r, "ui", _fmt_num(st["rotation"][rxi]), pxo[rxi], iy + 2.0, 0.78, 0.78, 0.78, 1.0)
                 rxi = rxi + 1
             iy = iy + 26.0
             # Scale
@@ -1464,7 +1488,7 @@ while running:
                         ev = ev + "|"
                     add_text(font_r, "ui", ev, pxo[sxi], iy + 2.0, 0.290, 0.565, 0.851, 1.0)
                 else:
-                    add_text(font_r, "ui", _fn(st["scale"][sxi]), pxo[sxi], iy + 2.0, 0.78, 0.78, 0.78, 1.0)
+                    add_text(font_r, "ui", _fmt_num(st["scale"][sxi]), pxo[sxi], iy + 2.0, 0.78, 0.78, 0.78, 1.0)
                 sxi = sxi + 1
             iy = iy + 28.0
             if active_details_field != nil:
@@ -1483,11 +1507,11 @@ while running:
                 if rb["is_kinematic"]:
                     add_text(font_r, "ui", "Static Body", dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
                 else:
-                    add_text(font_r, "ui", "Mass: " + _fn(rb["mass"]) + "  Bounce: " + _fn(rb["restitution"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                    add_text(font_r, "ui", "Mass: " + _fmt_num(rb["mass"]) + "  Bounce: " + _fmt_num(rb["restitution"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
                 iy = iy + 20.0
             if has_component(world, cur_sel, "health"):
                 let hp = get_component(world, cur_sel, "health")
-                add_text(font_r, "ui", "Health: " + _fn(hp["current"]) + " / " + _fn(hp["max"]), dx + 8.0, iy, 0.3, 0.85, 0.3, 1.0)
+                add_text(font_r, "ui", "Health: " + _fmt_num(hp["current"]) + " / " + _fmt_num(hp["max"]), dx + 8.0, iy, 0.3, 0.85, 0.3, 1.0)
                 iy = iy + 22.0
             # Material section
             if has_component(world, cur_sel, "imported_asset"):
@@ -1498,21 +1522,21 @@ while running:
                     let mat = ia["materials"][0]
                     add_text(font_r, "ui", mat["name"], dx + 8.0, iy, 0.65, 0.65, 0.65, 1.0)
                     iy = iy + 18.0
-                    add_text(font_r, "ui", "Metallic: " + _fn(mat["metallic"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                    add_text(font_r, "ui", "Metallic: " + _fmt_num(mat["metallic"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
                     iy = iy + 16.0
-                    add_text(font_r, "ui", "Roughness: " + _fn(mat["roughness"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                    add_text(font_r, "ui", "Roughness: " + _fmt_num(mat["roughness"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
             # MaterialComponent (if present)
             if has_component(world, cur_sel, "material"):
                 let mc = get_component(world, cur_sel, "material")
                 iy = iy + 22.0
                 add_text(font_r, "ui", "Material", dx + 6.0, iy + 2.0, 0.784, 0.784, 0.784, 1.0)
                 iy = iy + 24.0
-                add_text(font_r, "ui", "Albedo: " + _fn(mc["albedo"][0]) + " " + _fn(mc["albedo"][1]) + " " + _fn(mc["albedo"][2]), dx + 8.0, iy, 0.65, 0.65, 0.65, 1.0)
+                add_text(font_r, "ui", "Albedo: " + _fmt_num(mc["albedo"][0]) + " " + _fmt_num(mc["albedo"][1]) + " " + _fmt_num(mc["albedo"][2]), dx + 8.0, iy, 0.65, 0.65, 0.65, 1.0)
                 iy = iy + 18.0
-                add_text(font_r, "ui", "Metallic: " + _fn(mc["metallic"]) + "  Roughness: " + _fn(mc["roughness"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                add_text(font_r, "ui", "Metallic: " + _fmt_num(mc["metallic"]) + "  Roughness: " + _fmt_num(mc["roughness"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
                 iy = iy + 16.0
                 if mc["emission_strength"] > 0.0:
-                    add_text(font_r, "ui", "Emission: " + _fn(mc["emission_strength"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                    add_text(font_r, "ui", "Emission: " + _fmt_num(mc["emission_strength"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
                     iy = iy + 16.0
         else:
             add_text(font_r, "ui", "Select an entity to view details", dx + 4.0, dy + 8.0, 0.439, 0.439, 0.439, 1.0)

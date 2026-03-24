@@ -5,25 +5,29 @@ A complete guide to building games and interactive experiences with the Forge En
 ## Table of Contents
 
 1. [Getting Started](#getting-started)
-2. [The Editor](#the-editor)
-3. [Engine Architecture](#engine-architecture)
-4. [Creating a Game](#creating-a-game)
-5. [Entity Component System](#entity-component-system)
-6. [Rendering](#rendering)
-7. [Physics](#physics)
-8. [Input System](#input-system)
-9. [UI Framework](#ui-framework)
-10. [Audio](#audio)
-11. [Animation](#animation)
-12. [AI Systems](#ai-systems)
-13. [Terrain and World](#terrain-and-world)
-14. [Particles and VFX](#particles-and-vfx)
-15. [Networking](#networking)
-16. [Scene Serialization](#scene-serialization)
-17. [Content Pipeline](#content-pipeline)
-18. [Code Generation](#code-generation)
-19. [Performance Tips](#performance-tips)
-20. [SageLang Reference](#sagelang-reference)
+2. [Project Browser](#project-browser)
+3. [The Editor](#the-editor)
+4. [Engine Architecture](#engine-architecture)
+5. [Creating a Game](#creating-a-game)
+6. [Entity Component System](#entity-component-system)
+7. [Rendering](#rendering)
+8. [Physics](#physics)
+9. [Input System](#input-system)
+10. [UI Framework](#ui-framework)
+11. [Audio](#audio)
+12. [Animation](#animation)
+13. [AI Systems](#ai-systems)
+14. [Terrain and World](#terrain-and-world)
+15. [Particles and VFX](#particles-and-vfx)
+16. [Networking](#networking)
+17. [Scene Serialization](#scene-serialization)
+18. [Content Pipeline](#content-pipeline)
+19. [Code Generation](#code-generation)
+20. [Building for Distribution](#building-for-distribution)
+21. [Coroutines](#coroutines)
+22. [Environment Configuration](#environment-configuration)
+23. [Performance Tips](#performance-tips)
+24. [SageLang Reference](#sagelang-reference)
 
 ---
 
@@ -33,7 +37,7 @@ A complete guide to building games and interactive experiences with the Forge En
 
 - **SageLang** compiler/interpreter (located at `../sagelang`)
 - **Vulkan** GPU drivers
-- **Linux** (tested on Ubuntu/Arch with NVIDIA GPUs)
+- **Linux** (tested on Ubuntu/Arch with NVIDIA and AMD GPUs)
 
 ### Quick Start
 
@@ -41,31 +45,67 @@ A complete guide to building games and interactive experiences with the Forge En
 # Clone or copy the engine
 cd ~/Devel/3DEngine
 
-# Launch the visual editor
-./editor.sh
+# Launch the visual editor (opens project browser first)
+./run.sh editor.sage
 
 # Run a demo
 ./run.sh examples/demo_world.sage
 
 # Run all tests
 ./tests/run_all.sh
+
+# Build distributable package
+./build_dist.sh
 ```
 
 ### Project Structure
 
-```
+```text
 forge-engine/
-├── editor.sage          # Visual editor application
-├── editor.sh            # Editor launcher script
+├── editor.sage          # Visual editor application (~1,700 lines)
 ├── run.sh               # Script runner
-├── build.sh             # Build system
-├── lib/                 # Engine modules
+├── build_dist.sh        # Distribution builder (sage runtime + engine bundle)
+├── lib/                 # Engine modules (89 files)
 ├── shaders/             # GLSL + SPIR-V shaders
 ├── assets/              # Fonts, textures, saved scenes
-├── examples/            # Demo programs
-├── tests/               # Test suites
+├── examples/            # 8 demo programs
+├── tests/               # 47 test suites, 1,396 checks
 └── build/               # Distribution output
+    └── dist/            # Self-contained distributable
 ```
+
+---
+
+## Project Browser
+
+When you launch the editor, a **Project Browser** screen appears before the editor loads. This is similar to Unreal Engine's project selection screen.
+
+### Layout
+
+- **Left panel — Templates**: 7 game type templates displayed as selectable cards, each with a colored badge, name, and description
+- **Right panel — Actions**: Three buttons for Create New Project, Open Existing Project, and Exit
+- **Preview area**: Shows the selected template's description and a list of included features (e.g., "Player controller + camera", "Weapon system + raycasting")
+
+### Templates
+
+| Template | Description | Includes |
+| --- | --- | --- |
+| **FPS** | First Person Shooter | Player controller, weapons, health/damage HUD, AI enemies |
+| **RPG** | Role-Playing Game | Third-person camera, inventory, quests, stats/leveling |
+| **Top-Down** | Top-Down Action | Overhead camera, twin-stick controls, projectiles, spawner |
+| **Voxel** | Voxel World | Block terrain, place/break tools, block palette |
+| **Racing** | Racing Game | Vehicle physics, chase camera, lap timer, speed HUD |
+| **Survival** | Survival | Crafting, hunger/thirst, day-night cycle, buildable shelters |
+| **Sandbox** | Sandbox / Empty | Empty scene with grid, basic lighting, full creative freedom |
+
+### Controls
+
+| Input | Action |
+| --- | --- |
+| Click | Select template / click buttons |
+| Up / Down arrows | Navigate templates |
+| Enter | Create project with selected template |
+| ESC | Exit |
 
 ---
 
@@ -79,17 +119,17 @@ Press **F1** at any time to see the full keyboard shortcuts overlay.
 
 - **Menu Bar** (top) — File, Edit, Window, Tools, Help dropdown menus
 - **Toolbar** (below menu) — Move/Rotate/Scale mode buttons, Play button, Save button
-- **Viewport** (center) — 3D scene with overlay bar showing Perspective/Lit/Show
-- **Floating Windows** — Draggable, resizable panels that snap to screen edges:
+- **Viewport** (center) — 3D scene with dark background so lit objects stand out clearly
+- **Floating Windows** — Draggable, resizable panels that snap to screen edges and reposition on window resize:
   - **Outliner** — Scrollable list of all entities, click to select
-  - **Details** — Editable transform properties (click values to type new numbers)
+  - **Details** — Editable transform properties (click values to type new numbers), component sections with accent bars, color-coded booleans
   - **Content Browser** — Asset list, shortcuts, imported model info
 - **Status Bar** (bottom) — Entity count, draw count, mode, FPS
 
 ### Editor Controls
 
 | Input | Action |
-|-------|--------|
+| --- | --- |
 | RMB + Drag | Orbit camera |
 | MMB + Drag | Pan camera |
 | Scroll Wheel | Zoom viewport / scroll panels |
@@ -113,6 +153,7 @@ Press **F1** at any time to see the full keyboard shortcuts overlay.
 ### Inline Property Editing
 
 Click any X, Y, or Z value in the Details panel to enter edit mode:
+
 - Type a new number using the keyboard
 - Press **Enter** to commit (creates an undo-able command)
 - Press **Escape** to cancel and restore the original value
@@ -122,16 +163,16 @@ Click any X, Y, or Z value in the Details panel to enter edit mode:
 ### Menu Bar
 
 | Menu | Actions |
-|------|---------|
-| File | New Scene, Open Scene, Save Scene, Export Game, Quit |
-| Edit | Delete, Duplicate, Select All |
-| Window | Show/hide Outliner, Details, Content Browser |
-| Tools | Add Cube/Sphere/Physics Cube, Toggle Physics, Generate Code |
+| --- | --- |
+| File | New Scene, Open Scene, Save Scene, Save Screenshot, Export Game, Compile Native, Quit |
+| Edit | Undo, Redo, Delete, Duplicate, Select All |
+| Window | Show/hide Outliner, Details, Content Browser, Reset Layout |
+| Tools | Add Cube/Sphere/Physics Cube/Light, Apply Materials, Save as Prefab, Toggle Physics, Generate Code |
 | Help | Controls (F1 overlay), About |
 
 ### Modal Dialogs
 
-Certain actions (like Quit) show a modal confirmation dialog with Yes/No buttons. Press Escape to dismiss.
+Certain actions (like Quit) show a modal confirmation dialog with themed Yes/No buttons. Press Escape to dismiss.
 
 ---
 
@@ -139,7 +180,7 @@ Certain actions (like Quit) show a modal confirmation dialog with Yes/No buttons
 
 Forge Engine is built as a collection of SageLang modules. Each module handles a specific concern:
 
-```
+```text
 ┌─────────────────────────────────────────────┐
 │                  Your Game                   │
 ├─────────┬──────────┬──────────┬─────────────┤
@@ -152,6 +193,23 @@ Forge Engine is built as a collection of SageLang modules. Each module handles a
 │ Vulkan GPU Backend (SageLang gpu module)     │
 └─────────────────────────────────────────────┘
 ```
+
+### UI Architecture
+
+The UI system uses a centralized theme defined in `ui_core.sage`:
+
+```text
+ui_core.sage          Theme system (40+ colors, spacing, sizing, helpers)
+  ├── ui_widgets.sage   Advanced widgets (sliders, checkboxes, dropdowns, text fields)
+  ├── ui_window.sage    Floating windows, context menus, modals
+  ├── ui_renderer.sage  Batched GPU quad rendering
+  ├── launch_screen.sage  Project browser
+  ├── hud.sage          Game HUD components
+  ├── menu.sage         Game menu screens
+  └── inspector.sage    Entity property inspector
+```
+
+All UI modules reference `ui_core.THEME_*` constants instead of hardcoding colors, ensuring visual consistency across the entire engine.
 
 ---
 
@@ -268,7 +326,7 @@ tick_systems(world, dt)
 ### Built-in Components
 
 | Component | Constructor | Fields |
-|-----------|------------|--------|
+| --- | --- | --- |
 | Transform | `TransformComponent(x, y, z)` | position, rotation, scale, matrix, dirty |
 | Velocity | `VelocityComponent()` | linear, angular, damping |
 | Camera | `CameraComponent(fov, near, far)` | fov, near, far, yaw, pitch |
@@ -397,11 +455,140 @@ if action_just_pressed(inp, "shoot"):
 
 ### Available Keys
 
-Letters: `KEY_W, KEY_A, KEY_S, KEY_D, KEY_Q, KEY_E, KEY_R, KEY_F`
+Letters: `KEY_W, KEY_A, KEY_S, KEY_D, KEY_Q, KEY_E, KEY_R, KEY_F, KEY_Z, KEY_Y, KEY_X, KEY_C, KEY_V, KEY_N, KEY_O`
 Numbers: `KEY_1` through `KEY_5`
-Special: `KEY_SPACE, KEY_ESCAPE, KEY_ENTER, KEY_TAB, KEY_SHIFT, KEY_CTRL`
+Special: `KEY_SPACE, KEY_ESCAPE, KEY_ENTER, KEY_TAB, KEY_SHIFT, KEY_CTRL, KEY_BACKSPACE, KEY_DELETE, KEY_HOME, KEY_END, KEY_F1`
 Arrows: `KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT`
 Mouse: `MOUSE_LEFT, MOUSE_RIGHT, MOUSE_MIDDLE`
+
+---
+
+## UI Framework
+
+The UI system provides a complete widget toolkit with a centralized theme.
+
+### Theme System
+
+All colors, spacing, and sizing are defined in `ui_core.sage`:
+
+```python
+import ui_core
+
+# Surface colors (wider spread for contrast)
+ui_core.THEME_BG          # Darkest background
+ui_core.THEME_SURFACE     # Recessed surfaces
+ui_core.THEME_PANEL       # Panel backgrounds
+ui_core.THEME_HEADER      # Section headers
+ui_core.THEME_ELEVATED    # Elevated elements (menus, tooltips)
+
+# Interactive states
+ui_core.THEME_BUTTON        # Default button
+ui_core.THEME_BUTTON_HOVER  # Hovered button
+ui_core.THEME_BUTTON_ACTIVE # Pressed button
+
+# Accent colors
+ui_core.THEME_ACCENT       # Primary accent (blue)
+ui_core.THEME_ACCENT_HOVER # Hovered accent
+
+# Semantic colors
+ui_core.THEME_SUCCESS   # Green (true values, health high)
+ui_core.THEME_WARNING   # Yellow (health medium)
+ui_core.THEME_DANGER    # Red (false values, health low, quit buttons)
+
+# Spacing constants
+ui_core.SP_XS   # 2px
+ui_core.SP_SM   # 4px
+ui_core.SP_MD   # 8px
+ui_core.SP_LG   # 12px
+ui_core.SP_XL   # 16px
+ui_core.SP_XXL  # 24px
+
+# Font sizes
+ui_core.FONT_SM    # 1.8
+ui_core.FONT_MD    # 2.2
+ui_core.FONT_LG    # 2.8
+ui_core.FONT_TITLE # 4.5
+```
+
+### Widget States
+
+Buttons support four visual states:
+
+- **Default** — `bg_color`
+- **Hover** — `hover_color` (brightened) + focus ring + top highlight
+- **Pressed** — `active_color` (darkened)
+- **Disabled** — `disabled_color` (dimmed, ignores clicks)
+
+### Advanced Widgets
+
+```python
+import ui_widgets
+
+# Slider with track, fill, and thumb handle
+let sl = ui_widgets.create_slider(x, y, 200.0, 0.0, 100.0, 50.0)
+
+# Checkbox with accent fill when checked
+let cb = ui_widgets.create_checkbox(x, y, "Enable Physics", true)
+
+# Dropdown with open/close animation and selected highlight
+let dd = ui_widgets.create_dropdown(x, y, 150.0, ["Low", "Medium", "High"], 1)
+
+# Text field with blinking cursor and focus border
+let tf = ui_widgets.create_text_field(x, y, 200.0, "default value")
+
+# Section header with accent bar and collapse indicator
+let sh = ui_widgets.create_section_header(x, y, 240.0, "Transform")
+```
+
+### Quad Collection for Rendering
+
+Each advanced widget type has a dedicated quad collector:
+
+```python
+# Collect visual quads for custom rendering
+ui_widgets.collect_slider_quads(slider, quads)
+ui_widgets.collect_checkbox_quads(checkbox, quads)
+ui_widgets.collect_dropdown_quads(dropdown, quads)
+ui_widgets.collect_text_field_quads(text_field, quads)
+ui_widgets.collect_section_header_quads(header, quads)
+ui_widgets.collect_scrollbar_quads(scroll_panel, quads)
+```
+
+### Game HUD
+
+```python
+from hud import create_game_hud, update_game_hud
+
+let hud = create_game_hud()
+
+# In update:
+update_game_hud(hud, health_pct, score_pts, combo, fps, entity_count)
+```
+
+HUD includes:
+
+- **Health bar** — 4-stage smooth color transition (green > yellow > red > critical pulsing)
+- **Crosshair** — Modern gapped-line style with center dot
+- **Score display** — Points + combo counter
+- **Info panel** — FPS + entity count
+- **Minimap** — Top-down view with themed player (cyan) and enemy (red) dots
+
+### Game Menus
+
+```python
+from menu import create_menu_system, create_pause_menu, show_menu
+
+let menus = create_menu_system()
+let pause = create_pause_menu(on_resume, on_quit)
+register_menu(menus, "pause", pause)
+
+# Show with fade animation:
+show_menu(menus, "pause")
+```
+
+Menu types: `create_pause_menu`, `create_main_menu`, `create_game_over_menu`
+
+Buttons use style variants: `"primary"` (accent), `"danger"` (red), `"success"` (green). Menus include title headers with accent underlines, visual hierarchy between primary and secondary actions, and hint text.
 
 ---
 
@@ -436,15 +623,9 @@ add_bone(sk, "head", "spine")
 ### Two-Bone IK
 
 ```python
-from animation import solve_ik_two_bone
+from animation import solve_ik_two_bone, apply_ik_to_skeleton
 
-# Solve IK for arm/leg chains
 let result = solve_ik_two_bone(shoulder_pos, elbow_pos, hand_pos, target_pos, pole_target)
-# result["mid"] = new elbow position
-# result["end"] = new hand position (at or near target)
-
-# Apply to skeleton:
-from animation import apply_ik_to_skeleton
 apply_ik_to_skeleton(skeleton, "upper_arm", "lower_arm", "hand", target_pos, pole_target)
 ```
 
@@ -453,11 +634,9 @@ apply_ik_to_skeleton(skeleton, "upper_arm", "lower_arm", "hand", target_pos, pol
 ```python
 from animation import add_animation_event, fire_animation_events
 
-# Attach events to keyframe times
 add_animation_event(walk_clip, 0.25, "footstep_left", {"volume": 0.8})
 add_animation_event(walk_clip, 0.75, "footstep_right", {"volume": 0.8})
 
-# Fire events during playback
 proc on_anim_event(evt):
     if evt["name"] == "footstep_left":
         play_sound(audio, "step_l", "sfx", evt["data"]["volume"], false)
@@ -551,6 +730,16 @@ let cl = create_client()
 connect_to_server(cl, "localhost", 7777, "Player1")
 ```
 
+### Secure Networking
+
+```python
+from net_server import create_secure_server
+from net_client import connect_secure
+
+let srv = create_secure_server(8443, "cert.pem", "key.pem")
+let client = connect_secure("game.example.com", 8443)
+```
+
 ---
 
 ## Scene Serialization
@@ -566,7 +755,7 @@ save_scene(world, "MyScene", "assets/my_scene.json")
 let result = load_scene("assets/my_scene.json")
 let loaded_world = result["world"]
 
-# Prefabs — save/load entity templates
+# Prefabs
 save_prefab(world, entity_id, "EnemyTank", "assets/prefabs/tank.prefab.json")
 let new_eid = load_prefab(world, "assets/prefabs/tank.prefab.json")
 let prefab_list = list_prefabs("assets/prefabs")
@@ -581,29 +770,9 @@ let prefab_list = list_prefabs("assets/prefabs")
 ```python
 from asset_import import import_gltf, scan_importable_assets
 
-# Scan directory for importable files
-let assets = scan_importable_assets("assets")  # finds .gltf, .png, .obj, etc.
-
-# Import a glTF model (meshes + materials + animations)
+let assets = scan_importable_assets("assets")
 let model = import_gltf("assets/character.gltf")
-# model["gpu_meshes"] = [{gpu_mesh, name}]
-# model["materials"] = [{name, albedo, metallic, roughness}]
-# model["animations"] = [{name, channels}]
-```
-
-### Prefabs
-
-```python
-from scene_serial import save_prefab, load_prefab, list_prefabs
-
-# Save entity as reusable template
-save_prefab(world, entity_id, "EnemyTank", "assets/prefabs/tank.prefab.json")
-
-# Load prefab into scene (spawns new entity with all components)
-let new_eid = load_prefab(world, "assets/prefabs/tank.prefab.json")
-
-# List all available prefabs
-let prefabs = list_prefabs("assets/prefabs")
+# model["gpu_meshes"], model["materials"], model["animations"]
 ```
 
 ### Material Presets
@@ -612,8 +781,6 @@ let prefabs = list_prefabs("assets/prefabs")
 from material import create_material_preset, get_material_presets
 
 # Available: Metal, Wood, Concrete, Glass, Plastic, Gold, Rubber, Emissive
-print get_material_presets()
-
 let gold = create_material_preset("Gold")
 add_component(world, entity_id, "material", gold)
 ```
@@ -626,7 +793,7 @@ from hot_reload import create_file_watcher, watch_asset_directory, check_asset_c
 let hr = create_file_watcher()
 
 proc on_asset_change(filename, path, change_type):
-    print filename + " was " + change_type  # "modified" or "added"
+    print filename + " was " + change_type
 
 watch_asset_directory(hr, "assets/textures", on_asset_change)
 
@@ -646,6 +813,19 @@ request_level_load(lm, "dungeon_1", "assets/levels/dungeon_1.json")
 process_level_queue(lm, world)
 ```
 
+### Async Asset Loading
+
+```python
+from asset_import import request_async_load, process_async_loads, get_async_results
+
+request_async_load("assets/character.gltf", "gltf")
+request_async_load("assets/terrain.png", "texture")
+
+# Process one load per frame (no freeze):
+process_async_loads()
+let loaded = get_async_results()
+```
+
 ---
 
 ## Code Generation
@@ -661,10 +841,6 @@ io.writefile("my_game.sage", code)
 
 # Run interpreted:
 # ./run.sh my_game.sage
-
-# Or compile to native executable via LLVM (~10x faster):
-compile_game_native(world, "MyGame", {"width": 1280, "height": 720})
-# Then: sage --compile assets/generated_game.sage -o MyGame
 ```
 
 ### GPU-Driven Rendering
@@ -674,31 +850,51 @@ from render_system import create_indirect_buffer, draw_mesh_lit_indirect
 from render_system import create_compute_pipeline, dispatch_compute
 from render_system import barrier_compute_to_graphics
 
-# Indirect draw (GPU fills draw commands, no CPU bottleneck)
 let indirect_buf = create_indirect_buffer(1024)
 draw_mesh_lit_indirect(cmd, material, indirect_buf, draw_count, 20)
 
-# Compute shader dispatch
 let cp = create_compute_pipeline("shaders/cull.comp.spv", desc_layout, 16)
 dispatch_compute(cmd, cp, 64, 1, 1, desc_set, push_data)
-barrier_compute_to_graphics(cmd)  # Sync before drawing
+barrier_compute_to_graphics(cmd)
 ```
 
-### Async Asset Loading
+---
 
-```python
-from asset_import import request_async_load, process_async_loads, get_async_results
+## Building for Distribution
 
-# Queue assets for non-blocking loading
-request_async_load("assets/character.gltf", "gltf")
-request_async_load("assets/terrain.png", "texture")
+### Distribution Build
 
-# Process one load per frame (no freeze):
-process_async_loads()
+```bash
+# Build a self-contained package
+./build_dist.sh
 
-# Check results:
-let loaded = get_async_results()
+# Output: build/dist/ (~3.9MB, 132 .sage modules)
+# Contains: sage runtime binary + engine libs + stdlib + shaders + assets
+
+# Run:
+cd build/dist && ./forge_engine
+
+# Package for sharing:
+tar -czf forge_engine.tar.gz -C build dist
+# Result: ~1.4MB compressed archive
 ```
+
+### What's Included
+
+| Component | Description |
+| --- | --- |
+| `sage` | SageLang runtime binary (ELF x86-64, links Vulkan/GLFW/OpenGL) |
+| `lib/` | 89 engine .sage modules |
+| `stdlib/` | 33 SageLang standard library modules |
+| `shaders/` | Compiled SPIR-V shaders |
+| `assets/` | Fonts (DejaVuSans), glTF models, textures, saved scenes |
+| `editor.sage` | Editor entry point |
+| `examples/` | 8 demo programs |
+| `forge_engine` | Launch script |
+
+### Native Compilation Status
+
+The SageLang LLVM backend supports native compilation for GPU-centric programs via `sage --compile-llvm`, but does not yet support multi-module projects with `from X import Y` imports. The editor uses 30+ modules with 130+ cross-module imports, which exceeds the current LLVM backend's capabilities. Use the interpreter-based distribution build for now.
 
 ---
 
@@ -709,57 +905,28 @@ SageLang generators enable game sequences without blocking the frame loop:
 ```python
 from game_loop import start_coroutine, update_coroutines, is_coroutine_running
 
-# Define a sequence using yield
 proc cutscene_intro():
     print "Camera panning..."
-    yield true   # Wait one frame
+    yield true
     print "Title appears..."
     yield true
-    yield true   # Wait two more frames
+    yield true
     print "Cutscene done"
 
-# Start and update each frame
 start_coroutine("intro", cutscene_intro())
 
 # In game loop:
 update_coroutines(dt)
-if is_coroutine_running("intro"):
-    # Still playing
 ```
 
-## Octree Spatial Queries
-
-For large scenes with many entities, the octree provides efficient spatial queries:
-
-```python
-from spatial_grid import create_octree, octree_insert, octree_query_sphere
-
-let tree = create_octree([0.0, 0.0, 0.0], 500.0, 6)  # center, half_size, max_depth
-octree_insert(tree, entity_id, position)
-
-# Find all entities within radius of a point
-let nearby = octree_query_sphere(tree, player_pos, 10.0)
-```
-
-## Secure Networking
-
-```python
-from net_server import create_secure_server
-from net_client import connect_secure
-
-# Server with SSL/TLS
-let srv = create_secure_server(8443, "cert.pem", "key.pem")
-
-# Client with SSL
-let client = connect_secure("game.example.com", 8443)
-```
+---
 
 ## Environment Configuration
 
 Set engine parameters via environment variables:
 
 ```bash
-FORGE_WIDTH=1920 FORGE_HEIGHT=1080 FORGE_FULLSCREEN=1 ./editor.sh
+FORGE_WIDTH=1920 FORGE_HEIGHT=1080 FORGE_FULLSCREEN=1 ./run.sh editor.sage
 ```
 
 Supported: `FORGE_WIDTH`, `FORGE_HEIGHT`, `FORGE_FULLSCREEN`, `FORGE_VSYNC`, `FORGE_DEBUG`
@@ -770,17 +937,15 @@ Supported: `FORGE_WIDTH`, `FORGE_HEIGHT`, `FORGE_FULLSCREEN`, `FORGE_VSYNC`, `FO
 
 1. **Use frustum culling** — `extract_frustum_planes` + `aabb_in_frustum` to skip off-screen objects
 2. **Use the spatial grid** — `create_spatial_grid` for broadphase collision instead of O(n^2) pair checks
-3. **Batch text rendering** — use `begin_text` / `add_text` / `flush_text` instead of individual `draw_text` calls
-4. **Use indirect rendering** — `cmd_draw_indirect` for GPU-driven draw calls (10K+ objects)
-5. **Use pipeline cache** — `create_pipeline_cache` reduces pipeline compilation stutter
-6. **Use device-local uploads** — `upload_mesh_device_local` for optimal GPU memory placement
-7. **Compile to native** — `sage --compile` uses LLVM for ~10x interpreter speedup
-8. **Use async loading** — `request_async_load` prevents frame stalls during asset loading
-9. **Use LOD** — `compute_lod` skips distant objects automatically
-10. **GC tuning** — `gc_disable()` at file top, `gc_collect()` at frame boundary
+3. **Batch text rendering** — use `begin_text` / `add_text` / `flush_text` instead of individual calls
 4. **Use native functions** — `build_quad_verts` and `array_extend` are C-native and 50x faster than SageLang equivalents
 5. **Cache when possible** — only rebuild UI/text when state changes, not every frame
-6. **Limit entity count** — the ECS uses dict-based storage; keep entity counts reasonable (<1000)
+6. **Use indirect rendering** — `cmd_draw_indirect` for GPU-driven draw calls (10K+ objects)
+7. **Use pipeline cache** — `create_pipeline_cache` reduces pipeline compilation stutter
+8. **Use device-local uploads** — `upload_mesh_device_local` for optimal GPU memory placement
+9. **Use LOD** — `compute_lod` skips distant objects automatically
+10. **GC tuning** — `gc_disable()` at file top, `gc_collect()` at frame boundary
+11. **Limit entity count** — the ECS uses dict-based storage; keep entity counts reasonable (<1000)
 
 ---
 
@@ -796,6 +961,19 @@ let name = "hello"
 # Functions
 proc greet(name):
     print "Hello " + name
+
+# Pattern matching
+match value:
+    case 1:
+        print "one"
+    case 2:
+        print "two"
+    default:
+        print "other"
+
+# Defer (cleanup on scope exit)
+defer:
+    close_resource(handle)
 
 # Classes
 class Animal:
@@ -824,26 +1002,13 @@ from math3d import vec3, mat4_mul
 ### Native Functions Added by Forge Engine
 
 | Function | Description |
-|----------|-------------|
+| --- | --- |
 | `build_quad_verts(quads)` | Convert quad dicts to vertex float array (C native, 50x faster) |
 | `array_extend(target, source)` | Append all elements of source to target (C native memcpy) |
 | `gpu.load_font(path, size)` | Rasterize TTF font to atlas texture |
 | `gpu.font_text_verts(handle, text, x, y, r, g, b, a)` | Generate text vertex data |
 | `gpu.font_measure(handle, text)` | Measure text dimensions |
 | `gpu.font_atlas(handle)` | Get font atlas info (texture, sampler) |
+| `gpu.text_input_available()` | Check if keyboard input is pending |
+| `gpu.text_input_read()` | Read next UTF-8 character from input buffer |
 | `build_line_quads(lines, thickness, r, g, b, a)` | Convert line segments to quad array |
-
----
-
-## Building for Distribution
-
-```bash
-./build.sh editor.sage -o forge_editor
-
-# Output:
-# build/dist/forge_editor   — native launcher
-# build/dist/lib/           — all engine modules
-# build/dist/shaders/       — compiled SPIR-V
-# build/dist/assets/        — fonts, textures
-# build/dist/examples/      — demo programs
-```

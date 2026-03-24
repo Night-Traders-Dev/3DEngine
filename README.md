@@ -1,6 +1,6 @@
 # Forge Engine
 
-A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Features a visual editor with floating windows, TrueType font rendering, PBR lighting, quaternion math, 21 GLSL shaders, and 86+ engine modules spanning rendering, physics, animation, AI, networking, and content pipelines.
+A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Features a project launcher with game templates, a visual editor with floating windows, TrueType font rendering, PBR lighting, quaternion math, a centralized UI theme system, and 89+ engine modules spanning rendering, physics, animation, AI, networking, and content pipelines.
 
 For the complete engine guide, see **[GUIDE.md](GUIDE.md)**.
 
@@ -10,33 +10,48 @@ For the complete engine guide, see **[GUIDE.md](GUIDE.md)**.
 # Build SageLang (if not already built)
 cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 
-# Launch the editor
-./editor.sh
+# Launch the editor (opens project browser first)
+./run.sh editor.sage
 
 # Run a game demo
 ./run.sh examples/demo_world.sage
 
-# Run tests (47 suites, 1,343 checks)
+# Run tests (47 suites, 1,396 checks)
 ./tests/run_all.sh
+
+# Build distributable package
+./build_dist.sh
 ```
+
+## Project Browser
+
+When you launch the editor, a **Project Browser** appears first:
+
+- **Left panel** — 7 game templates: FPS, RPG, Top-Down, Voxel, Racing, Survival, Sandbox
+- **Right panel** — Create New Project, Open Existing Project, Exit
+- **Preview area** — Shows selected template details and included features
+- **Keyboard** — Arrow keys to navigate, Enter to create, ESC to exit
 
 ## Editor
 
-The Forge Editor is a visual scene editor for building 3D games. Place objects, transform them, apply materials, configure physics, then generate a complete SageLang game script.
+The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Place objects, transform them, apply materials, configure physics, then generate a complete SageLang game script.
 
 ### Features
 
+- **Project launcher** — Template-based project creation with 7 game type presets
 - **Floating windows** — Draggable, resizable Outliner, Details, and Content Browser panels with snap-to-edge docking
+- **Responsive layout** — Panels reposition automatically when the window is resized
 - **Menu system** — File, Edit, Window, Tools, Help dropdown menus + right-click context menu
+- **Themed UI** — Centralized dark theme with accent colors, hover/active/disabled button states, borders, shadows, and focus rings
 - **Editable properties** — Click transform values in Details panel to type new numbers (with blinking cursor, undo support)
-- **Scrollable panels** — Mouse wheel scrolls all floating window content
+- **Scrollable panels** — Mouse wheel scrolls all floating window content with visible scrollbars
 - **Material presets** — Apply Metal, Wood, Glass, Gold materials from Tools menu
 - **Prefab system** — Save entities as reusable .prefab.json templates
 - **Undo/Redo** — CTRL+Z / CTRL+Y with full command history (100 levels)
 - **Modal dialogs** — Quit confirmation, About dialog
 - **Play-in-Editor** — Press ENTER to generate and run your game
 - **Save Screenshot** — Capture viewport to PNG from File menu
-- **Compile Native** — Generate LLVM-compiled standalone executables (~10x faster)
+- **Compile Native** — Generate LLVM-compiled standalone executables
 - **Keyboard shortcuts** — Press F1 to see all shortcuts
 
 ### Controls
@@ -87,29 +102,38 @@ Press **ENTER** or use File > Export Game to generate `assets/generated_game.sag
 
 ```
 forge-engine/
-├── editor.sage              # Visual editor (~1600 lines)
-├── editor.sh                # Editor launcher
-├── lib/                     # Engine modules (86 files, ~16,000 lines)
-├── shaders/                 # 21 GLSL shader pairs + SPIR-V
-├── examples/                # 8 demo programs (2,557 lines)
-├── tests/                   # 47 suites, 1,343 checks
+├── editor.sage              # Visual editor (~1,700 lines)
+├── run.sh                   # Script runner
+├── build_dist.sh            # Distribution builder
+├── lib/                     # Engine modules (89 files)
+│   ├── ui_core.sage         # Centralized theme + widget system
+│   ├── ui_widgets.sage      # Advanced widgets (sliders, checkboxes, dropdowns, text fields)
+│   ├── ui_window.sage       # Floating windows, menus, modals
+│   ├── ui_renderer.sage     # Batched GPU quad rendering
+│   ├── launch_screen.sage   # Project browser / template selector
+│   ├── hud.sage             # Game HUD (health, crosshair, minimap, score)
+│   ├── menu.sage            # Game menus (pause, main, game over)
+│   └── ...                  # 80+ more engine modules
+├── shaders/                 # GLSL shader pairs + SPIR-V
+├── examples/                # 8 demo programs
+├── tests/                   # 47 suites, 1,396 checks
 ├── assets/                  # Fonts, models, scenes, prefabs
 │   └── prefabs/             # Saved entity templates
 └── build/                   # Distribution output
 ```
 
-**Total codebase:** ~27,000 lines of SageLang + ~800 lines of GLSL
+**Total codebase:** ~22,400 lines of SageLang + ~700 lines of GLSL
 
 ## Engine Systems
 
 ### Core
-`engine` (**env var config**: FORGE_WIDTH/HEIGHT/FULLSCREEN/VSYNC/DEBUG) · `ecs` (dict-based, queries, systems, tags) · `events` · `game_loop` (**coroutine system** via generators) · `components` (Transform, Name, Camera, Light, Material, Audio, TriggerVolume) · `engine_math` · `input`
+`ecs` (dict-based, queries, systems, tags) · `events` · `game_loop` (**coroutine system** via generators) · `components` (Transform, Name, Camera, Light, Material, Audio, TriggerVolume) · `engine_math` · `input`
 
 ### Math
 `math3d` — vec2/3/4, mat4 (multiply, translate, scale, rotate, perspective, look_at, ortho, inverse), quaternions (mul, slerp, from_euler, to_matrix, rotate_vec3)
 
 ### Rendering
-`renderer` (Vulkan swapchain, frame sync, **pipeline cache**, **secondary command buffers**) · `render_system` (**indirect draw**, **compute dispatch**, **anisotropic samplers**, **pipeline barriers**) · `lighting` (16 lights, fog, UBO) · `sky` (procedural presets, **cubemap skybox**) · `pbr_material` (Cook-Torrance BRDF) · `textures` · `shadow_map` (depth pass, PCF) · `deferred` (G-buffer MRT, **G-buffer pipeline builder**) · `frustum` (culling) · `lod` (5 distance levels) · `taa` (temporal anti-aliasing, **jitter projection**) · `frame_graph` (pass dependencies, **GPU barrier integration**) · `editor_grid` · `post_fx` (vignette, color grading, fade) · `postprocess` (bloom, tone mapping, fullscreen passes, **offscreen targets**)
+`renderer` (Vulkan swapchain, frame sync, **pipeline cache**, **secondary command buffers**) · `render_system` (**indirect draw**, **compute dispatch**, **anisotropic samplers**, **pipeline barriers**) · `lighting` (16 lights, fog, UBO) · `sky` (procedural presets, **cubemap skybox**) · `pbr_material` (Cook-Torrance BRDF) · `textures` · `shadow_map` (depth pass, PCF) · `deferred` (G-buffer MRT) · `frustum` (culling) · `lod` (5 distance levels) · `taa` (temporal anti-aliasing) · `frame_graph` (pass dependencies, **GPU barrier integration**) · `editor_grid` · `post_fx` (vignette, color grading, fade) · `postprocess` (bloom, tone mapping, fullscreen passes, **offscreen targets**)
 
 ### Physics
 `collision` (AABB/sphere/ray/capsule, collision callbacks/events) · `physics` (rigidbody, gravity, restitution, fixed/distance/hinge constraints, constraint solver) · `spatial_grid` (broadphase, **octree** for large scenes)
@@ -123,8 +147,8 @@ forge-engine/
 ### Animation & AI
 `tween` (18 easings) · `animation` (skeletal, keyframes, blend trees, state machine, two-bone IK solver, animation events) · `navigation` (A* pathfinding, steering: seek/flee/arrive/wander/avoid) · `behavior_tree` (action/condition/sequence/selector/inverter/repeater/wait)
 
-### UI
-`ui_core` (widget hierarchy, anchoring, hit testing) · `ui_renderer` (batched quads) · `ui_widgets` (buttons, sliders, checkboxes, dropdowns, text input fields, number fields, tree views, scroll panels, section headers) · `ui_window` (floating windows, menus, modal dialogs, snap-to-edge) · `font` (TrueType via stb_truetype) · `hud` · `menu`
+### UI Framework
+`ui_core` (**centralized theme system** with 40+ named colors, spacing constants, font sizing, border/shadow helpers, hover/active/disabled/pressed widget states, focus rings) · `ui_renderer` (batched quads) · `ui_widgets` (buttons, sliders, checkboxes, dropdowns, text input fields, number fields, tree views, scroll panels, section headers, **visible scrollbars**, **per-widget quad collection**) · `ui_window` (floating windows, context menus, modal dialogs, snap-to-edge) · `font` (TrueType via stb_truetype) · `launch_screen` (project browser with templates) · `hud` (health bar with 4-stage color transition, gapped crosshair, themed minimap, score display) · `menu` (themed pause/main/game-over menus with visual hierarchy, button styles, fade animations) · `inspector` (entity property inspector with accent bars, color-coded booleans)
 
 ### World
 `terrain` (heightmap, procedural noise) · `water` (animated waves) · `foliage` (scatter rules) · `day_night` (sun cycle) · `scene` (scene graph, level streaming)
@@ -139,8 +163,6 @@ forge-engine/
 `undo_redo` (command pattern, 100 levels) · `inspector` · `gizmo` (translate/rotate/scale) · `asset_browser` · `scene_editor` (multi-select, raycast picking) · `editor_viewport` · `editor_layout` · `codegen` · `editor_grid` · `debug_ui` (overlay, frame stats)
 
 ## Shaders
-
-21 shader pairs (GLSL source + compiled SPIR-V):
 
 | Shader | Purpose |
 |--------|---------|
@@ -174,27 +196,41 @@ forge-engine/
 ## Testing
 
 ```bash
-./tests/run_all.sh            # 47 suites, 1,343 individual checks
+./tests/run_all.sh            # 47 suites, 1,396 individual checks
 ./run.sh tests/test_ecs.sage  # Run individual suite
 ```
+
+## Building for Distribution
+
+```bash
+# Build a self-contained distributable package
+./build_dist.sh
+
+# Output: build/dist/ (1.4MB compressed, 3.9MB extracted)
+# Contains: sage runtime + 132 .sage modules + shaders + assets
+
+# Run from dist:
+cd build/dist && ./forge_engine
+
+# Package for sharing:
+tar -czf forge_engine.tar.gz -C build dist
+```
+
+The distribution build bundles the SageLang interpreter with all engine source, shaders, and assets into a portable directory. Native LLVM compilation is not yet supported for multi-module projects (the LLVM backend resolves GPU constants but not cross-module `from X import Y` imports).
 
 ## SageLang Features Used
 
 Forge Engine leverages these SageLang capabilities:
 
-**Interpreter Enhancements:**
+**Language Features:**
+
+- `match`/`case`/`default` pattern matching for UI state machines
+- `defer` blocks for resource cleanup
 - Text input via GLFW char callback + ring buffer
-- `str()` for arrays, better runtime error messages
 - Native C functions: `build_quad_verts`, `array_extend`, `build_line_quads`
 - stb_truetype font rendering, cgltf model loading
-- Extended key constants (KEY_Z/Y/X, BACKSPACE, DELETE, F1, etc.)
 
-**LLVM Backend:**
-- Native compilation via `sage --compile` for ~10x speedup
-- 100+ GPU runtime functions linked directly via C ABI
-- Bytecode VM with 21 GPU hot-path opcodes for game loops
-
-**GPU Module (135 functions):**
+**GPU Module (135+ functions):**
 - Vulkan rendering pipeline (swapchain, render passes, pipelines, command buffers)
 - Compute shader dispatch (`cmd_dispatch`, `cmd_dispatch_indirect`)
 - Indirect rendering (`cmd_draw_indirect`, `cmd_draw_indexed_indirect`)
@@ -202,18 +238,19 @@ Forge Engine leverages these SageLang capabilities:
 - Pipeline caching, advanced samplers, cubemaps
 - Offscreen targets, MRT render passes, pipeline barriers
 - Screenshot capture, device-local memory uploads
+- Text input API (`text_input_available`, `text_input_read`)
 
 **Networking:**
 - TCP/UDP sockets, HTTP client (get/post/download), SSL/TLS
 
 ## Known Issues
 
-- Menu bar visibility depends on theme contrast (WIP)
 - Audio requires OpenAL; gracefully degrades if absent
-- No MSAA (pipeline hardcoded to 1x sample — planned)
+- No MSAA (pipeline hardcoded to 1x sample)
 - Deferred G-buffer fill pass not yet wired (infrastructure and shaders ready)
 - Networking is TCP-only (UDP planned)
-- Content browser text can overflow on small windows (scroll support added but clipping WIP)
+- LLVM backend does not support multi-module compilation (use interpreter or dist build)
+- Pre-existing "Operands must be numbers or strings" warning at startup (non-fatal, does not affect functionality)
 
 ## License
 
