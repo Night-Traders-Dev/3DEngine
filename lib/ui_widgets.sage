@@ -12,20 +12,23 @@ from ui_core import add_child
 # Color theme (Unreal-style dark)
 # Use ui_core.rgba to avoid from-import nil bug with let variables
 # ============================================================================
-# Modern dark theme with teal accent
-let THEME_BG = ui_core.rgba(0.07, 0.07, 0.08, 1.0)
-let THEME_PANEL = ui_core.rgba(0.11, 0.11, 0.13, 1.0)
-let THEME_HEADER = ui_core.rgba(0.14, 0.14, 0.17, 1.0)
-let THEME_BUTTON = ui_core.rgba(0.18, 0.19, 0.22, 1.0)
-let THEME_BUTTON_HOVER = ui_core.rgba(0.24, 0.26, 0.30, 1.0)
-let THEME_ACCENT = ui_core.rgba(0.0, 0.65, 0.72, 1.0)
-let THEME_ACCENT_HOVER = ui_core.rgba(0.0, 0.78, 0.85, 1.0)
-let THEME_TEXT = ui_core.rgba(0.85, 0.87, 0.90, 1.0)
-let THEME_TEXT_DIM = ui_core.rgba(0.42, 0.44, 0.50, 1.0)
-let THEME_BORDER = ui_core.rgba(0.04, 0.04, 0.05, 1.0)
-let THEME_INPUT_BG = ui_core.rgba(0.06, 0.06, 0.08, 1.0)
-let THEME_SELECT = ui_core.rgba(0.0, 0.45, 0.55, 0.45)
-let THEME_SEPARATOR = ui_core.rgba(0.18, 0.18, 0.22, 1.0)
+# Catppuccin-inspired dark theme — near-black panels, bright viewport
+# Panels: #11111B -> #1E1E2E -> #24243A
+# Viewport: brighter #313244 so it pops against dark panels
+# Accent: teal/cyan #89DCEB or #94E2D5
+let THEME_BG = ui_core.rgba(0.067, 0.067, 0.106, 1.0)
+let THEME_PANEL = ui_core.rgba(0.118, 0.118, 0.180, 1.0)
+let THEME_HEADER = ui_core.rgba(0.141, 0.141, 0.227, 1.0)
+let THEME_BUTTON = ui_core.rgba(0.180, 0.180, 0.271, 1.0)
+let THEME_BUTTON_HOVER = ui_core.rgba(0.220, 0.220, 0.318, 1.0)
+let THEME_ACCENT = ui_core.rgba(0.537, 0.863, 0.922, 1.0)
+let THEME_ACCENT_HOVER = ui_core.rgba(0.580, 0.886, 0.835, 1.0)
+let THEME_TEXT = ui_core.rgba(0.804, 0.839, 0.957, 1.0)
+let THEME_TEXT_DIM = ui_core.rgba(0.427, 0.443, 0.545, 1.0)
+let THEME_BORDER = ui_core.rgba(0.043, 0.043, 0.067, 1.0)
+let THEME_INPUT_BG = ui_core.rgba(0.075, 0.075, 0.118, 1.0)
+let THEME_SELECT = ui_core.rgba(0.537, 0.863, 0.922, 0.20)
+let THEME_SEPARATOR = ui_core.rgba(0.180, 0.180, 0.271, 1.0)
 
 # ============================================================================
 # Toolbar button

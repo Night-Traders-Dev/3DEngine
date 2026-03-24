@@ -48,7 +48,7 @@ proc _build_all(layout):
     # --- Toolbar ---
     add_child(layout["root"], create_rect(0.0, 0.0, sw, tb, THEME_HEADER))
     # Toolbar bottom border (accent line)
-    add_child(layout["root"], create_rect(0.0, tb - 1.0, sw, 1.0, [0.15, 0.40, 0.82, 0.6]))
+    add_child(layout["root"], create_rect(0.0, tb - 1.0, sw, 1.0, [0.537, 0.863, 0.922, 0.4]))
 
     # --- Left panel (Outliner) ---
     add_child(layout["root"], create_rect(0.0, mid_y, lw, mid_h, THEME_PANEL))

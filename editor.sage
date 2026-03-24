@@ -71,7 +71,8 @@ let r = create_renderer(1440, 900, "Forge Engine Editor")
 if r == nil:
     raise "Failed to create renderer"
 # Dark gray background (Unreal-style viewport)
-r["clear_color"] = [0.16, 0.16, 0.18, 1.0]
+# Viewport is brighter than panels (key design principle from UE5/Blender)
+r["clear_color"] = [0.192, 0.196, 0.267, 1.0]
 print "GPU: " + gpu.device_name()
 
 # ============================================================================
@@ -448,22 +449,22 @@ while running:
     let mx_b = 130.0
     let mi_b = 0
     while mi_b < 3:
-        let bc = [0.16, 0.17, 0.20, 1.0]
+        let bc = [0.180, 0.180, 0.271, 1.0]
         if cur_mode == modes[mi_b]:
-            bc = [0.0, 0.55, 0.62, 1.0]
+            bc = [0.537, 0.863, 0.922, 0.8]
         push(ui_quads, {"x": mx_b, "y": 4.0, "w": 85.0, "h": 24.0, "color": bc})
         mx_b = mx_b + 90.0
         mi_b = mi_b + 1
-    push(ui_quads, {"x": 0.0, "y": tb_h + 23.0, "w": lw, "h": 1.0, "color": [0.03, 0.03, 0.04, 1.0]})
-    push(ui_quads, {"x": rp_x, "y": tb_h + 23.0, "w": rw, "h": 1.0, "color": [0.03, 0.03, 0.04, 1.0]})
+    push(ui_quads, {"x": 0.0, "y": tb_h + 23.0, "w": lw, "h": 1.0, "color": [0.043, 0.043, 0.067, 1.0]})
+    push(ui_quads, {"x": rp_x, "y": tb_h + 23.0, "w": rw, "h": 1.0, "color": [0.043, 0.043, 0.067, 1.0]})
     let bp_y_s = sh - bp_h - sb_h
-    push(ui_quads, {"x": lw, "y": bp_y_s + 23.0, "w": sw - lw - rw, "h": 1.0, "color": [0.03, 0.03, 0.04, 1.0]})
+    push(ui_quads, {"x": lw, "y": bp_y_s + 23.0, "w": sw - lw - rw, "h": 1.0, "color": [0.043, 0.043, 0.067, 1.0]})
     let ents = query(world, ["transform"])
     let ey = tb_h + 28.0
     let ei = 0
     while ei < len(ents) and ei < 25:
         if ents[ei] == cur_sel:
-            push(ui_quads, {"x": 2.0, "y": ey - 1.0, "w": lw - 4.0, "h": 18.0, "color": [0.0, 0.45, 0.55, 0.4]})
+            push(ui_quads, {"x": 2.0, "y": ey - 1.0, "w": lw - 4.0, "h": 18.0, "color": [0.537, 0.863, 0.922, 0.18]})
         ey = ey + 24.0
         ei = ei + 1
     if len(ui_quads) > 0:
@@ -480,7 +481,7 @@ while running:
     proc _fn(n):
         return str(math.floor(n * 100.0 + 0.5) / 100.0)
 
-    add_text(font_r, "ui", "FORGE", 10.0, 8.0, 0.0, 0.72, 0.8, 1.0)
+    add_text(font_r, "ui", "FORGE", 10.0, 8.0, 0.537, 0.863, 0.922, 1.0)
     add_text(font_r, "ui", "Move", 143.0, 9.0, 0.9, 0.9, 0.9, 1.0)
     add_text(font_r, "ui", "Rotate", 232.0, 9.0, 0.9, 0.9, 0.9, 1.0)
     add_text(font_r, "ui", "Scale", 324.0, 9.0, 0.9, 0.9, 0.9, 1.0)
@@ -508,7 +509,7 @@ while running:
         if has_component(world, cur_sel, "name"):
             add_text(font_r, "ui", get_component(world, cur_sel, "name")["name"], rp_x + 10.0, iy, 1.0, 1.0, 1.0, 1.0)
             iy = iy + 28.0
-        add_text(font_r, "ui", "Transform", rp_x + 10.0, iy, 0.0, 0.72, 0.8, 1.0)
+        add_text(font_r, "ui", "Transform", rp_x + 10.0, iy, 0.537, 0.863, 0.922, 1.0)
         iy = iy + 26.0
         add_text(font_r, "ui", "Location", rp_x + 12.0, iy, 0.5, 0.5, 0.5, 1.0)
         iy = iy + 22.0
@@ -531,7 +532,7 @@ while running:
         # Material info (if imported asset)
         if has_component(world, cur_sel, "imported_asset"):
             let ia = get_component(world, cur_sel, "imported_asset")
-            add_text(font_r, "ui", "Material", rp_x + 10.0, iy, 0.0, 0.72, 0.8, 1.0)
+            add_text(font_r, "ui", "Material", rp_x + 10.0, iy, 0.537, 0.863, 0.922, 1.0)
             iy = iy + 22.0
             if len(ia["materials"]) > 0:
                 let mat = ia["materials"][0]
@@ -557,7 +558,7 @@ while running:
                 model_str = model_str + ", "
             model_str = model_str + model_names[mn]
             mn = mn + 1
-        add_text(font_r, "ui", model_str, lw + 10.0, bp_y + 68.0, 0.0, 0.65, 0.72, 1.0)
+        add_text(font_r, "ui", model_str, lw + 10.0, bp_y + 68.0, 0.580, 0.886, 0.835, 1.0)
 
     let stats = editor_stats(editor)
     let status = str(stats["entities"]) + " entities  " + str(draw_count) + " drawn  " + stats["mode"]
