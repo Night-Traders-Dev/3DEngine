@@ -766,7 +766,7 @@ while running:
                 save_scene(world, "EditorScene", "assets/editor_scene.json")
                 print "Scene saved: assets/editor_scene.json"
             if item == "Save Screenshot":
-                gpu.screenshot("assets/screenshot.png")
+                gpu.save_screenshot("assets/screenshot.png")
                 print "Screenshot saved: assets/screenshot.png"
             if item == "Export Game":
                 let code = generate_game_script(world, "ForgeGame", {"width": 1280, "height": 720})
@@ -855,7 +855,8 @@ while running:
             if item == "Controls":
                 show_shortcuts = show_shortcuts == false
             if item == "About Forge Engine":
-                show_modal("About", "Forge Engine v0.1 - SageLang 3D Editor (Vulkan)", nil, nil)
+                let about_msg = "Forge Engine v0.1 | GPU: " + gpu.device_name() + " | SageLang + Vulkan"
+                show_modal("About", about_msg, nil, nil)
             close_menu()
             menubar_active = -1
             window_consumed = true
