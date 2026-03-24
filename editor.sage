@@ -1498,43 +1498,39 @@ while running:
         else:
             add_text(font_r, "ui", "Select an entity to view details", dx + 4.0, dy + 8.0, 0.439, 0.439, 0.439, 1.0)
 
-    # --- Content Browser content ---
+    # --- Content Browser content (with scroll clipping) ---
     if win_content["visible"] and win_content["collapsed"] == false:
         let cca = window_content_area(win_content)
-        add_text(font_r, "ui", "Assets Menu: Browse Assets / Textures / Sprites / Animations", cca["x"] + 4.0, cca["y"] + 4.0, 0.38, 0.38, 0.42, 1.0)
-        add_text(font_r, "ui", "Click row or scroll to change selection, then use Place Selected Asset", cca["x"] + 4.0, cca["y"] + 24.0, 0.38, 0.38, 0.42, 1.0)
-        let filter_label = "All"
-        if content_filter == "models":
-            filter_label = "Models"
-        if content_filter == "textures":
-            filter_label = "Textures"
-        if content_filter == "sprites":
-            filter_label = "Sprites"
-        if content_filter == "animations":
-            filter_label = "Animations"
-        add_text(font_r, "ui", "Filter: " + filter_label + " | A:" + str(len(content_assets_all)) + " T:" + str(len(content_assets_textures)) + " S:" + str(len(content_assets_sprites)) + " An:" + str(len(content_assets_animations)), cca["x"] + 4.0, cca["y"] + 44.0, 0.357, 0.627, 0.914, 1.0)
+        let cb_max_y = cca["y"] + cca["h"]
+        let cb_scroll = win_content["scroll_y"]
+        let cb_base_y = cca["y"] - cb_scroll
+        if cb_base_y + 4.0 < cb_max_y:
+            add_text(font_r, "ui", "R=Cube  F=Sphere  E=Model  D=Del  Q=Dup  TAB=Physics", cca["x"] + 4.0, cb_base_y + 4.0, 0.38, 0.38, 0.42, 1.0)
+        if cb_base_y + 22.0 < cb_max_y:
+            add_text(font_r, "ui", "LClick=Select  RMB=Orbit  Scroll=Zoom  ENTER=Play", cca["x"] + 4.0, cb_base_y + 22.0, 0.38, 0.38, 0.42, 1.0)
         let content_rows = _content_filtered()
-        if len(content_rows) == 0:
-            add_text(font_r, "ui", "No items in this filter", cca["x"] + 4.0, cca["y"] + 62.0, 0.6, 0.6, 0.6, 1.0)
-        else:
+        let total_h = 44.0 + len(content_rows) * 18.0
+        update_window_content_height(win_content, total_h)
+        if len(content_rows) > 0:
             let cbi = 0
-            let cy = cca["y"] + 62.0
-            while cbi < len(content_rows) and cbi < 8:
-                let row = content_rows[cbi]
-                let row_prefix = "  "
-                let rc = [0.65, 0.65, 0.65, 1.0]
-                if cbi == content_selected_index:
-                    row_prefix = "> "
-                    rc = [1.0, 1.0, 1.0, 1.0]
-                if row["kind"] == "texture":
-                    rc = [0.75, 0.75, 0.95, 1.0]
-                if row["kind"] == "sprite":
-                    rc = [0.75, 0.95, 0.75, 1.0]
-                if row["kind"] == "animation":
-                    rc = [0.95, 0.75, 0.75, 1.0]
-                if cbi == content_selected_index:
-                    rc = [1.0, 1.0, 1.0, 1.0]
-                add_text(font_r, "ui", row_prefix + "[" + row["kind"] + "] " + row["name"], cca["x"] + 4.0, cy, rc[0], rc[1], rc[2], 1.0)
+            let cy = cb_base_y + 42.0
+            while cbi < len(content_rows):
+                if cy + 18.0 > cca["y"] and cy < cb_max_y:
+                    let row = content_rows[cbi]
+                    let row_prefix = "  "
+                    let rc = [0.55, 0.55, 0.55, 1.0]
+                    if row["kind"] == "texture":
+                        rc = [0.65, 0.65, 0.85, 1.0]
+                    if row["kind"] == "sprite":
+                        rc = [0.65, 0.85, 0.65, 1.0]
+                    if row["kind"] == "model":
+                        rc = [0.65, 0.65, 0.65, 1.0]
+                    if row["kind"] == "animation":
+                        rc = [0.85, 0.65, 0.65, 1.0]
+                    if cbi == content_selected_index:
+                        row_prefix = "> "
+                        rc = [1.0, 1.0, 1.0, 1.0]
+                    add_text(font_r, "ui", row_prefix + "[" + row["kind"] + "] " + row["name"], cca["x"] + 4.0, cy, rc[0], rc[1], rc[2], 1.0)
                 cy = cy + 18.0
                 cbi = cbi + 1
     # Menu item text
