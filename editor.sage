@@ -212,16 +212,69 @@ proc _rehydrate_mesh_refs(w):
 # Scan for importable assets
 let importable_assets = scan_importable_assets("assets")
 let imported_models = {}
+let content_assets_all = []
+let content_assets_models = []
+let content_assets_textures = []
+let content_assets_sprites = []
+let content_assets_animations = []
+let content_filter = "all"
+let content_selected_index = 0
+
+proc _add_content_asset(name, kind, path):
+    let row = {"name": name, "kind": kind, "path": path}
+    push(content_assets_all, row)
+    if kind == "model":
+        push(content_assets_models, row)
+    if kind == "texture":
+        push(content_assets_textures, row)
+    if kind == "sprite":
+        push(content_assets_sprites, row)
+    if kind == "animation":
+        push(content_assets_animations, row)
+
+proc _content_filtered():
+    if content_filter == "models":
+        return content_assets_models
+    if content_filter == "textures":
+        return content_assets_textures
+    if content_filter == "sprites":
+        return content_assets_sprites
+    if content_filter == "animations":
+        return content_assets_animations
+    return content_assets_all
+
+proc _set_content_filter(filter_name):
+    content_filter = filter_name
+    content_selected_index = 0
+    win_content["visible"] = true
+    bring_to_front(win_content)
+
 print "Found " + str(len(importable_assets)) + " importable assets"
 
 # Auto-import any .gltf files found
 let ai = 0
 while ai < len(importable_assets):
     let ia = importable_assets[ai]
+    if ia["type"] == "model":
+        _add_content_asset(ia["name"], "model", ia["path"])
+    if ia["type"] == "texture":
+        _add_content_asset(ia["name"], "texture", ia["path"])
+        if endswith(ia["name"], ".png"):
+            _add_content_asset(ia["name"], "sprite", ia["path"])
     if ia["type"] == "model" and endswith(ia["name"], ".gltf"):
         let asset = import_gltf(ia["path"])
         if asset != nil:
             imported_models[ia["name"]] = asset
+            if asset["animation_count"] > 0:
+                let ani = 0
+                while ani < asset["animation_count"]:
+                    let aname = "Anim_" + str(ani)
+                    if ani < len(asset["animations"]):
+                        let a = asset["animations"][ani]
+                        if dict_has(a, "name"):
+                            aname = a["name"]
+                    _add_content_asset(ia["name"] + " :: " + aname, "animation", ia["path"])
+                    ani = ani + 1
     ai = ai + 1
 
 print "Editor loaded with " + str(entity_count(world)) + " entities"
@@ -397,6 +450,16 @@ while running:
     let my = mp[1]
     let sw_f = r["width"] + 0.0
     let sh_f = r["height"] + 0.0
+    let cca_scroll = window_content_area(win_content)
+    let mouse_in_content = win_content["visible"] and win_content["collapsed"] == false and mx >= cca_scroll["x"] and mx < cca_scroll["x"] + cca_scroll["w"] and my >= cca_scroll["y"] and my < cca_scroll["y"] + cca_scroll["h"]
+    if mouse_in_content and sv[1] != 0.0:
+        let filtered_scroll = _content_filtered()
+        if len(filtered_scroll) > 0:
+            content_selected_index = content_selected_index - math.floor(sv[1])
+            if content_selected_index < 0:
+                content_selected_index = 0
+            if content_selected_index >= len(filtered_scroll):
+                content_selected_index = len(filtered_scroll) - 1
 
     # --- Floating window interaction ---
     let left_pressed = gpu.mouse_just_pressed(gpu.MOUSE_LEFT)
@@ -428,7 +491,7 @@ while running:
                 if clicked_menu == 2:
                     menu_items_list = ["Outliner", "Details", "Content Browser", "---", "Reset Layout"]
                 if clicked_menu == 3:
-                    menu_items_list = ["Add Cube", "Add Sphere", "Add Physics Cube", "---", "Toggle Physics", "Generate Code"]
+                    menu_items_list = ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Light", "---", "Browse Assets", "Browse Textures", "Browse Sprites", "Browse Animations", "Place Selected Asset", "---", "Toggle Physics", "Generate Code"]
                 if clicked_menu == 4:
                     menu_items_list = ["Controls", "---", "About Forge Engine"]
                 open_menu(menu_x_positions[clicked_menu] - 4.0, layout["menubar_h"], menu_items_list)
@@ -474,7 +537,7 @@ while running:
         if is_menu_open():
             close_menu()
         else:
-            open_menu(mx, my, ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Light", "---", "Select All", "Delete Selected"])
+            open_menu(mx, my, ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Light", "---", "Place Selected Asset", "Browse Assets", "Browse Textures", "Browse Sprites", "Browse Animations", "---", "Select All", "Delete Selected"])
 
     # Menu click (handles both context menu and menu bar dropdowns)
     if left_pressed and is_menu_open():
@@ -482,7 +545,7 @@ while running:
         if menu_idx >= 0:
             let items = get_menu_items()
             let item = items[menu_idx]
-            if play_mode and (item == "Add Cube" or item == "Add Sphere" or item == "Add Physics Cube" or item == "Add Light" or item == "Delete" or item == "Delete Selected" or item == "Duplicate" or item == "Toggle Physics" or item == "New Scene" or item == "Open Scene..."):
+            if play_mode and (item == "Add Cube" or item == "Add Sphere" or item == "Add Physics Cube" or item == "Add Light" or item == "Place Selected Asset" or item == "Delete" or item == "Delete Selected" or item == "Duplicate" or item == "Toggle Physics" or item == "New Scene" or item == "Open Scene..."):
                 print "Stop Play mode before editing the scene"
                 close_menu()
                 menubar_active = -1
@@ -513,6 +576,72 @@ while running:
                 let eid = place_entity(editor, pos, "Light_" + str(entity_counter), sphere_gpu)
                 add_component(world, eid, "mesh_id", {"mesh": sphere_gpu, "name": "sphere"})
                 add_component(world, eid, "light", PointLightComponent(1.0, 0.95, 0.85, 3.0, 18.0))
+            if item == "Browse Assets":
+                _set_content_filter("all")
+                print "Content filter: all assets (" + str(len(content_assets_all)) + ")"
+            if item == "Browse Textures":
+                _set_content_filter("textures")
+                print "Content filter: textures (" + str(len(content_assets_textures)) + ")"
+            if item == "Browse Sprites":
+                _set_content_filter("sprites")
+                print "Content filter: sprites (" + str(len(content_assets_sprites)) + ")"
+            if item == "Browse Animations":
+                _set_content_filter("animations")
+                print "Content filter: animations (" + str(len(content_assets_animations)) + ")"
+            if item == "Place Selected Asset":
+                let filtered_assets = _content_filtered()
+                if len(filtered_assets) == 0:
+                    print "No assets available in current filter"
+                else:
+                    if content_selected_index < 0:
+                        content_selected_index = 0
+                    if content_selected_index >= len(filtered_assets):
+                        content_selected_index = len(filtered_assets) - 1
+                    let selected_asset = filtered_assets[content_selected_index]
+                    if selected_asset["kind"] == "model":
+                        let model_key = selected_asset["name"]
+                        if dict_has(imported_models, model_key) == false:
+                            if endswith(selected_asset["path"], ".gltf") or endswith(selected_asset["path"], ".glb"):
+                                let imported = import_gltf(selected_asset["path"])
+                                if imported != nil:
+                                    imported_models[model_key] = imported
+                        if dict_has(imported_models, model_key):
+                            let model_asset = imported_models[model_key]
+                            entity_counter = entity_counter + 1
+                            let pos = vec3(cam["target"][0], 0.0, cam["target"][2])
+                            let eid = place_entity(editor, pos, "Model_" + str(entity_counter), nil)
+                            add_component(world, eid, "imported_asset", model_asset)
+                            if len(model_asset["gpu_meshes"]) > 0:
+                                add_component(world, eid, "mesh_id", {"mesh": model_asset["gpu_meshes"][0]["gpu_mesh"], "name": "imported"})
+                        else:
+                            print "Model import failed: " + selected_asset["name"]
+                    if selected_asset["kind"] == "texture" or selected_asset["kind"] == "sprite":
+                        entity_counter = entity_counter + 1
+                        let pos = vec3(cam["target"][0], 0.5, cam["target"][2])
+                        let eid = place_entity(editor, pos, "Asset_" + str(entity_counter), cube_gpu)
+                        add_component(world, eid, "mesh_id", {"mesh": cube_gpu, "name": "cube"})
+                        add_component(world, eid, "asset_ref", selected_asset)
+                    if selected_asset["kind"] == "animation":
+                        let model_key = ""
+                        let mk = dict_keys(imported_models)
+                        let mki = 0
+                        while mki < len(mk):
+                            if imported_models[mk[mki]]["source"] == selected_asset["path"]:
+                                model_key = mk[mki]
+                            mki = mki + 1
+                        if model_key == "" and len(mk) > 0:
+                            model_key = mk[0]
+                        if model_key != "":
+                            let model_asset = imported_models[model_key]
+                            entity_counter = entity_counter + 1
+                            let pos = vec3(cam["target"][0], 0.0, cam["target"][2])
+                            let eid = place_entity(editor, pos, "Anim_" + str(entity_counter), nil)
+                            add_component(world, eid, "imported_asset", model_asset)
+                            add_component(world, eid, "animation_state", {"clip": selected_asset["name"], "playing": true})
+                            if len(model_asset["gpu_meshes"]) > 0:
+                                add_component(world, eid, "mesh_id", {"mesh": model_asset["gpu_meshes"][0]["gpu_mesh"], "name": "imported"})
+                        else:
+                            print "No imported model available for animation placement"
             # --- File menu ---
             if item == "New Scene":
                 let all_reset_menu = query(world, ["transform"])
@@ -651,6 +780,16 @@ while running:
             iy = iy + 22.0
             if col >= 0 and my >= iy and my < iy + 20.0:
                 active_details_field = {"key": "scale", "axis": col}
+            window_consumed = true
+        let cca_click = window_content_area(win_content)
+        let in_content = win_content["visible"] and win_content["collapsed"] == false and mx >= cca_click["x"] and mx < cca_click["x"] + cca_click["w"] and my >= cca_click["y"] and my < cca_click["y"] + cca_click["h"]
+        if in_content:
+            let list_y = cca_click["y"] + 62.0
+            if my >= list_y:
+                let local_idx = math.floor((my - list_y) / 18.0)
+                let filtered_click = _content_filtered()
+                if local_idx >= 0 and local_idx < len(filtered_click):
+                    content_selected_index = local_idx
             window_consumed = true
         if in_details == false and in_outliner == false:
             active_details_field = nil
@@ -1187,18 +1326,42 @@ while running:
     # --- Content Browser content ---
     if win_content["visible"] and win_content["collapsed"] == false:
         let cca = window_content_area(win_content)
-        add_text(font_r, "ui", "R=Cube  F=Sphere  E=Model  D=Del  Q=Dup  TAB=Physics  ENTER=Play", cca["x"] + 4.0, cca["y"] + 4.0, 0.38, 0.38, 0.42, 1.0)
-        add_text(font_r, "ui", "LClick=Select  RMB=Orbit  MMB=Pan  Scroll=Zoom  4=Save  5=Code", cca["x"] + 4.0, cca["y"] + 24.0, 0.38, 0.38, 0.42, 1.0)
-        let model_names = dict_keys(imported_models)
-        if len(model_names) > 0:
-            let model_str = "Imported: "
-            let mn = 0
-            while mn < len(model_names):
-                if mn > 0:
-                    model_str = model_str + ", "
-                model_str = model_str + model_names[mn]
-                mn = mn + 1
-            add_text(font_r, "ui", model_str, cca["x"] + 4.0, cca["y"] + 44.0, 0.357, 0.627, 0.914, 1.0)
+        add_text(font_r, "ui", "Assets Menu: Browse Assets / Textures / Sprites / Animations", cca["x"] + 4.0, cca["y"] + 4.0, 0.38, 0.38, 0.42, 1.0)
+        add_text(font_r, "ui", "Click row or scroll to change selection, then use Place Selected Asset", cca["x"] + 4.0, cca["y"] + 24.0, 0.38, 0.38, 0.42, 1.0)
+        let filter_label = "All"
+        if content_filter == "models":
+            filter_label = "Models"
+        if content_filter == "textures":
+            filter_label = "Textures"
+        if content_filter == "sprites":
+            filter_label = "Sprites"
+        if content_filter == "animations":
+            filter_label = "Animations"
+        add_text(font_r, "ui", "Filter: " + filter_label + " | A:" + str(len(content_assets_all)) + " T:" + str(len(content_assets_textures)) + " S:" + str(len(content_assets_sprites)) + " An:" + str(len(content_assets_animations)), cca["x"] + 4.0, cca["y"] + 44.0, 0.357, 0.627, 0.914, 1.0)
+        let content_rows = _content_filtered()
+        if len(content_rows) == 0:
+            add_text(font_r, "ui", "No items in this filter", cca["x"] + 4.0, cca["y"] + 62.0, 0.6, 0.6, 0.6, 1.0)
+        else:
+            let cbi = 0
+            let cy = cca["y"] + 62.0
+            while cbi < len(content_rows) and cbi < 8:
+                let row = content_rows[cbi]
+                let row_prefix = "  "
+                let rc = [0.65, 0.65, 0.65, 1.0]
+                if cbi == content_selected_index:
+                    row_prefix = "> "
+                    rc = [1.0, 1.0, 1.0, 1.0]
+                if row["kind"] == "texture":
+                    rc = [0.75, 0.75, 0.95, 1.0]
+                if row["kind"] == "sprite":
+                    rc = [0.75, 0.95, 0.75, 1.0]
+                if row["kind"] == "animation":
+                    rc = [0.95, 0.75, 0.75, 1.0]
+                if cbi == content_selected_index:
+                    rc = [1.0, 1.0, 1.0, 1.0]
+                add_text(font_r, "ui", row_prefix + "[" + row["kind"] + "] " + row["name"], cca["x"] + 4.0, cy, rc[0], rc[1], rc[2], 1.0)
+                cy = cy + 18.0
+                cbi = cbi + 1
     # Menu item text
     if is_menu_open():
         let mitems = get_menu_items()

@@ -39,7 +39,8 @@ The Forge Editor is a visual scene editor in the style of Unreal Engine. Build s
 | F | Place sphere |
 | D | Delete selected |
 | Q | Duplicate selected |
-| W/A/S/D | Nudge selected entity |
+| Arrow Keys | Nudge selected entity |
+| Ctrl + Click (outliner/viewport) | Add/remove from selection |
 | ESC | Deselect |
 
 **Gizmo Modes**
@@ -53,8 +54,24 @@ The Forge Editor is a visual scene editor in the style of Unreal Engine. Build s
 | Key | Action |
 |-----|--------|
 | 4 | Save scene (JSON) |
+| Enter | Toggle Play-In-Editor |
 | **5** | **Generate SageLang game script** |
-| CTRL | Quit editor |
+| Ctrl+N / Ctrl+O / Ctrl+S | New / Open / Save scene |
+| Ctrl+Z / Ctrl+Y | Undo / Redo |
+| Ctrl+A | Select all entities |
+| Ctrl+Q | Quit editor |
+
+### Content Menu
+
+The **Tools** menu and viewport context menu now include content-browser actions:
+
+- `Browse Assets`
+- `Browse Textures`
+- `Browse Sprites`
+- `Browse Animations`
+- `Place Selected Asset`
+
+Use the **Content Browser** panel to filter by type, pick an item, then place it into the scene.
 
 ### Code Generation
 

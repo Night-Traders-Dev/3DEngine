@@ -88,6 +88,7 @@ The Forge Editor is a visual scene editor. Place objects, transform them, and pr
 |-------|--------|
 | Left Click (viewport) | Select entity by raycast |
 | Left Click (outliner) | Select entity from list |
+| Ctrl + Click (viewport/outliner) | Add/remove entity from multi-selection |
 | R | Place new cube at camera target |
 | F | Place new sphere |
 | D | Delete selected entity |
@@ -108,16 +109,32 @@ The Forge Editor is a visual scene editor. Place objects, transform them, and pr
 | Key | Action |
 |-----|--------|
 | 4 | Save scene as JSON |
+| Enter | Toggle Play-In-Editor |
 | 5 | Generate SageLang game script |
-| CTRL | Quit editor |
+| Ctrl+N / Ctrl+O / Ctrl+S | New / Open / Save scene |
+| Ctrl+Z / Ctrl+Y | Undo / Redo |
+| Ctrl+A | Select all entities |
+| Ctrl+Q | Quit editor |
 
 ### Editor Panels
 
 - **Toolbar** (top) — Engine name, gizmo mode buttons, shortcuts
 - **Outliner** (left) — List of all entities in the scene
 - **Details** (right) — Transform properties of selected entity (Location, Rotation, Scale with X/Y/Z colored Red/Green/Blue)
-- **Content Browser** (bottom) — Keyboard shortcuts reference
+- **Content Browser** (bottom) — Asset list with filters for Assets, Textures, Sprites, Animations
 - **Status Bar** (bottom) — Entity count, draw count, current mode, FPS
+
+### Content Browser + Tools Menu
+
+The **Tools** menu and viewport context menu expose content workflows:
+
+- `Browse Assets`
+- `Browse Textures`
+- `Browse Sprites`
+- `Browse Animations`
+- `Place Selected Asset`
+
+The content panel shows the active filter, per-category counts, and a selectable row list.
 
 ---
 
