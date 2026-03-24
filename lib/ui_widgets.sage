@@ -12,11 +12,11 @@ from ui_core import add_child
 # Color theme — Forge Engine (UE5-inspired neutral dark grey + blue accent)
 # ============================================================================
 # BG: #191919  Panel: #242424  Header: #2D2D2D  Accent: #4A90D9
-let THEME_BG = ui_core.rgba(0.098, 0.098, 0.098, 1.0)
-let THEME_PANEL = ui_core.rgba(0.141, 0.141, 0.141, 1.0)
-let THEME_HEADER = ui_core.rgba(0.176, 0.176, 0.176, 1.0)
-let THEME_BUTTON = ui_core.rgba(0.212, 0.212, 0.212, 1.0)
-let THEME_BUTTON_HOVER = ui_core.rgba(0.259, 0.259, 0.259, 1.0)
+let THEME_BG = ui_core.rgba(0.118, 0.118, 0.118, 1.0)
+let THEME_PANEL = ui_core.rgba(0.165, 0.165, 0.165, 1.0)
+let THEME_HEADER = ui_core.rgba(0.208, 0.208, 0.208, 1.0)
+let THEME_BUTTON = ui_core.rgba(0.247, 0.247, 0.247, 1.0)
+let THEME_BUTTON_HOVER = ui_core.rgba(0.290, 0.290, 0.290, 1.0)
 let THEME_ACCENT = ui_core.rgba(0.290, 0.565, 0.851, 1.0)
 let THEME_ACCENT_HOVER = ui_core.rgba(0.357, 0.627, 0.914, 1.0)
 let THEME_TEXT = ui_core.rgba(0.784, 0.784, 0.784, 1.0)

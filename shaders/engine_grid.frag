@@ -41,7 +41,7 @@ void main() {
     float fade = 1.0 - smoothstep(fadeStart, fadeEnd, fragDist);
 
     // Forge Engine viewport (neutral dark grey)
-    vec3 bgColor = vec3(0.141, 0.141, 0.141);
+    vec3 bgColor = vec3(0.118, 0.118, 0.118);
     vec3 smallGridColor = vec3(0.19, 0.19, 0.19);
     vec3 bigGridColor = vec3(0.24, 0.24, 0.24);
     vec3 xAxisColor = vec3(0.90, 0.22, 0.22);  // Red

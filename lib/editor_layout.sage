@@ -45,13 +45,14 @@ proc _build_all(layout):
     let sb = layout["statusbar_h"]
     let top_h = mb + tb
 
-    # --- Menu bar (topmost row) ---
-    add_child(layout["root"], create_rect(0.0, 0.0, sw, mb, THEME_BG))
+    # --- Menu bar (topmost row, slightly lighter than panels) ---
+    add_child(layout["root"], create_rect(0.0, 0.0, sw, mb, THEME_HEADER))
     add_child(layout["root"], create_rect(0.0, mb - 1.0, sw, 1.0, COL_SHADOW))
 
-    # --- Toolbar (below menu bar) ---
-    add_child(layout["root"], create_rect(0.0, mb, sw, tb, THEME_HEADER))
+    # --- Toolbar (below menu bar, distinct color) ---
+    add_child(layout["root"], create_rect(0.0, mb, sw, tb, THEME_PANEL))
     add_child(layout["root"], create_rect(0.0, mb + tb - 1.0, sw, 1.0, COL_SHADOW))
+    add_child(layout["root"], create_rect(0.0, mb + tb - 1.0, sw, 1.0, COL_ACCENT_LINE))
 
     # Viewport fills area between toolbar and statusbar
     let vx = 0.0

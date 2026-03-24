@@ -88,7 +88,7 @@ if r == nil:
     raise "Failed to create renderer"
 # Dark gray background (Unreal-style viewport)
 # Viewport is brighter than panels (key design principle from UE5/Blender)
-r["clear_color"] = [0.141, 0.141, 0.141, 1.0]
+r["clear_color"] = [0.118, 0.118, 0.118, 1.0]
 print "GPU: " + gpu.device_name()
 
 # ============================================================================
@@ -1219,16 +1219,16 @@ while running:
     proc _fn(n):
         return str(math.floor(n * 100.0 + 0.5) / 100.0)
 
-    # Menu bar text
+    # Menu bar text (bright white on dark header)
     let mti = 0
     while mti < 5:
-        let mc = [0.65, 0.65, 0.65, 1.0]
+        let mc = [0.78, 0.78, 0.78, 1.0]
         if menubar_active == mti:
             mc = [1.0, 1.0, 1.0, 1.0]
-        add_text(font_r, "ui", menu_labels[mti], menu_x_pos[mti], 5.0, mc[0], mc[1], mc[2], 1.0)
+        add_text(font_r, "ui", menu_labels[mti], menu_x_pos[mti], 4.0, mc[0], mc[1], mc[2], 1.0)
         mti = mti + 1
     # Project name on right side of menu bar
-    add_text(font_r, "ui", "Forge Engine", sw - 130.0, 5.0, 0.439, 0.439, 0.439, 1.0)
+    add_text(font_r, "ui", "Forge Engine", sw - 130.0, 4.0, 0.5, 0.5, 0.5, 1.0)
 
     # Toolbar text
     add_text(font_r, "ui", "Move", 22.0, mb_h + 8.0, 0.78, 0.78, 0.78, 1.0)
