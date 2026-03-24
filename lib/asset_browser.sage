@@ -68,18 +68,37 @@ proc add_vfx_assets(ab):
 # ============================================================================
 # Scan directory for .obj and .json scene files
 # ============================================================================
-proc scan_directory(ab, dir_path):
-    # Check for known asset files
-    let obj_files = ["model.obj", "scene.json"]
+proc _asset_type_from_name(name):
+    if endswith(name, ".obj") or endswith(name, ".gltf") or endswith(name, ".glb"):
+        return "mesh"
+    if endswith(name, ".json"):
+        return "scene"
+    if endswith(name, ".png") or endswith(name, ".jpg"):
+        return "texture"
+    if endswith(name, ".wav") or endswith(name, ".ogg"):
+        return "audio"
+    return ""
+
+proc _has_asset_path(ab, path):
     let i = 0
-    while i < len(obj_files):
-        let fpath = dir_path + "/" + obj_files[i]
-        if io.exists(fpath):
-            let name = obj_files[i]
-            if endswith(name, ".obj"):
-                add_asset(ab, name, "mesh", fpath)
-            if endswith(name, ".json"):
-                add_asset(ab, name, "scene", fpath)
+    while i < len(ab["entries"]):
+        if ab["entries"][i]["path"] == path:
+            return true
+        i = i + 1
+    return false
+
+proc scan_directory(ab, dir_path):
+    let files = io.listdir(dir_path)
+    if files == nil:
+        return nil
+    let i = 0
+    while i < len(files):
+        let name = files[i]
+        let atype = _asset_type_from_name(name)
+        if atype != "":
+            let fpath = dir_path + "/" + name
+            if _has_asset_path(ab, fpath) == false:
+                add_asset(ab, name, atype, fpath)
         i = i + 1
 
 # ============================================================================

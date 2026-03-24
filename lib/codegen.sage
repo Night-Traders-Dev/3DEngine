@@ -2,7 +2,7 @@ gc_disable()
 # -----------------------------------------
 # codegen.sage - SageLang code generator for Forge Engine
 # Generates complete, runnable .sage game scripts from editor scenes
-# Supports physics, HUD, health/damage, and AI entities
+# Supports physics, HUD, and health/damage entities
 # -----------------------------------------
 
 import io

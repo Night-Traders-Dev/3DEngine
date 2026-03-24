@@ -4,6 +4,7 @@
 from scene_editor import create_scene_editor, select_entity, deselect
 from scene_editor import place_entity, delete_selected, duplicate_selected
 from scene_editor import apply_gizmo_delta, editor_stats
+from scene_editor import toggle_entity_selection, select_all_entities, selected_entities
 from ecs import create_world, spawn, add_component, has_component, entity_count
 from components import TransformComponent, NameComponent
 from collision import ray_vs_aabb
@@ -105,12 +106,21 @@ flush_dead(w)
 
 # --- Multiple entities ---
 place_entity(ed, vec3(0.0, 0.0, 0.0), "A", nil)
-place_entity(ed, vec3(1.0, 0.0, 0.0), "B", nil)
-place_entity(ed, vec3(2.0, 0.0, 0.0), "C", nil)
+let e_multi_b = place_entity(ed, vec3(1.0, 0.0, 0.0), "B", nil)
+let e_multi_c = place_entity(ed, vec3(2.0, 0.0, 0.0), "C", nil)
+
+# --- Multi-select ---
+select_entity(ed, e_multi_b)
+toggle_entity_selection(ed, e_multi_c)
+check("multi-select includes B/C", len(selected_entities(ed)) >= 2)
+let sel_all_count = select_all_entities(ed)
+check("select_all returns count", sel_all_count > 0)
+check("select_all matches selection len", len(selected_entities(ed)) == sel_all_count)
 
 # --- Editor stats ---
 let stats = editor_stats(ed)
 check("stats has selected", dict_has(stats, "selected"))
+check("stats has selected_count", dict_has(stats, "selected_count"))
 check("stats has mode", dict_has(stats, "mode"))
 check("stats has entities", stats["entities"] > 0)
 check("stats has snap", dict_has(stats, "snap"))

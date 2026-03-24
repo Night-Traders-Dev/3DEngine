@@ -237,3 +237,49 @@ proc collect_quads(widget, quads):
     while i < len(widget["children"]):
         collect_quads(widget["children"][i], quads)
         i = i + 1
+
+# ============================================================================
+# Input dispatch (hover + click)
+# ============================================================================
+proc _update_hover_recursive(widget, mx, my):
+    if widget["visible"] == false:
+        widget["hovered"] = false
+        return false
+    let inside = point_in_widget(widget, mx, my)
+    widget["hovered"] = inside
+    let i = 0
+    while i < len(widget["children"]):
+        _update_hover_recursive(widget["children"][i], mx, my)
+        i = i + 1
+    return inside
+
+proc update_hover_state(root, mx, my):
+    return _update_hover_recursive(root, mx, my)
+
+proc _hit_test_top(widget, mx, my):
+    if widget["visible"] == false:
+        return nil
+    # Children are considered top-most in insertion order; scan in reverse.
+    let i = len(widget["children"]) - 1
+    while i >= 0:
+        let hit = _hit_test_top(widget["children"][i], mx, my)
+        if hit != nil:
+            return hit
+        i = i - 1
+    if point_in_widget(widget, mx, my):
+        return widget
+    return nil
+
+proc dispatch_click(root, mx, my):
+    let hit = _hit_test_top(root, mx, my)
+    if hit == nil:
+        return false
+    if hit["on_click"] != nil:
+        hit["on_click"]()
+    return true
+
+proc process_ui_input(root, mx, my, left_pressed):
+    update_hover_state(root, mx, my)
+    if left_pressed:
+        return dispatch_click(root, mx, my)
+    return false

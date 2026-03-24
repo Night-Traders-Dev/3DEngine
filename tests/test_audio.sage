@@ -3,6 +3,7 @@
 
 from audio import create_sound_emitter, calculate_attenuation
 from audio import set_channel_volume, get_channel_volume, get_effective_volume
+from audio import load_sound, unload_sound, play_sound, stop_sound, stop_all_sounds, is_sound_playing
 from audio import AudioEmitterComponent, AudioListenerComponent
 from math3d import vec3
 
@@ -92,6 +93,38 @@ check("effective volume", approx(eff, 0.4))
 am["channels"]["master"] = 0.0
 let eff_muted = get_effective_volume(am, "sfx")
 check("master mute = silent", approx(eff_muted, 0.0))
+
+# --- High-level load/play/stop ---
+let am2 = {}
+am2["buffers"] = {}
+am2["sources"] = {}
+am2["next_id"] = 1
+am2["channels"] = {}
+am2["channels"]["master"] = 1.0
+am2["channels"]["sfx"] = 0.5
+let loaded = load_sound(am2, "shot", "assets/shot.wav")
+check("load sound returns true", loaded == true)
+check("buffer stored", dict_has(am2["buffers"], "shot"))
+let bad_play = play_sound(am2, "missing", "sfx", 1.0, false)
+check("play missing returns -1", bad_play == -1)
+let hid = play_sound(am2, "shot", "sfx", 0.8, false)
+check("play returns handle", hid > 0)
+check("is_sound_playing true", is_sound_playing(am2, hid) == true)
+check("source volume uses channel", approx(am2["sources"][str(hid)]["volume"], 0.4))
+let stopped_one = stop_sound(am2, hid)
+check("stop_sound returns true", stopped_one == true)
+check("is_sound_playing false after stop", is_sound_playing(am2, hid) == false)
+let h2 = play_sound(am2, "shot", "sfx", 0.6, true)
+let h3 = play_sound(am2, "shot", "music", 0.6, true)
+let stopped_channel = stop_all_sounds(am2, "sfx")
+check("stop_all_sounds channel count", stopped_channel >= 1)
+check("music handle still playing", is_sound_playing(am2, h3) == true)
+let stopped_all = stop_all_sounds(am2, nil)
+check("stop_all_sounds all count", stopped_all >= 1)
+check("music now stopped", is_sound_playing(am2, h3) == false)
+let unloaded = unload_sound(am2, "shot")
+check("unload returns true", unloaded == true)
+check("buffer removed", dict_has(am2["buffers"], "shot") == false)
 
 # --- Audio Components ---
 let aec = AudioEmitterComponent("gunshot.wav", "sfx", 0.9, false)

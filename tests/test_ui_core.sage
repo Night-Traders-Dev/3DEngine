@@ -5,6 +5,7 @@ from ui_core import create_widget, create_panel, create_rect, create_label
 from ui_core import create_button, create_progress_bar
 from ui_core import add_child, remove_child, compute_layout, collect_quads
 from ui_core import point_in_widget, compute_anchor_offset
+from ui_core import update_hover_state, dispatch_click, process_ui_input
 from ui_core import rgba, rgb, COLOR_WHITE, COLOR_RED, COLOR_TRANSPARENT
 from ui_core import ANCHOR_TOP_LEFT, ANCHOR_CENTER, ANCHOR_BOTTOM_RIGHT
 
@@ -121,6 +122,22 @@ check("centered child y", approx(centered["computed_y"], 275.0))
 compute_layout(root, 0.0, 0.0, 800.0, 600.0)
 check("hit inside box", point_in_widget(box, 15.0, 25.0))
 check("hit outside box", point_in_widget(box, 200.0, 200.0) == false)
+
+# --- Hover + click dispatch ---
+let ui_root = create_panel(0.0, 0.0, 300.0, 200.0, COLOR_TRANSPARENT)
+let ui_btn = create_button(20.0, 20.0, 120.0, 40.0, "Dispatch", COLOR_RED, on_click)
+add_child(ui_root, ui_btn)
+compute_layout(ui_root, 0.0, 0.0, 800.0, 600.0)
+clicked[0] = false
+update_hover_state(ui_root, 30.0, 30.0)
+check("hovered button true", ui_btn["hovered"] == true)
+let consumed = dispatch_click(ui_root, 30.0, 30.0)
+check("dispatch_click consumed", consumed == true)
+check("dispatch_click fired callback", clicked[0] == true)
+clicked[0] = false
+let consumed2 = process_ui_input(ui_root, 400.0, 400.0, true)
+check("process click outside not consumed", consumed2 == false)
+check("outside click did not fire callback", clicked[0] == false)
 
 # --- Quad collection ---
 let quads = []

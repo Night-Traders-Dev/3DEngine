@@ -16,6 +16,15 @@ from inspector import create_inspector, inspect_entity, clear_inspection, refres
 from undo_redo import create_command_history, execute_command, undo, redo
 from undo_redo import can_undo, can_redo, cmd_set_property
 
+proc _clone_sage(value):
+    from json import cJSON_FromSage, cJSON_ToSage, cJSON_Delete
+    let node = cJSON_FromSage(value)
+    if node == nil:
+        return value
+    let out = cJSON_ToSage(node)
+    cJSON_Delete(node)
+    return out
+
 # ============================================================================
 # Editor State
 # ============================================================================
@@ -23,6 +32,7 @@ proc create_scene_editor(world):
     let ed = {}
     ed["world"] = world
     ed["selected"] = -1
+    ed["selection"] = []
     ed["gizmo"] = create_gizmo()
     ed["inspector"] = create_inspector()
     ed["history"] = create_command_history(100)
@@ -42,6 +52,9 @@ proc create_scene_editor(world):
 # Entity selection via raycast
 # ============================================================================
 proc select_by_ray(ed, ray_origin, ray_dir):
+    return select_by_ray_mode(ed, ray_origin, ray_dir, false)
+
+proc select_by_ray_mode(ed, ray_origin, ray_dir, additive):
     let w = ed["world"]
     let best_t = 999999.0
     let best_eid = -1
@@ -64,12 +77,17 @@ proc select_by_ray(ed, ray_origin, ray_dir):
                 best_t = hit["t"]
                 best_eid = eid
         i = i + 1
-    select_entity(ed, best_eid)
+    if additive and best_eid >= 0:
+        toggle_entity_selection(ed, best_eid)
+    else:
+        select_entity(ed, best_eid)
     return best_eid
 
 proc select_entity(ed, entity_id):
+    ed["selection"] = []
     ed["selected"] = entity_id
     if entity_id >= 0:
+        push(ed["selection"], entity_id)
         let w = ed["world"]
         if has_component(w, entity_id, "transform"):
             let t = get_component(w, entity_id, "transform")
@@ -78,8 +96,59 @@ proc select_entity(ed, entity_id):
     else:
         clear_inspection(ed["inspector"])
 
+proc _selection_index(ed, entity_id):
+    let i = 0
+    while i < len(ed["selection"]):
+        if ed["selection"][i] == entity_id:
+            return i
+        i = i + 1
+    return -1
+
+proc toggle_entity_selection(ed, entity_id):
+    if entity_id < 0:
+        return 0
+    let idx = _selection_index(ed, entity_id)
+    if idx >= 0:
+        let next_sel = []
+        let i = 0
+        while i < len(ed["selection"]):
+            if i != idx:
+                push(next_sel, ed["selection"][i])
+            i = i + 1
+        ed["selection"] = next_sel
+        if len(ed["selection"]) > 0:
+            ed["selected"] = ed["selection"][0]
+            inspect_entity(ed["inspector"], ed["world"], ed["selected"])
+        else:
+            ed["selected"] = -1
+            clear_inspection(ed["inspector"])
+        return len(ed["selection"])
+    push(ed["selection"], entity_id)
+    ed["selected"] = entity_id
+    inspect_entity(ed["inspector"], ed["world"], entity_id)
+    return len(ed["selection"])
+
+proc selected_entities(ed):
+    return ed["selection"]
+
+proc select_all_entities(ed):
+    let all_e = query(ed["world"], ["transform"])
+    ed["selection"] = []
+    let i = 0
+    while i < len(all_e):
+        push(ed["selection"], all_e[i])
+        i = i + 1
+    if len(ed["selection"]) > 0:
+        ed["selected"] = ed["selection"][0]
+        inspect_entity(ed["inspector"], ed["world"], ed["selected"])
+    else:
+        ed["selected"] = -1
+        clear_inspection(ed["inspector"])
+    return len(ed["selection"])
+
 proc deselect(ed):
     ed["selected"] = -1
+    ed["selection"] = []
     clear_inspection(ed["inspector"])
 
 # ============================================================================
@@ -100,11 +169,24 @@ proc place_entity(ed, position, name, mesh_ref):
 # Delete selected entity
 # ============================================================================
 proc delete_selected(ed):
-    if ed["selected"] < 0:
+    let ids = []
+    if len(ed["selection"]) > 0:
+        let i = 0
+        while i < len(ed["selection"]):
+            push(ids, ed["selection"][i])
+            i = i + 1
+    else:
+        if ed["selected"] >= 0:
+            push(ids, ed["selected"])
+    if len(ids) == 0:
         return false
     let w = ed["world"]
-    destroy(w, ed["selected"])
+    let i = 0
+    while i < len(ids):
+        destroy(w, ids[i])
+        i = i + 1
     ed["selected"] = -1
+    ed["selection"] = []
     clear_inspection(ed["inspector"])
     return true
 
@@ -112,53 +194,99 @@ proc delete_selected(ed):
 # Duplicate selected entity
 # ============================================================================
 proc duplicate_selected(ed):
-    if ed["selected"] < 0:
+    let source_ids = []
+    if len(ed["selection"]) > 0:
+        let i = 0
+        while i < len(ed["selection"]):
+            push(source_ids, ed["selection"][i])
+            i = i + 1
+    else:
+        if ed["selected"] >= 0:
+            push(source_ids, ed["selected"])
+    if len(source_ids) == 0:
         return -1
     let w = ed["world"]
-    let src = ed["selected"]
-    let eid = spawn(w)
-    # Copy transform with offset
-    if has_component(w, src, "transform"):
-        let st = get_component(w, src, "transform")
-        let nt = TransformComponent(st["position"][0] + 1.0, st["position"][1], st["position"][2])
-        nt["rotation"] = vec3(st["rotation"][0], st["rotation"][1], st["rotation"][2])
-        nt["scale"] = vec3(st["scale"][0], st["scale"][1], st["scale"][2])
-        add_component(w, eid, "transform", nt)
-    if has_component(w, src, "name"):
-        let sn = get_component(w, src, "name")
-        add_component(w, eid, "name", NameComponent(sn["name"] + "_copy"))
-    if has_component(w, src, "mesh_id"):
-        let sm = get_component(w, src, "mesh_id")
-        add_component(w, eid, "mesh_id", sm)
-    add_tag(w, eid, "editable")
-    select_entity(ed, eid)
-    return eid
+    let new_ids = []
+    let si = 0
+    while si < len(source_ids):
+        let src = source_ids[si]
+        let eid = spawn(w)
+        # Copy transform with offset
+        if has_component(w, src, "transform"):
+            let st = get_component(w, src, "transform")
+            let nt = TransformComponent(st["position"][0] + 1.0, st["position"][1], st["position"][2])
+            nt["rotation"] = vec3(st["rotation"][0], st["rotation"][1], st["rotation"][2])
+            nt["scale"] = vec3(st["scale"][0], st["scale"][1], st["scale"][2])
+            add_component(w, eid, "transform", nt)
+        if has_component(w, src, "name"):
+            let sn = get_component(w, src, "name")
+            add_component(w, eid, "name", NameComponent(sn["name"] + "_copy"))
+        if has_component(w, src, "mesh_id"):
+            let sm = get_component(w, src, "mesh_id")
+            add_component(w, eid, "mesh_id", _clone_sage(sm))
+        if has_component(w, src, "rigidbody"):
+            let rb = get_component(w, src, "rigidbody")
+            add_component(w, eid, "rigidbody", _clone_sage(rb))
+        if has_component(w, src, "collider"):
+            let col = get_component(w, src, "collider")
+            add_component(w, eid, "collider", _clone_sage(col))
+        if has_component(w, src, "health"):
+            let hp = get_component(w, src, "health")
+            add_component(w, eid, "health", _clone_sage(hp))
+        if has_component(w, src, "light"):
+            let lt = get_component(w, src, "light")
+            add_component(w, eid, "light", _clone_sage(lt))
+        add_tag(w, eid, "editable")
+        push(new_ids, eid)
+        si = si + 1
+    if len(new_ids) == 0:
+        return -1
+    ed["selection"] = []
+    let ni = 0
+    while ni < len(new_ids):
+        push(ed["selection"], new_ids[ni])
+        ni = ni + 1
+    ed["selected"] = new_ids[0]
+    inspect_entity(ed["inspector"], w, ed["selected"])
+    return new_ids[0]
 
 # ============================================================================
 # Apply gizmo transform to selected entity
 # ============================================================================
 proc apply_gizmo_delta(ed, delta):
-    if ed["selected"] < 0:
+    let targets = []
+    if len(ed["selection"]) > 0:
+        let ti = 0
+        while ti < len(ed["selection"]):
+            push(targets, ed["selection"][ti])
+            ti = ti + 1
+    else:
+        if ed["selected"] >= 0:
+            push(targets, ed["selected"])
+    if len(targets) == 0:
         return nil
     let w = ed["world"]
-    let t = get_component(w, ed["selected"], "transform")
-    if t == nil:
-        return nil
     let mode = ed["gizmo"]["mode"]
-    if mode == GIZMO_TRANSLATE:
-        t["position"] = v3_add(t["position"], delta)
-        if ed["snap_enabled"]:
-            let ss = ed["snap_size"]
-            import math
-            t["position"][0] = math.floor(t["position"][0] / ss + 0.5) * ss
-            t["position"][1] = math.floor(t["position"][1] / ss + 0.5) * ss
-            t["position"][2] = math.floor(t["position"][2] / ss + 0.5) * ss
-    if mode == GIZMO_ROTATE:
-        t["rotation"] = v3_add(t["rotation"], delta)
-    if mode == GIZMO_SCALE:
-        t["scale"] = v3_add(t["scale"], delta)
-    t["dirty"] = true
-    ed["gizmo"]["position"] = t["position"]
+    let i = 0
+    while i < len(targets):
+        let t = get_component(w, targets[i], "transform")
+        if t != nil:
+            if mode == GIZMO_TRANSLATE:
+                t["position"] = v3_add(t["position"], delta)
+                if ed["snap_enabled"]:
+                    let ss = ed["snap_size"]
+                    import math
+                    t["position"][0] = math.floor(t["position"][0] / ss + 0.5) * ss
+                    t["position"][1] = math.floor(t["position"][1] / ss + 0.5) * ss
+                    t["position"][2] = math.floor(t["position"][2] / ss + 0.5) * ss
+            if mode == GIZMO_ROTATE:
+                t["rotation"] = v3_add(t["rotation"], delta)
+            if mode == GIZMO_SCALE:
+                t["scale"] = v3_add(t["scale"], delta)
+            t["dirty"] = true
+        i = i + 1
+    if ed["selected"] >= 0 and has_component(w, ed["selected"], "transform"):
+        ed["gizmo"]["position"] = get_component(w, ed["selected"], "transform")["position"]
 
 # ============================================================================
 # Editor stats
@@ -166,6 +294,7 @@ proc apply_gizmo_delta(ed, delta):
 proc editor_stats(ed):
     let s = {}
     s["selected"] = ed["selected"]
+    s["selected_count"] = len(ed["selection"])
     s["mode"] = ed["gizmo"]["mode"]
     s["entities"] = entity_count(ed["world"])
     s["can_undo"] = can_undo(ed["history"])

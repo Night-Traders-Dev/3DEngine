@@ -5,7 +5,9 @@ from asset_browser import create_asset_browser, add_asset, add_primitive_assets
 from asset_browser import add_vfx_assets, select_asset, get_selected_asset
 from asset_browser import asset_count, asset_count_by_type
 from asset_browser import set_category_filter, get_filtered_entries
-from asset_browser import rebuild_browser_ui
+from asset_browser import rebuild_browser_ui, scan_directory
+
+import io
 
 let pass_count = 0
 let fail_count = 0
@@ -87,8 +89,35 @@ set_category_filter(ab, "all")
 let all_entries = get_filtered_entries(ab)
 check("all filter returns everything", len(all_entries) == asset_count(ab))
 
+# --- Directory scan ---
+io.writefile("/tmp/sage_ab_scan_mesh.obj", "# test obj")
+io.writefile("/tmp/sage_ab_scan_scene.json", "scene_test")
+io.writefile("/tmp/sage_ab_scan_tex.png", "not_real_png")
+let before_scan = asset_count(ab)
+scan_directory(ab, "/tmp")
+check("scan added assets", asset_count(ab) >= before_scan + 3)
+let found_mesh = false
+let found_scene = false
+let found_tex = false
+let si = 0
+while si < len(ab["entries"]):
+    let en = ab["entries"][si]
+    if en["name"] == "sage_ab_scan_mesh.obj" and en["type"] == "mesh":
+        found_mesh = true
+    if en["name"] == "sage_ab_scan_scene.json" and en["type"] == "scene":
+        found_scene = true
+    if en["name"] == "sage_ab_scan_tex.png" and en["type"] == "texture":
+        found_tex = true
+    si = si + 1
+check("scan found mesh file", found_mesh)
+check("scan found scene file", found_scene)
+check("scan found texture file", found_tex)
+io.remove("/tmp/sage_ab_scan_mesh.obj")
+io.remove("/tmp/sage_ab_scan_scene.json")
+io.remove("/tmp/sage_ab_scan_tex.png")
+
 # --- Zero entries for unknown type ---
-check("unknown type = 0", asset_count_by_type(ab, "audio") == 0)
+check("unknown type = 0", asset_count_by_type(ab, "nonexistent_type") == 0)
 
 # --- UI rebuild ---
 rebuild_browser_ui(ab)

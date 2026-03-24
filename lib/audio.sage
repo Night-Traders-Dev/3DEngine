@@ -84,6 +84,80 @@ proc _next_sound_id(am):
     return id
 
 # ============================================================================
+# High-level sound API (software-managed handles)
+# ============================================================================
+proc load_sound(am, sound_name, file_path):
+    if sound_name == nil or sound_name == "":
+        return false
+    if dict_has(am, "buffers") == false:
+        am["buffers"] = {}
+    let snd = {}
+    snd["name"] = sound_name
+    snd["path"] = file_path
+    snd["loaded"] = true
+    am["buffers"][sound_name] = snd
+    return true
+
+proc unload_sound(am, sound_name):
+    if dict_has(am, "buffers") == false:
+        return false
+    if dict_has(am["buffers"], sound_name):
+        dict_delete(am["buffers"], sound_name)
+        return true
+    return false
+
+proc play_sound(am, sound_name, channel, volume, loop):
+    if dict_has(am, "buffers") == false:
+        am["buffers"] = {}
+    if dict_has(am["buffers"], sound_name) == false:
+        return -1
+    if dict_has(am, "sources") == false:
+        am["sources"] = {}
+    let id = _next_sound_id(am)
+    let src = create_sound_emitter(channel, volume, loop)
+    src["sound_name"] = sound_name
+    src["playing"] = true
+    src["handle_id"] = id
+    src["base_volume"] = volume
+    src["volume"] = volume * get_effective_volume(am, channel)
+    am["sources"][str(id)] = src
+    return id
+
+proc stop_sound(am, handle_id):
+    if dict_has(am, "sources") == false:
+        return false
+    let sid = str(handle_id)
+    if dict_has(am["sources"], sid) == false:
+        return false
+    am["sources"][sid]["playing"] = false
+    dict_delete(am["sources"], sid)
+    return true
+
+proc stop_all_sounds(am, channel):
+    if dict_has(am, "sources") == false:
+        return 0
+    let keys = dict_keys(am["sources"])
+    let stopped = 0
+    let i = 0
+    while i < len(keys):
+        let sid = keys[i]
+        let src = am["sources"][sid]
+        if channel == nil or channel == "" or src["channel"] == channel:
+            src["playing"] = false
+            dict_delete(am["sources"], sid)
+            stopped = stopped + 1
+        i = i + 1
+    return stopped
+
+proc is_sound_playing(am, handle_id):
+    if dict_has(am, "sources") == false:
+        return false
+    let sid = str(handle_id)
+    if dict_has(am["sources"], sid) == false:
+        return false
+    return am["sources"][sid]["playing"]
+
+# ============================================================================
 # Sound emitter (high-level, non-FFI)
 # ============================================================================
 proc create_sound_emitter(channel, volume, loop):

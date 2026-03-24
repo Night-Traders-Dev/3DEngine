@@ -69,12 +69,24 @@ proc serialize_light(comp):
     cJSON_AddNumberToObject(obj, "intensity", comp["intensity"])
     if dict_has(comp, "radius"):
         cJSON_AddNumberToObject(obj, "radius", comp["radius"])
+    if dict_has(comp, "cast_shadows"):
+        cJSON_AddItemToObject(obj, "cast_shadows", cJSON_CreateBool(comp["cast_shadows"]))
     return obj
 
 proc serialize_mesh_renderer(comp):
     let obj = cJSON_CreateObject()
-    cJSON_AddStringToObject(obj, "material", comp["material"])
-    cJSON_AddItemToObject(obj, "visible", cJSON_CreateBool(comp["visible"]))
+    let material = "default"
+    if dict_has(comp, "material"):
+        material = comp["material"]
+    cJSON_AddStringToObject(obj, "material", material)
+    let visible = true
+    if dict_has(comp, "visible"):
+        visible = comp["visible"]
+    cJSON_AddItemToObject(obj, "visible", cJSON_CreateBool(visible))
+    if dict_has(comp, "cast_shadows"):
+        cJSON_AddItemToObject(obj, "cast_shadows", cJSON_CreateBool(comp["cast_shadows"]))
+    if dict_has(comp, "receive_shadows"):
+        cJSON_AddItemToObject(obj, "receive_shadows", cJSON_CreateBool(comp["receive_shadows"]))
     return obj
 
 proc serialize_health(comp):
@@ -254,6 +266,42 @@ proc deserialize_health(node):
         h["alive"] = false
     return h
 
+proc deserialize_light(node):
+    from components import PointLightComponent, DirectionalLightComponent
+    let ltype = cJSON_GetStringValue(cJSON_GetObjectItem(node, "type"))
+    let color = json_to_vec3(cJSON_GetObjectItem(node, "color"))
+    let intensity = cJSON_GetNumberValue(cJSON_GetObjectItem(node, "intensity"))
+    if ltype == "directional":
+        let l = DirectionalLightComponent(color[0], color[1], color[2], intensity)
+        let cs = cJSON_GetObjectItem(node, "cast_shadows")
+        if cs != nil:
+            l["cast_shadows"] = cJSON_IsTrue(cs)
+        return l
+    let radius = 20.0
+    let rad_node = cJSON_GetObjectItem(node, "radius")
+    if rad_node != nil:
+        radius = cJSON_GetNumberValue(rad_node)
+    let p = PointLightComponent(color[0], color[1], color[2], intensity, radius)
+    return p
+
+proc deserialize_mesh_renderer(node):
+    from components import MeshRendererComponent
+    let material = "default"
+    let mat_node = cJSON_GetObjectItem(node, "material")
+    if mat_node != nil:
+        material = cJSON_GetStringValue(mat_node)
+    let mr = MeshRendererComponent(nil, material)
+    let vis = cJSON_GetObjectItem(node, "visible")
+    if vis != nil:
+        mr["visible"] = cJSON_IsTrue(vis)
+    let cs = cJSON_GetObjectItem(node, "cast_shadows")
+    if cs != nil:
+        mr["cast_shadows"] = cJSON_IsTrue(cs)
+    let rs = cJSON_GetObjectItem(node, "receive_shadows")
+    if rs != nil:
+        mr["receive_shadows"] = cJSON_IsTrue(rs)
+    return mr
+
 # ============================================================================
 # Deserializer registry
 # ============================================================================
@@ -296,7 +344,9 @@ _deserializers["name"] = deserialize_name
 _deserializers["velocity"] = deserialize_velocity
 _deserializers["camera"] = deserialize_camera
 _deserializers["health"] = deserialize_health
+_deserializers["light"] = deserialize_light
 _deserializers["mesh_id"] = deserialize_mesh_id
+_deserializers["mesh_renderer"] = deserialize_mesh_renderer
 _deserializers["rigidbody"] = deserialize_rigidbody
 _deserializers["collider"] = deserialize_collider
 

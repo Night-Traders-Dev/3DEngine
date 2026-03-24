@@ -8,7 +8,7 @@
 #   Left Click = Select entity | ESC = Deselect
 #   1 = Translate | 2 = Rotate | 3 = Scale gizmo mode
 #   R = Place cube | F = Place sphere | D = Delete selected
-#   Q = Duplicate | 5 = Generate code | 4 = Save scene | CTRL = Quit
+#   Q = Duplicate | 5 = Generate code | 4 = Save scene | CTRL+Q = Quit
 
 import gpu
 import math
@@ -17,8 +17,8 @@ from renderer import create_renderer, begin_frame, end_frame
 from renderer import shutdown_renderer, check_resize, update_title_fps
 from ecs import create_world, spawn, add_component, get_component
 from ecs import has_component, query, tick_systems, flush_dead
-from ecs import entity_count, destroy, add_tag, has_tag, remove_component
-from components import TransformComponent, NameComponent
+from ecs import entity_count, destroy, add_tag, has_tag, remove_component, register_system
+from components import TransformComponent, NameComponent, PointLightComponent
 from input import create_input, update_input, bind_action
 from input import action_held, action_just_pressed
 from input import mouse_delta, scroll_value, mouse_position
@@ -53,15 +53,18 @@ let THEME_SELECT = ui_widgets.THEME_SELECT
 from editor_layout import create_editor_layout, get_viewport_bounds, resize_editor_layout
 from editor_viewport import create_editor_camera, editor_camera_view
 from editor_viewport import editor_camera_position
-from scene_editor import create_scene_editor, select_entity, deselect, select_by_ray
+from scene_editor import create_scene_editor, select_entity, deselect, select_by_ray_mode
 from scene_editor import place_entity, delete_selected, duplicate_selected
 from scene_editor import apply_gizmo_delta, editor_stats
+from scene_editor import select_all_entities, selected_entities, toggle_entity_selection
 from gizmo import set_gizmo_mode, get_gizmo_visuals
 from gizmo import GIZMO_TRANSLATE, GIZMO_ROTATE, GIZMO_SCALE
 from inspector import create_inspector, inspect_entity, clear_inspection, refresh_inspector
 from codegen import generate_game_script
-from scene_serial import save_scene, load_scene
+from scene_serial import save_scene, load_scene, serialize_scene, load_scene_string
 from physics import RigidbodyComponent, BoxColliderComponent, SphereColliderComponent
+from physics import create_physics_world, create_physics_system
+from undo_redo import execute_command, undo, redo, cmd_set_vec3
 from gameplay import HealthComponent
 import sys
 from game_loop import create_time_state, update_time
@@ -121,10 +124,43 @@ let font_r = create_font_renderer(r["render_pass"])
 # Single font atlas for all editor text (avoids multi-atlas batching issues)
 let font_ui = load_font(font_r, "ui", "assets/DejaVuSans.ttf", 18.0)
 
-# Floating windows (positioned below menu bar + toolbar = 60px)
-let win_outliner = create_ui_window("Outliner", 10.0, 66.0, 220.0, 450.0)
-let win_details = create_ui_window("Details", 1180.0, 66.0, 250.0, 500.0)
-let win_content = create_ui_window("Content Browser", 240.0, 700.0, 700.0, 160.0)
+# Floating windows
+let win_outliner = create_ui_window("Outliner", 10.0, 66.0, layout["left_panel_w"], 450.0)
+let win_details = create_ui_window("Details", 1180.0, 66.0, layout["right_panel_w"], 500.0)
+let win_content = create_ui_window("Content Browser", 240.0, 700.0, 700.0, layout["bottom_panel_h"] + 40.0)
+
+proc reset_layout_windows():
+    let sw_l = layout["screen_w"]
+    let sh_l = layout["screen_h"]
+    let top_y = layout["menubar_h"] + layout["toolbar_h"] + 6.0
+    win_outliner["visible"] = true
+    win_details["visible"] = true
+    win_content["visible"] = true
+    win_outliner["collapsed"] = false
+    win_details["collapsed"] = false
+    win_content["collapsed"] = false
+    win_outliner["x"] = 10.0
+    win_outliner["y"] = top_y
+    win_outliner["width"] = layout["left_panel_w"]
+    win_outliner["height"] = sh_l - top_y - layout["statusbar_h"] - layout["bottom_panel_h"] - 22.0
+    if win_outliner["height"] < 180.0:
+        win_outliner["height"] = 180.0
+
+    win_details["width"] = layout["right_panel_w"]
+    win_details["height"] = sh_l - top_y - layout["statusbar_h"] - layout["bottom_panel_h"] - 22.0
+    if win_details["height"] < 180.0:
+        win_details["height"] = 180.0
+    win_details["x"] = sw_l - win_details["width"] - 10.0
+    win_details["y"] = top_y
+
+    win_content["x"] = win_outliner["x"] + win_outliner["width"] + 10.0
+    win_content["y"] = sh_l - layout["statusbar_h"] - layout["bottom_panel_h"] - 8.0
+    win_content["width"] = sw_l - win_content["x"] - win_details["width"] - 20.0
+    if win_content["width"] < 320.0:
+        win_content["width"] = 320.0
+    win_content["height"] = layout["bottom_panel_h"]
+
+reset_layout_windows()
 
 # Menu bar state
 let menubar_active = -1
@@ -134,6 +170,8 @@ let menubar_active = -1
 # ============================================================================
 let world = create_world()
 let editor = create_scene_editor(world)
+let physics_world = create_physics_world()
+register_system(world, "physics", ["rigidbody", "transform"], create_physics_system(physics_world))
 
 # Default scene: ground plane
 let ge = spawn(world)
@@ -152,6 +190,24 @@ add_component(world, s1, "mesh_id", {"mesh": sphere_gpu, "name": "sphere"})
 
 deselect(editor)
 let entity_counter = 4
+let play_mode = false
+let play_snapshot = nil
+let active_details_field = nil
+
+proc _rehydrate_mesh_refs(w):
+    let mids = query(w, ["mesh_id"])
+    let mi = 0
+    while mi < len(mids):
+        let eid = mids[mi]
+        let m = get_component(w, eid, "mesh_id")
+        let mname = "cube"
+        if dict_has(m, "name"):
+            mname = m["name"]
+        if mname == "sphere":
+            m["mesh"] = sphere_gpu
+        else:
+            m["mesh"] = cube_gpu
+        mi = mi + 1
 
 # Scan for importable assets
 let importable_assets = scan_importable_assets("assets")
@@ -184,7 +240,6 @@ cam["yaw"] = 0.5
 # Input
 # ============================================================================
 let inp = create_input()
-bind_action(inp, "quit", [gpu.KEY_CTRL])
 bind_action(inp, "select", [gpu.KEY_ESCAPE])
 bind_action(inp, "place_cube", [gpu.KEY_R])
 bind_action(inp, "place_sphere", [gpu.KEY_F])
@@ -220,8 +275,9 @@ print "Controls:"
 print "  RMB=Orbit  MMB=Pan  Scroll=Zoom  Right-Click=Context Menu"
 print "  R=Cube  F=Sphere  E=Model  D=Delete  Q=Dup  TAB=Physics"
 print "  1/2/3=Move/Rotate/Scale  4=Save  5=Code  ENTER=Play"
+print "  CTRL+Z/Y=Undo/Redo  CTRL+A=Select All  CTRL+N/O/S=New/Open/Save"
 print "  Drag window title bars to reposition panels"
-print "  CTRL=Quit"
+print "  CTRL+Q=Quit"
 print ""
 
 while running:
@@ -244,9 +300,57 @@ while running:
     gpu.update_input()
     update_input(inp)
 
-    if action_just_pressed(inp, "quit"):
+    # Global editor shortcuts
+    if gpu.key_pressed(gpu.KEY_CTRL) and gpu.key_just_pressed(gpu.KEY_Q):
         running = false
         continue
+    if gpu.key_pressed(gpu.KEY_CTRL) and gpu.key_just_pressed(gpu.KEY_Z):
+        if undo(editor["history"]):
+            refresh_inspector(editor["inspector"])
+    if gpu.key_pressed(gpu.KEY_CTRL) and gpu.key_just_pressed(gpu.KEY_Y):
+        if redo(editor["history"]):
+            refresh_inspector(editor["inspector"])
+    if gpu.key_pressed(gpu.KEY_CTRL) and gpu.key_just_pressed(gpu.KEY_A):
+        let selected_count = select_all_entities(editor)
+        if selected_count > 0:
+            print "Selected " + str(selected_count) + " entities"
+    if gpu.key_pressed(gpu.KEY_CTRL) and gpu.key_just_pressed(gpu.KEY_S):
+        save_scene(world, "EditorScene", "assets/editor_scene.json")
+        print "Scene saved: assets/editor_scene.json"
+    if gpu.key_pressed(gpu.KEY_CTRL) and gpu.key_just_pressed(gpu.KEY_N):
+        if play_mode:
+            print "Stop Play mode before creating a new scene"
+        else:
+            let all_reset = query(world, ["transform"])
+            let ri_reset = 0
+            while ri_reset < len(all_reset):
+                destroy(world, all_reset[ri_reset])
+                ri_reset = ri_reset + 1
+            flush_dead(world)
+            let ge_new = spawn(world)
+            add_component(world, ge_new, "transform", TransformComponent(0.0, 0.0, 0.0))
+            add_component(world, ge_new, "name", NameComponent("Ground"))
+            add_tag(world, ge_new, "editable")
+            deselect(editor)
+            entity_counter = 1
+            print "New scene created"
+    if gpu.key_pressed(gpu.KEY_CTRL) and gpu.key_just_pressed(gpu.KEY_O):
+        if play_mode:
+            print "Stop Play mode before opening a scene"
+        else:
+            if io.exists("assets/editor_scene.json"):
+                let loaded_shortcut = load_scene("assets/editor_scene.json")
+                if loaded_shortcut != nil:
+                    world = loaded_shortcut["world"]
+                    register_system(world, "physics", ["rigidbody", "transform"], create_physics_system(physics_world))
+                    _rehydrate_mesh_refs(world)
+                    editor["world"] = world
+                    deselect(editor)
+                    let entities_after_load = query(world, ["transform"])
+                    entity_counter = len(entities_after_load) + 1
+                    print "Scene opened: assets/editor_scene.json"
+            else:
+                print "Open failed: assets/editor_scene.json not found"
 
     # --- Camera orbit/pan/zoom (only when mouse is in viewport) ---
     let md = mouse_delta(inp)
@@ -341,11 +445,23 @@ while running:
     if left_pressed and my >= layout["menubar_h"] and my < layout["menubar_h"] + layout["toolbar_h"]:
         # Play button
         if mx >= sw_f / 2.0 - 40.0 and mx < sw_f / 2.0 + 40.0:
-            save_scene(world, "EditorScene", "assets/editor_scene.json")
-            let code = generate_game_script(world, "ForgeGame", {"width": 1280, "height": 720})
-            io.writefile("assets/generated_game.sage", code)
-            print "=== GAME GENERATED === Run: ./run.sh assets/generated_game.sage"
-            gpu.set_title("Forge Engine Editor | Game Generated!")
+            if play_mode == false:
+                play_snapshot = serialize_scene(world, "PIE")
+                play_mode = true
+                print "Play mode started (ENTER or Play to stop)"
+                gpu.set_title("Forge Engine Editor | PLAYING")
+            else:
+                if play_snapshot != nil:
+                    let restored = load_scene_string(play_snapshot)
+                    if restored != nil:
+                        world = restored["world"]
+                        register_system(world, "physics", ["rigidbody", "transform"], create_physics_system(physics_world))
+                        _rehydrate_mesh_refs(world)
+                        editor["world"] = world
+                        deselect(editor)
+                play_mode = false
+                print "Play mode stopped"
+                gpu.set_title("Forge Engine Editor")
             window_consumed = true
         # Save button
         if mx >= sw_f / 2.0 + 50.0 and mx < sw_f / 2.0 + 110.0:
@@ -366,6 +482,12 @@ while running:
         if menu_idx >= 0:
             let items = get_menu_items()
             let item = items[menu_idx]
+            if play_mode and (item == "Add Cube" or item == "Add Sphere" or item == "Add Physics Cube" or item == "Add Light" or item == "Delete" or item == "Delete Selected" or item == "Duplicate" or item == "Toggle Physics" or item == "New Scene" or item == "Open Scene..."):
+                print "Stop Play mode before editing the scene"
+                close_menu()
+                menubar_active = -1
+                window_consumed = true
+                continue
             # --- Tools / Context menu actions ---
             if item == "Add Cube":
                 entity_counter = entity_counter + 1
@@ -385,7 +507,41 @@ while running:
                 add_component(world, eid, "rigidbody", RigidbodyComponent(1.0))
                 add_component(world, eid, "collider", BoxColliderComponent(0.5, 0.5, 0.5))
                 add_component(world, eid, "health", HealthComponent(50.0))
+            if item == "Add Light":
+                entity_counter = entity_counter + 1
+                let pos = vec3(cam["target"][0], 2.5, cam["target"][2])
+                let eid = place_entity(editor, pos, "Light_" + str(entity_counter), sphere_gpu)
+                add_component(world, eid, "mesh_id", {"mesh": sphere_gpu, "name": "sphere"})
+                add_component(world, eid, "light", PointLightComponent(1.0, 0.95, 0.85, 3.0, 18.0))
             # --- File menu ---
+            if item == "New Scene":
+                let all_reset_menu = query(world, ["transform"])
+                let rm_i = 0
+                while rm_i < len(all_reset_menu):
+                    destroy(world, all_reset_menu[rm_i])
+                    rm_i = rm_i + 1
+                flush_dead(world)
+                let ge_new_menu = spawn(world)
+                add_component(world, ge_new_menu, "transform", TransformComponent(0.0, 0.0, 0.0))
+                add_component(world, ge_new_menu, "name", NameComponent("Ground"))
+                add_tag(world, ge_new_menu, "editable")
+                deselect(editor)
+                entity_counter = 1
+                print "New scene created"
+            if item == "Open Scene...":
+                if io.exists("assets/editor_scene.json"):
+                    let loaded_menu = load_scene("assets/editor_scene.json")
+                    if loaded_menu != nil:
+                        world = loaded_menu["world"]
+                        register_system(world, "physics", ["rigidbody", "transform"], create_physics_system(physics_world))
+                        _rehydrate_mesh_refs(world)
+                        editor["world"] = world
+                        deselect(editor)
+                        let entities_after_load_menu = query(world, ["transform"])
+                        entity_counter = len(entities_after_load_menu) + 1
+                        print "Scene opened: assets/editor_scene.json"
+                else:
+                    print "Open failed: assets/editor_scene.json not found"
             if item == "Save Scene":
                 save_scene(world, "EditorScene", "assets/editor_scene.json")
                 print "Scene saved: assets/editor_scene.json"
@@ -396,15 +552,21 @@ while running:
             if item == "Quit":
                 running = false
             # --- Edit menu ---
+            if item == "Undo":
+                if undo(editor["history"]):
+                    refresh_inspector(editor["inspector"])
+            if item == "Redo":
+                if redo(editor["history"]):
+                    refresh_inspector(editor["inspector"])
             if item == "Delete" or item == "Delete Selected":
                 delete_selected(editor)
                 flush_dead(world)
             if item == "Duplicate":
                 duplicate_selected(editor)
             if item == "Select All":
-                let all_e = query(world, ["transform"])
-                if len(all_e) > 0:
-                    select_entity(editor, all_e[0])
+                let csel = select_all_entities(editor)
+                if csel > 0:
+                    print "Selected " + str(csel) + " entities"
             # --- Window menu ---
             if item == "Outliner":
                 win_outliner["visible"] = true
@@ -415,6 +577,9 @@ while running:
             if item == "Content Browser":
                 win_content["visible"] = true
                 bring_to_front(win_content)
+            if item == "Reset Layout":
+                reset_layout_windows()
+                print "Layout reset"
             # --- Tools menu ---
             if item == "Toggle Physics":
                 if editor["selected"] >= 0:
@@ -430,6 +595,11 @@ while running:
                 let code = generate_game_script(world, "GeneratedGame", {"width": 1280, "height": 720})
                 io.writefile("assets/generated_game.sage", code)
                 print "Generated: assets/generated_game.sage"
+            # --- Help menu ---
+            if item == "Controls":
+                print "Controls: RMB orbit | MMB pan | Wheel zoom | R/F place | D delete | Q duplicate | TAB physics | ENTER play"
+            if item == "About Forge Engine":
+                print "Forge Engine Editor - UE-style SageLang editor (Vulkan backend)"
             close_menu()
             menubar_active = -1
             window_consumed = true
@@ -447,8 +617,43 @@ while running:
             let click_idx = math.floor((my - oca_click["y"]) / 24.0)
             let all_ents = query(world, ["transform"])
             if click_idx >= 0 and click_idx < len(all_ents):
-                select_entity(editor, all_ents[click_idx])
+                if gpu.key_pressed(gpu.KEY_CTRL):
+                    toggle_entity_selection(editor, all_ents[click_idx])
+                else:
+                    select_entity(editor, all_ents[click_idx])
             window_consumed = true
+        let dca_click = window_content_area(win_details)
+        let in_details = win_details["visible"] and win_details["collapsed"] == false and mx >= dca_click["x"] and mx < dca_click["x"] + dca_click["w"] and my >= dca_click["y"] and my < dca_click["y"] + dca_click["h"]
+        if in_details and editor["selected"] >= 0 and has_component(world, editor["selected"], "transform"):
+            active_details_field = nil
+            let dx = dca_click["x"]
+            let dw = dca_click["w"]
+            let fw3 = (dw - 16.0) / 3.0
+            let iy = dca_click["y"]
+            if has_component(world, editor["selected"], "name"):
+                iy = iy + 28.0
+            iy = iy + 26.0
+            iy = iy + 22.0
+            let col = -1
+            if mx >= dx + 2.0 and mx < dx + 2.0 + fw3:
+                col = 0
+            if mx >= dx + fw3 + 6.0 and mx < dx + fw3 + 6.0 + fw3:
+                col = 1
+            if mx >= dx + fw3 * 2.0 + 10.0 and mx < dx + fw3 * 2.0 + 10.0 + fw3:
+                col = 2
+            if col >= 0 and my >= iy and my < iy + 20.0:
+                active_details_field = {"key": "position", "axis": col}
+            iy = iy + 26.0
+            iy = iy + 22.0
+            if col >= 0 and my >= iy and my < iy + 20.0:
+                active_details_field = {"key": "rotation", "axis": col}
+            iy = iy + 26.0
+            iy = iy + 22.0
+            if col >= 0 and my >= iy and my < iy + 20.0:
+                active_details_field = {"key": "scale", "axis": col}
+            window_consumed = true
+        if in_details == false and in_outliner == false:
+            active_details_field = nil
 
     # --- Viewport click handler ---
     if left_pressed and window_consumed == false:
@@ -467,25 +672,43 @@ while running:
             let cam_right = v3_normalize(v3_cross(cam_fwd, vec3(0.0, 1.0, 0.0)))
             let cam_up = v3_cross(cam_right, cam_fwd)
             let ray_dir = v3_normalize(v3_add(v3_add(v3_scale(cam_right, rx), v3_scale(cam_up, ry)), cam_fwd))
-            select_by_ray(editor, cam_pos, ray_dir)
+            select_by_ray_mode(editor, cam_pos, ray_dir, gpu.key_pressed(gpu.KEY_CTRL))
+
+    # Inspector quick-edit: scroll wheel over active transform field
+    if play_mode == false and active_details_field != nil and editor["selected"] >= 0 and has_component(world, editor["selected"], "transform"):
+        if sv[1] != 0.0:
+            let t_edit = get_component(world, editor["selected"], "transform")
+            let key = active_details_field["key"]
+            let axis = active_details_field["axis"]
+            let step = 0.1
+            if gpu.key_pressed(gpu.KEY_SHIFT):
+                step = 1.0
+            if key == "scale":
+                step = 0.05
+            let nv = t_edit[key][axis] + sv[1] * step
+            if key == "scale" and nv < 0.01:
+                nv = 0.01
+            execute_command(editor["history"], cmd_set_vec3(t_edit, key, axis, nv))
+            t_edit["dirty"] = true
 
     # --- Entity operations ---
     if action_just_pressed(inp, "select"):
         deselect(editor)
+        active_details_field = nil
 
-    if action_just_pressed(inp, "place_cube"):
+    if play_mode == false and action_just_pressed(inp, "place_cube"):
         entity_counter = entity_counter + 1
         let pos = vec3(cam["target"][0], 0.5, cam["target"][2])
         let eid = place_entity(editor, pos, "Cube_" + str(entity_counter), cube_gpu)
         add_component(world, eid, "mesh_id", {"mesh": cube_gpu, "name": "cube"})
 
-    if action_just_pressed(inp, "place_sphere"):
+    if play_mode == false and action_just_pressed(inp, "place_sphere"):
         entity_counter = entity_counter + 1
         let pos = vec3(cam["target"][0], 1.0, cam["target"][2])
         let eid = place_entity(editor, pos, "Sphere_" + str(entity_counter), sphere_gpu)
         add_component(world, eid, "mesh_id", {"mesh": sphere_gpu, "name": "sphere"})
 
-    if action_just_pressed(inp, "place_model"):
+    if play_mode == false and action_just_pressed(inp, "place_model"):
         let model_keys = dict_keys(imported_models)
         if len(model_keys) > 0:
             let model_asset = imported_models[model_keys[0]]
@@ -500,15 +723,16 @@ while running:
         else:
             print "No imported models available. Place .gltf files in assets/"
 
-    if action_just_pressed(inp, "delete"):
+    if play_mode == false and action_just_pressed(inp, "delete"):
         delete_selected(editor)
         flush_dead(world)
+        active_details_field = nil
 
-    if action_just_pressed(inp, "duplicate"):
+    if play_mode == false and action_just_pressed(inp, "duplicate"):
         duplicate_selected(editor)
 
     # Toggle physics on selected entity (TAB)
-    if action_just_pressed(inp, "toggle_physics"):
+    if play_mode == false and action_just_pressed(inp, "toggle_physics"):
         if editor["selected"] >= 0:
             let sel = editor["selected"]
             if has_component(world, sel, "rigidbody"):
@@ -524,30 +748,64 @@ while running:
                 add_component(world, sel, "health", HealthComponent(50.0))
                 print "Physics + Health added to #" + str(sel)
 
-    # Play mode (ENTER) — generate game, save scene, print run command
+    # Play mode (ENTER) — toggle Play-In-Editor simulation
     if action_just_pressed(inp, "play"):
-        save_scene(world, "EditorScene", "assets/editor_scene.json")
-        let code = generate_game_script(world, "ForgeGame", {"width": 1280, "height": 720})
-        io.writefile("assets/generated_game.sage", code)
-        print ""
-        print "=== GAME GENERATED ==="
-        print "Scene saved: assets/editor_scene.json"
-        print "Game script: assets/generated_game.sage"
-        print "Run: ./run.sh assets/generated_game.sage"
-        print ""
-        gpu.set_title("Forge Engine Editor | Game Generated! Run: ./run.sh assets/generated_game.sage")
+        if play_mode == false:
+            play_snapshot = serialize_scene(world, "PIE")
+            play_mode = true
+            print "Play mode started (ENTER to stop)"
+            gpu.set_title("Forge Engine Editor | PLAYING")
+        else:
+            if play_snapshot != nil:
+                let restored_enter = load_scene_string(play_snapshot)
+                if restored_enter != nil:
+                    world = restored_enter["world"]
+                    register_system(world, "physics", ["rigidbody", "transform"], create_physics_system(physics_world))
+                    _rehydrate_mesh_refs(world)
+                    editor["world"] = world
+                    deselect(editor)
+            play_mode = false
+            print "Play mode stopped"
+            gpu.set_title("Forge Engine Editor")
 
     # --- Keyboard nudge for selected entity (arrow keys) ---
-    if editor["selected"] >= 0 and has_component(world, editor["selected"], "transform"):
+    if play_mode == false and editor["selected"] >= 0 and has_component(world, editor["selected"], "transform"):
         let nudge_speed = 3.0 * dt
+        let nudge_targets = selected_entities(editor)
+        if len(nudge_targets) == 0:
+            nudge_targets = [editor["selected"]]
         if gpu.key_pressed(gpu.KEY_UP):
-            apply_gizmo_delta(editor, vec3(0.0, 0.0, 0.0 - nudge_speed))
+            let ni = 0
+            while ni < len(nudge_targets):
+                let t = get_component(world, nudge_targets[ni], "transform")
+                if t != nil:
+                    execute_command(editor["history"], cmd_set_vec3(t, "position", 2, t["position"][2] - nudge_speed))
+                    t["dirty"] = true
+                ni = ni + 1
         if gpu.key_pressed(gpu.KEY_DOWN):
-            apply_gizmo_delta(editor, vec3(0.0, 0.0, nudge_speed))
+            let ni = 0
+            while ni < len(nudge_targets):
+                let t = get_component(world, nudge_targets[ni], "transform")
+                if t != nil:
+                    execute_command(editor["history"], cmd_set_vec3(t, "position", 2, t["position"][2] + nudge_speed))
+                    t["dirty"] = true
+                ni = ni + 1
         if gpu.key_pressed(gpu.KEY_LEFT):
-            apply_gizmo_delta(editor, vec3(0.0 - nudge_speed, 0.0, 0.0))
+            let ni = 0
+            while ni < len(nudge_targets):
+                let t = get_component(world, nudge_targets[ni], "transform")
+                if t != nil:
+                    execute_command(editor["history"], cmd_set_vec3(t, "position", 0, t["position"][0] - nudge_speed))
+                    t["dirty"] = true
+                ni = ni + 1
         if gpu.key_pressed(gpu.KEY_RIGHT):
-            apply_gizmo_delta(editor, vec3(nudge_speed, 0.0, 0.0))
+            let ni = 0
+            while ni < len(nudge_targets):
+                let t = get_component(world, nudge_targets[ni], "transform")
+                if t != nil:
+                    execute_command(editor["history"], cmd_set_vec3(t, "position", 0, t["position"][0] + nudge_speed))
+                    t["dirty"] = true
+                ni = ni + 1
 
     # (Click handling done above in unified handler)
 
@@ -559,6 +817,10 @@ while running:
         let code = generate_game_script(world, "GeneratedGame", {"width": 1280, "height": 720})
         io.writefile("assets/generated_game.sage", code)
         print "Generated: assets/generated_game.sage"
+
+    if play_mode:
+        tick_systems(world, dt)
+        flush_dead(world)
 
     # --- Update inspector ---
     if editor["selected"] >= 0:
@@ -662,7 +924,10 @@ while running:
         mi_b = mi_b + 1
 
     # Play button
-    push(ui_quads, {"x": sw / 2.0 - 40.0, "y": mb_h + 4.0, "w": 80.0, "h": 26.0, "color": [0.15, 0.45, 0.15, 1.0]})
+    let play_btn_col = [0.15, 0.45, 0.15, 1.0]
+    if play_mode:
+        play_btn_col = [0.55, 0.20, 0.20, 1.0]
+    push(ui_quads, {"x": sw / 2.0 - 40.0, "y": mb_h + 4.0, "w": 80.0, "h": 26.0, "color": play_btn_col})
 
     # Save button
     push(ui_quads, {"x": sw / 2.0 + 50.0, "y": mb_h + 4.0, "w": 60.0, "h": 26.0, "color": [0.212, 0.212, 0.212, 1.0]})
@@ -702,7 +967,10 @@ while running:
     add_text(font_r, "ui", "Move", 22.0, mb_h + 8.0, 0.78, 0.78, 0.78, 1.0)
     add_text(font_r, "ui", "Rotate", 92.0, mb_h + 8.0, 0.78, 0.78, 0.78, 1.0)
     add_text(font_r, "ui", "Scale", 172.0, mb_h + 8.0, 0.78, 0.78, 0.78, 1.0)
-    add_text(font_r, "ui", "Play", sw / 2.0 - 22.0, mb_h + 8.0, 0.9, 0.9, 0.9, 1.0)
+    let play_label = "Play"
+    if play_mode:
+        play_label = "Stop"
+    add_text(font_r, "ui", play_label, sw / 2.0 - 22.0, mb_h + 8.0, 0.9, 0.9, 0.9, 1.0)
     add_text(font_r, "ui", "Save", sw / 2.0 + 62.0, mb_h + 8.0, 0.78, 0.78, 0.78, 1.0)
 
     # Viewport overlay text
@@ -713,8 +981,13 @@ while running:
     # Status bar
     let stats = editor_stats(editor)
     let status = str(stats["entities"]) + " entities  " + str(draw_count) + " drawn  " + stats["mode"]
-    if stats["selected"] >= 0:
-        status = status + "  |  #" + str(stats["selected"])
+    if stats["selected_count"] > 1:
+        status = status + "  |  " + str(stats["selected_count"]) + " selected"
+    else:
+        if stats["selected"] >= 0:
+            status = status + "  |  #" + str(stats["selected"])
+    if play_mode:
+        status = status + "  |  PLAYING"
     status = status + "  |  FPS: " + str(math.floor(ts["fps"]))
     add_text(font_r, "ui", status, 8.0, sh - sb_h + 5.0, 0.439, 0.439, 0.439, 1.0)
 
@@ -779,9 +1052,16 @@ while running:
     if win_outliner["visible"] and win_outliner["collapsed"] == false:
         let oca_h = window_content_area(win_outliner)
         let hey = oca_h["y"]
+        let sel_ids = selected_entities(editor)
         let hei = 0
         while hei < len(ents) and hei < 25:
-            if ents[hei] == cur_sel:
+            let is_sel = false
+            let si = 0
+            while si < len(sel_ids):
+                if ents[hei] == sel_ids[si]:
+                    is_sel = true
+                si = si + 1
+            if is_sel:
                 push(all_win_quads, {"x": oca_h["x"], "y": hey - 1.0, "w": oca_h["w"], "h": 20.0, "color": [0.290, 0.565, 0.851, 0.15]})
             hey = hey + 24.0
             hei = hei + 1
@@ -810,13 +1090,20 @@ while running:
     if win_outliner["visible"] and win_outliner["collapsed"] == false:
         let oca = window_content_area(win_outliner)
         let oy = oca["y"]
+        let sel_out = selected_entities(editor)
         let oei = 0
         while oei < len(ents) and oei < 25:
             let eid = ents[oei]
             let ename = "Entity_" + str(eid)
             if has_component(world, eid, "name"):
                 ename = get_component(world, eid, "name")["name"]
-            if eid == cur_sel:
+            let is_sel_text = false
+            let so = 0
+            while so < len(sel_out):
+                if eid == sel_out[so]:
+                    is_sel_text = true
+                so = so + 1
+            if is_sel_text:
                 add_text(font_r, "ui", ename, oca["x"] + 6.0, oy, 1.0, 1.0, 1.0, 1.0)
             else:
                 add_text(font_r, "ui", ename, oca["x"] + 6.0, oy, 0.55, 0.55, 0.55, 1.0)
@@ -860,6 +1147,14 @@ while running:
             add_text(font_r, "ui", _fn(st["scale"][1]), dx + fw3 + 14.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
             add_text(font_r, "ui", _fn(st["scale"][2]), dx + fw3 * 2.0 + 18.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
             iy = iy + 28.0
+            if active_details_field != nil:
+                let axis_lbl = "X"
+                if active_details_field["axis"] == 1:
+                    axis_lbl = "Y"
+                if active_details_field["axis"] == 2:
+                    axis_lbl = "Z"
+                add_text(font_r, "ui", "Edit: " + active_details_field["key"] + "." + axis_lbl + " (Wheel, SHIFT=fine)", dx + 8.0, iy, 0.357, 0.627, 0.914, 1.0)
+                iy = iy + 22.0
             # Physics section
             if has_component(world, cur_sel, "rigidbody"):
                 let rb = get_component(world, cur_sel, "rigidbody")

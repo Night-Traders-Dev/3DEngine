@@ -4,6 +4,7 @@
 from ecs import create_world, spawn, add_component, get_component
 from ecs import has_component, add_tag, has_tag, entity_count
 from components import TransformComponent, VelocityComponent, NameComponent, CameraComponent
+from components import PointLightComponent, MeshRendererComponent
 from gameplay import HealthComponent
 from scene_serial import serialize_scene, load_scene_string
 from scene_serial import vec3_to_json, json_to_vec3
@@ -64,6 +65,17 @@ add_component(w, e2, "health", HealthComponent(50.0))
 add_tag(w, e2, "enemy")
 add_tag(w, e2, "shootable")
 
+let e3 = spawn(w)
+add_component(w, e3, "transform", TransformComponent(-2.0, 3.0, 1.0))
+add_component(w, e3, "name", NameComponent("Lamp"))
+add_component(w, e3, "light", PointLightComponent(1.0, 0.8, 0.6, 3.5, 18.0))
+let mr = MeshRendererComponent(nil, "metallic")
+mr["visible"] = false
+mr["cast_shadows"] = false
+mr["receive_shadows"] = true
+add_component(w, e3, "mesh_renderer", mr)
+add_tag(w, e3, "light_source")
+
 # --- Serialize ---
 let json_str = serialize_scene(w, "TestScene")
 check("serialized not nil", json_str != nil)
@@ -71,6 +83,7 @@ check("serialized has content", len(json_str) > 50)
 check("contains scene name", contains(json_str, "TestScene"))
 check("contains Player", contains(json_str, "Player"))
 check("contains Box", contains(json_str, "Box"))
+check("contains Lamp", contains(json_str, "Lamp"))
 check("contains player tag", contains(json_str, "player"))
 check("contains enemy tag", contains(json_str, "enemy"))
 
@@ -78,16 +91,17 @@ check("contains enemy tag", contains(json_str, "enemy"))
 let result = load_scene_string(json_str)
 check("loaded result not nil", result != nil)
 check("scene name", result["name"] == "TestScene")
-check("entity count", result["entity_count"] == 2)
+check("entity count", result["entity_count"] == 3)
 
 let w2 = result["world"]
 check("world created", w2 != nil)
-check("world has entities", entity_count(w2) >= 2)
+check("world has entities", entity_count(w2) >= 3)
 
 # Find entities by checking for name component
 let found_player = false
 let found_box = false
-let all_eids = [1, 2]
+let found_lamp = false
+let all_eids = [1, 2, 3]
 let i = 0
 while i < len(all_eids):
     let eid = all_eids[i]
@@ -131,10 +145,27 @@ while i < len(all_eids):
             # Tags
             check("box enemy tag", has_tag(w2, eid, "enemy"))
             check("box shootable tag", has_tag(w2, eid, "shootable"))
+        if n["name"] == "Lamp":
+            found_lamp = true
+            check("lamp has light", has_component(w2, eid, "light"))
+            if has_component(w2, eid, "light"):
+                let ll = get_component(w2, eid, "light")
+                check("lamp type point", ll["type"] == "point")
+                check("lamp intensity", approx(ll["intensity"], 3.5))
+                check("lamp radius", approx(ll["radius"], 18.0))
+            check("lamp has mesh renderer", has_component(w2, eid, "mesh_renderer"))
+            if has_component(w2, eid, "mesh_renderer"):
+                let lm = get_component(w2, eid, "mesh_renderer")
+                check("mesh renderer material", lm["material"] == "metallic")
+                check("mesh renderer visible false", lm["visible"] == false)
+                check("mesh renderer cast_shadows false", lm["cast_shadows"] == false)
+                check("mesh renderer receive_shadows true", lm["receive_shadows"] == true)
+            check("lamp tag", has_tag(w2, eid, "light_source"))
     i = i + 1
 
 check("found player entity", found_player)
 check("found box entity", found_box)
+check("found lamp entity", found_lamp)
 
 # --- File round-trip ---
 import io
@@ -145,7 +176,7 @@ check("save file exists", io.exists("/tmp/sage_test_scene.json"))
 let loaded = load_scene("/tmp/sage_test_scene.json")
 check("load from file works", loaded != nil)
 check("loaded name", loaded["name"] == "FileTest")
-check("loaded entity count", loaded["entity_count"] == 2)
+check("loaded entity count", loaded["entity_count"] == 3)
 io.remove("/tmp/sage_test_scene.json")
 
 # --- Edge case: empty world ---
