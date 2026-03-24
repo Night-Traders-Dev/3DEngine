@@ -49,7 +49,8 @@ proc create_shadow_renderer(resolution):
     cfg["vertex_shader"] = vert
     cfg["fragment_shader"] = frag
     cfg["topology"] = gpu.TOPO_TRIANGLE_LIST
-    cfg["cull_mode"] = gpu.CULL_FRONT
+    # Keep compatibility with Sage GPU builds that do not expose CULL_FRONT.
+    cfg["cull_mode"] = gpu.CULL_BACK
     cfg["front_face"] = gpu.FRONT_CCW
     cfg["depth_test"] = true
     cfg["depth_write"] = true
