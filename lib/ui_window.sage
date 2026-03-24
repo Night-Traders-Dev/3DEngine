@@ -186,30 +186,33 @@ proc build_window_quads(win):
     if win["collapsed"]:
         h = WIN_TITLE_H
 
-    # Drop shadow (offset down-right)
-    push(quads, {"x": x + 3.0, "y": y + 3.0, "w": w, "h": h, "color": [0.02, 0.02, 0.03, 0.5]})
+    # Drop shadow (offset down-right, layered for soft effect)
+    push(quads, {"x": x + 4.0, "y": y + 4.0, "w": w, "h": h, "color": [0.0, 0.0, 0.0, 0.35]})
+    push(quads, {"x": x + 2.0, "y": y + 2.0, "w": w, "h": h, "color": [0.0, 0.0, 0.0, 0.2]})
 
     # Window body
     push(quads, {"x": x, "y": y, "w": w, "h": h, "color": ui_widgets.THEME_PANEL})
 
-    # Title bar
+    # Title bar (slightly elevated)
     push(quads, {"x": x, "y": y, "w": w, "h": WIN_TITLE_H, "color": ui_widgets.THEME_HEADER})
 
-    # Title bar accent underline
+    # Title bar accent underline (amber glow)
     let acc = ui_widgets.THEME_ACCENT
-    push(quads, {"x": x, "y": y + WIN_TITLE_H - 1.0, "w": w, "h": 1.0, "color": [acc[0], acc[1], acc[2], 0.4]})
+    push(quads, {"x": x, "y": y + WIN_TITLE_H - 2.0, "w": w, "h": 2.0, "color": [acc[0], acc[1], acc[2], 0.5]})
 
-    # Border
-    let bc = [0.04, 0.04, 0.06, 1.0]
+    # Border (subtle)
+    let bc = ui_widgets.THEME_BORDER
     push(quads, {"x": x, "y": y, "w": w, "h": WIN_BORDER, "color": bc})
     push(quads, {"x": x, "y": y + h - WIN_BORDER, "w": w, "h": WIN_BORDER, "color": bc})
     push(quads, {"x": x, "y": y, "w": WIN_BORDER, "h": h, "color": bc})
     push(quads, {"x": x + w - WIN_BORDER, "y": y, "w": WIN_BORDER, "h": h, "color": bc})
 
-    # Resize grip (bottom-right corner)
+    # Resize grip (bottom-right corner, amber tinted)
     if win["collapsed"] == false:
-        let gs = 8.0
-        push(quads, {"x": x + w - gs, "y": y + h - gs, "w": gs, "h": gs, "color": [acc[0], acc[1], acc[2], 0.25]})
+        let gs = 10.0
+        push(quads, {"x": x + w - gs, "y": y + h - gs, "w": gs, "h": gs, "color": [acc[0], acc[1], acc[2], 0.2]})
+        push(quads, {"x": x + w - gs + 2.0, "y": y + h - 1.0, "w": gs - 2.0, "h": 1.0, "color": [acc[0], acc[1], acc[2], 0.4]})
+        push(quads, {"x": x + w - 1.0, "y": y + h - gs + 2.0, "w": 1.0, "h": gs - 2.0, "color": [acc[0], acc[1], acc[2], 0.4]})
 
     return quads
 
@@ -256,14 +259,17 @@ proc build_menu_quads():
     let h = len(items) * item_h + 8.0
     let quads = []
     # Shadow
-    push(quads, {"x": x + 2.0, "y": y + 2.0, "w": w, "h": h, "color": [0.02, 0.02, 0.03, 0.6]})
+    push(quads, {"x": x + 3.0, "y": y + 3.0, "w": w, "h": h, "color": [0.0, 0.0, 0.0, 0.45]})
     # Background
     push(quads, {"x": x, "y": y, "w": w, "h": h, "color": ui_widgets.THEME_HEADER})
+    # Accent top edge
+    let macc = ui_widgets.THEME_ACCENT
+    push(quads, {"x": x, "y": y, "w": w, "h": 1.0, "color": [macc[0], macc[1], macc[2], 0.4]})
     # Border
-    push(quads, {"x": x, "y": y, "w": w, "h": 1.0, "color": [0.04, 0.04, 0.06, 1.0]})
-    push(quads, {"x": x, "y": y + h - 1.0, "w": w, "h": 1.0, "color": [0.04, 0.04, 0.06, 1.0]})
-    push(quads, {"x": x, "y": y, "w": 1.0, "h": h, "color": [0.04, 0.04, 0.06, 1.0]})
-    push(quads, {"x": x + w - 1.0, "y": y, "w": 1.0, "h": h, "color": [0.04, 0.04, 0.06, 1.0]})
+    let mbc = ui_widgets.THEME_BORDER
+    push(quads, {"x": x, "y": y + h - 1.0, "w": w, "h": 1.0, "color": mbc})
+    push(quads, {"x": x, "y": y, "w": 1.0, "h": h, "color": mbc})
+    push(quads, {"x": x + w - 1.0, "y": y, "w": 1.0, "h": h, "color": mbc})
     return quads
 
 proc get_menu_items():

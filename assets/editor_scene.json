@@ -1,0 +1,54 @@
+{
+    "name": "EditorScene",
+    "engine": "Sage Engine",
+    "version": 1,
+    "entities": [
+        {
+            "id": 6,
+            "components": {
+                "health": {
+                    "current": 50,
+                    "max": 50
+                },
+                "name": "PhysCube_6",
+                "rigidbody": {
+                    "mass": 1,
+                    "use_gravity": true,
+                    "is_kinematic": false,
+                    "restitution": 0.3
+                },
+                "transform": {
+                    "position": [
+                        0,
+                        2,
+                        0
+                    ],
+                    "rotation": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "scale": [
+                        1,
+                        1,
+                        1
+                    ]
+                },
+                "mesh_id": {
+                    "mesh_type": "cube"
+                },
+                "collider": {
+                    "type": "aabb",
+                    "half": [
+                        0.5,
+                        0.5,
+                        0.5
+                    ]
+                }
+            },
+            "tags": [
+                "editable"
+            ]
+        }
+    ]
+}

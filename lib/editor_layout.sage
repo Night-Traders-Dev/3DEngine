@@ -15,10 +15,10 @@ let THEME_BORDER = ui_widgets.THEME_BORDER
 let THEME_ACCENT = ui_widgets.THEME_ACCENT
 
 # Depth colors
-let COL_SHADOW = ui_core.rgba(0.03, 0.03, 0.05, 1.0)
-let COL_ACCENT_LINE = ui_core.rgba(THEME_ACCENT[0], THEME_ACCENT[1], THEME_ACCENT[2], 0.35)
-let COL_VP_BORDER = ui_core.rgba(THEME_ACCENT[0], THEME_ACCENT[1], THEME_ACCENT[2], 0.12)
-let COL_INNER = ui_core.rgba(0.08, 0.08, 0.12, 1.0)
+let COL_SHADOW = ui_core.rgba(0.02, 0.02, 0.035, 1.0)
+let COL_ACCENT_LINE = ui_core.rgba(THEME_ACCENT[0], THEME_ACCENT[1], THEME_ACCENT[2], 0.30)
+let COL_VP_BORDER = ui_core.rgba(THEME_ACCENT[0], THEME_ACCENT[1], THEME_ACCENT[2], 0.10)
+let COL_INNER = ui_core.rgba(0.055, 0.059, 0.078, 1.0)
 
 proc create_editor_layout(screen_w, screen_h):
     let layout = {}

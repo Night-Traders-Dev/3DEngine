@@ -40,12 +40,12 @@ void main() {
     // Distance fade
     float fade = 1.0 - smoothstep(fadeStart, fadeEnd, fragDist);
 
-    // Catppuccin Mocha viewport
-    vec3 bgColor = vec3(0.192, 0.196, 0.267);
-    vec3 smallGridColor = vec3(0.24, 0.25, 0.33);
-    vec3 bigGridColor = vec3(0.30, 0.31, 0.40);
-    vec3 xAxisColor = vec3(0.95, 0.27, 0.33);  // Red
-    vec3 zAxisColor = vec3(0.35, 0.43, 0.98);  // Blue
+    // Forge Dark viewport
+    vec3 bgColor = vec3(0.118, 0.122, 0.149);
+    vec3 smallGridColor = vec3(0.16, 0.165, 0.20);
+    vec3 bigGridColor = vec3(0.22, 0.225, 0.28);
+    vec3 xAxisColor = vec3(0.92, 0.33, 0.30);  // Red
+    vec3 zAxisColor = vec3(0.30, 0.45, 0.95);  // Blue
 
     vec3 color = bgColor;
     color = mix(color, smallGridColor, smallGrid * fade);

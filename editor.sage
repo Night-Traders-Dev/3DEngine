@@ -79,7 +79,7 @@ if r == nil:
     raise "Failed to create renderer"
 # Dark gray background (Unreal-style viewport)
 # Viewport is brighter than panels (key design principle from UE5/Blender)
-r["clear_color"] = [0.192, 0.196, 0.267, 1.0]
+r["clear_color"] = [0.118, 0.122, 0.149, 1.0]
 print "GPU: " + gpu.device_name()
 
 # ============================================================================
@@ -340,11 +340,12 @@ while running:
     if left_pressed and window_consumed == false:
         let vp_bounds = get_viewport_bounds(layout)
         let in_vp = mx > vp_bounds["x"] and mx < vp_bounds["x"] + vp_bounds["w"] and my > vp_bounds["y"] and my < vp_bounds["y"] + vp_bounds["h"]
-        let in_outliner = mx < layout["left_panel_w"] and my > 60.0 and my < sh_f - layout["bottom_panel_h"] - layout["statusbar_h"]
+        let oca_click = window_content_area(win_outliner)
+        let in_outliner = win_outliner["visible"] and mx >= oca_click["x"] and mx < oca_click["x"] + oca_click["w"] and my >= oca_click["y"] and my < oca_click["y"] + oca_click["h"]
 
         if in_outliner:
-            # Click in outliner panel — select entity from list
-            let click_idx = math.floor((my - 60.0) / 24.0)
+            # Click in outliner window — select entity from list
+            let click_idx = math.floor((my - oca_click["y"]) / 24.0)
             let all_ents = query(world, ["transform"])
             if click_idx >= 0 and click_idx < len(all_ents):
                 select_entity(editor, all_ents[click_idx])
@@ -539,24 +540,13 @@ while running:
     let mx_b = 130.0
     let mi_b = 0
     while mi_b < 3:
-        let bc = [0.180, 0.180, 0.271, 1.0]
+        let bc = [0.133, 0.145, 0.212, 1.0]
         if cur_mode == modes[mi_b]:
-            bc = [0.537, 0.863, 0.922, 0.8]
+            bc = [0.910, 0.659, 0.298, 0.8]
         push(ui_quads, {"x": mx_b, "y": 4.0, "w": 85.0, "h": 24.0, "color": bc})
         mx_b = mx_b + 90.0
         mi_b = mi_b + 1
-    push(ui_quads, {"x": 0.0, "y": tb_h + 23.0, "w": lw, "h": 1.0, "color": [0.043, 0.043, 0.067, 1.0]})
-    push(ui_quads, {"x": rp_x, "y": tb_h + 23.0, "w": rw, "h": 1.0, "color": [0.043, 0.043, 0.067, 1.0]})
-    let bp_y_s = sh - bp_h - sb_h
-    push(ui_quads, {"x": lw, "y": bp_y_s + 23.0, "w": sw - lw - rw, "h": 1.0, "color": [0.043, 0.043, 0.067, 1.0]})
     let ents = query(world, ["transform"])
-    let ey = tb_h + 28.0
-    let ei = 0
-    while ei < len(ents) and ei < 25:
-        if ents[ei] == cur_sel:
-            push(ui_quads, {"x": 2.0, "y": ey - 1.0, "w": lw - 4.0, "h": 18.0, "color": [0.537, 0.863, 0.922, 0.18]})
-        ey = ey + 24.0
-        ei = ei + 1
     if len(ui_quads) > 0:
         let uv = build_quad_verts(ui_quads)
         gpu.buffer_upload(ui_r["vbuf"], uv)
@@ -571,98 +561,11 @@ while running:
     proc _fn(n):
         return str(math.floor(n * 100.0 + 0.5) / 100.0)
 
-    add_text(font_r, "ui", "FORGE", 10.0, 8.0, 0.537, 0.863, 0.922, 1.0)
+    add_text(font_r, "ui", "FORGE", 10.0, 8.0, 0.910, 0.659, 0.298, 1.0)
     add_text(font_r, "ui", "Move", 143.0, 9.0, 0.9, 0.9, 0.9, 1.0)
     add_text(font_r, "ui", "Rotate", 232.0, 9.0, 0.9, 0.9, 0.9, 1.0)
     add_text(font_r, "ui", "Scale", 324.0, 9.0, 0.9, 0.9, 0.9, 1.0)
     add_text(font_r, "ui", "4=Save  5=Generate Code", 430.0, 10.0, 0.45, 0.45, 0.45, 1.0)
-
-    add_text(font_r, "ui", "Outliner", 8.0, tb_h + 4.0, 0.8, 0.8, 0.8, 1.0)
-    ey = tb_h + 28.0
-    ei = 0
-    while ei < len(ents) and ei < 25:
-        let eid = ents[ei]
-        let ename = "Entity_" + str(eid)
-        if has_component(world, eid, "name"):
-            ename = get_component(world, eid, "name")["name"]
-        if eid == cur_sel:
-            add_text(font_r, "ui", ename, 16.0, ey + 1.0, 1.0, 1.0, 1.0, 1.0)
-        else:
-            add_text(font_r, "ui", ename, 16.0, ey + 2.0, 0.55, 0.55, 0.55, 1.0)
-        ey = ey + 24.0
-        ei = ei + 1
-
-    add_text(font_r, "ui", "Details", rp_x + 8.0, tb_h + 4.0, 0.8, 0.8, 0.8, 1.0)
-    if cur_sel >= 0 and has_component(world, cur_sel, "transform"):
-        let st = get_component(world, cur_sel, "transform")
-        let iy = tb_h + 30.0
-        if has_component(world, cur_sel, "name"):
-            add_text(font_r, "ui", get_component(world, cur_sel, "name")["name"], rp_x + 10.0, iy, 1.0, 1.0, 1.0, 1.0)
-            iy = iy + 28.0
-        add_text(font_r, "ui", "Transform", rp_x + 10.0, iy, 0.537, 0.863, 0.922, 1.0)
-        iy = iy + 26.0
-        add_text(font_r, "ui", "Location", rp_x + 12.0, iy, 0.5, 0.5, 0.5, 1.0)
-        iy = iy + 22.0
-        add_text(font_r, "ui", "X " + _fn(st["position"][0]), rp_x + 14.0, iy, 0.9, 0.3, 0.3, 1.0)
-        add_text(font_r, "ui", "Y " + _fn(st["position"][1]), rp_x + 100.0, iy, 0.3, 0.9, 0.3, 1.0)
-        add_text(font_r, "ui", "Z " + _fn(st["position"][2]), rp_x + 186.0, iy, 0.3, 0.3, 0.9, 1.0)
-        iy = iy + 26.0
-        add_text(font_r, "ui", "Rotation", rp_x + 12.0, iy, 0.5, 0.5, 0.5, 1.0)
-        iy = iy + 22.0
-        add_text(font_r, "ui", "X " + _fn(st["rotation"][0]), rp_x + 14.0, iy, 0.9, 0.3, 0.3, 1.0)
-        add_text(font_r, "ui", "Y " + _fn(st["rotation"][1]), rp_x + 100.0, iy, 0.3, 0.9, 0.3, 1.0)
-        add_text(font_r, "ui", "Z " + _fn(st["rotation"][2]), rp_x + 186.0, iy, 0.3, 0.3, 0.9, 1.0)
-        iy = iy + 26.0
-        add_text(font_r, "ui", "Scale", rp_x + 12.0, iy, 0.5, 0.5, 0.5, 1.0)
-        iy = iy + 22.0
-        add_text(font_r, "ui", "X " + _fn(st["scale"][0]), rp_x + 14.0, iy, 0.9, 0.3, 0.3, 1.0)
-        add_text(font_r, "ui", "Y " + _fn(st["scale"][1]), rp_x + 100.0, iy, 0.3, 0.9, 0.3, 1.0)
-        add_text(font_r, "ui", "Z " + _fn(st["scale"][2]), rp_x + 186.0, iy, 0.3, 0.3, 0.9, 1.0)
-        iy = iy + 28.0
-        # Physics info
-        if has_component(world, cur_sel, "rigidbody"):
-            let rb = get_component(world, cur_sel, "rigidbody")
-            add_text(font_r, "ui", "Physics", rp_x + 10.0, iy, 0.537, 0.863, 0.922, 1.0)
-            iy = iy + 22.0
-            if rb["is_kinematic"]:
-                add_text(font_r, "ui", "Static Body", rp_x + 14.0, iy, 0.5, 0.5, 0.5, 1.0)
-            else:
-                add_text(font_r, "ui", "Mass: " + _fn(rb["mass"]) + "  Bounce: " + _fn(rb["restitution"]), rp_x + 14.0, iy, 0.5, 0.5, 0.5, 1.0)
-            iy = iy + 18.0
-        if has_component(world, cur_sel, "health"):
-            let hp = get_component(world, cur_sel, "health")
-            add_text(font_r, "ui", "Health: " + _fn(hp["current"]) + " / " + _fn(hp["max"]), rp_x + 14.0, iy, 0.3, 0.9, 0.3, 1.0)
-            iy = iy + 22.0
-        # Material info (if imported asset)
-        if has_component(world, cur_sel, "imported_asset"):
-            let ia = get_component(world, cur_sel, "imported_asset")
-            add_text(font_r, "ui", "Material", rp_x + 10.0, iy, 0.537, 0.863, 0.922, 1.0)
-            iy = iy + 22.0
-            if len(ia["materials"]) > 0:
-                let mat = ia["materials"][0]
-                add_text(font_r, "ui", mat["name"], rp_x + 14.0, iy, 0.7, 0.7, 0.7, 1.0)
-                iy = iy + 18.0
-                add_text(font_r, "ui", "Metallic: " + _fn(mat["metallic"]), rp_x + 14.0, iy, 0.5, 0.5, 0.5, 1.0)
-                iy = iy + 16.0
-                add_text(font_r, "ui", "Roughness: " + _fn(mat["roughness"]), rp_x + 14.0, iy, 0.5, 0.5, 0.5, 1.0)
-    else:
-        add_text(font_r, "ui", "Select an entity to view details", rp_x + 10.0, tb_h + 34.0, 0.4, 0.4, 0.4, 1.0)
-
-    let bp_y = sh - bp_h - sb_h
-    add_text(font_r, "ui", "Content Browser", lw + 8.0, bp_y + 4.0, 0.75, 0.75, 0.8, 1.0)
-    add_text(font_r, "ui", "R=Cube  F=Sphere  E=Model  D=Del  Q=Dup  TAB=Physics  ENTER=Play", lw + 10.0, bp_y + 28.0, 0.38, 0.38, 0.42, 1.0)
-    add_text(font_r, "ui", "LClick=Select  RMB=Orbit  MMB=Pan  Scroll=Zoom  4=Save  5=Code", lw + 10.0, bp_y + 48.0, 0.38, 0.38, 0.42, 1.0)
-    # Show imported models
-    let model_names = dict_keys(imported_models)
-    if len(model_names) > 0:
-        let model_str = "Imported: "
-        let mn = 0
-        while mn < len(model_names):
-            if mn > 0:
-                model_str = model_str + ", "
-            model_str = model_str + model_names[mn]
-            mn = mn + 1
-        add_text(font_r, "ui", model_str, lw + 10.0, bp_y + 68.0, 0.580, 0.886, 0.835, 1.0)
 
     let stats = editor_stats(editor)
     let status = str(stats["entities"]) + " entities  " + str(draw_count) + " drawn  " + stats["mode"]
@@ -681,6 +584,16 @@ while running:
         let wq = build_window_quads(sorted_wins[wi])
         array_extend(all_win_quads, wq)
         wi = wi + 1
+    # Selection highlight in outliner window
+    if win_outliner["visible"] and win_outliner["collapsed"] == false:
+        let oca_h = window_content_area(win_outliner)
+        let hey = oca_h["y"]
+        let hei = 0
+        while hei < len(ents) and hei < 25:
+            if ents[hei] == cur_sel:
+                push(all_win_quads, {"x": oca_h["x"], "y": hey - 1.0, "w": oca_h["w"], "h": 20.0, "color": [0.910, 0.659, 0.298, 0.15]})
+            hey = hey + 24.0
+            hei = hei + 1
     # Add menu quads if open
     if is_menu_open():
         let mq = build_menu_quads()
@@ -693,15 +606,105 @@ while running:
         gpu.cmd_bind_vertex_buffer(cmd, ui_r["vbuf"])
         gpu.cmd_draw(cmd, len(all_win_quads) * 6, 1, 0, 0)
 
-    # Floating window title text
+    # Floating window title + content text
     begin_text(font_r)
     wi = 0
     while wi < len(sorted_wins):
         let fw = sorted_wins[wi]
         if fw["visible"]:
-            add_text(font_r, "ui", fw["title"], fw["x"] + 8.0, fw["y"] + 4.0, 0.8, 0.84, 0.96, 1.0)
-            # Window content text (generated above — outliner/details/content are still in the fixed layout text)
+            add_text(font_r, "ui", fw["title"], fw["x"] + 8.0, fw["y"] + 4.0, 0.910, 0.659, 0.298, 1.0)
         wi = wi + 1
+
+    # --- Outliner content ---
+    if win_outliner["visible"] and win_outliner["collapsed"] == false:
+        let oca = window_content_area(win_outliner)
+        let oy = oca["y"]
+        let oei = 0
+        while oei < len(ents) and oei < 25:
+            let eid = ents[oei]
+            let ename = "Entity_" + str(eid)
+            if has_component(world, eid, "name"):
+                ename = get_component(world, eid, "name")["name"]
+            if eid == cur_sel:
+                add_text(font_r, "ui", ename, oca["x"] + 6.0, oy, 1.0, 1.0, 1.0, 1.0)
+            else:
+                add_text(font_r, "ui", ename, oca["x"] + 6.0, oy, 0.55, 0.55, 0.55, 1.0)
+            oy = oy + 24.0
+            oei = oei + 1
+
+    # --- Details content ---
+    if win_details["visible"] and win_details["collapsed"] == false:
+        let dca = window_content_area(win_details)
+        let dx = dca["x"]
+        let dy = dca["y"]
+        if cur_sel >= 0 and has_component(world, cur_sel, "transform"):
+            let st = get_component(world, cur_sel, "transform")
+            let iy = dy
+            if has_component(world, cur_sel, "name"):
+                add_text(font_r, "ui", get_component(world, cur_sel, "name")["name"], dx + 4.0, iy, 1.0, 1.0, 1.0, 1.0)
+                iy = iy + 28.0
+            add_text(font_r, "ui", "Transform", dx + 4.0, iy, 0.910, 0.659, 0.298, 1.0)
+            iy = iy + 26.0
+            add_text(font_r, "ui", "Location", dx + 6.0, iy, 0.5, 0.5, 0.5, 1.0)
+            iy = iy + 22.0
+            add_text(font_r, "ui", "X " + _fn(st["position"][0]), dx + 8.0, iy, 0.9, 0.3, 0.3, 1.0)
+            add_text(font_r, "ui", "Y " + _fn(st["position"][1]), dx + 86.0, iy, 0.3, 0.9, 0.3, 1.0)
+            add_text(font_r, "ui", "Z " + _fn(st["position"][2]), dx + 164.0, iy, 0.3, 0.3, 0.9, 1.0)
+            iy = iy + 26.0
+            add_text(font_r, "ui", "Rotation", dx + 6.0, iy, 0.5, 0.5, 0.5, 1.0)
+            iy = iy + 22.0
+            add_text(font_r, "ui", "X " + _fn(st["rotation"][0]), dx + 8.0, iy, 0.9, 0.3, 0.3, 1.0)
+            add_text(font_r, "ui", "Y " + _fn(st["rotation"][1]), dx + 86.0, iy, 0.3, 0.9, 0.3, 1.0)
+            add_text(font_r, "ui", "Z " + _fn(st["rotation"][2]), dx + 164.0, iy, 0.3, 0.3, 0.9, 1.0)
+            iy = iy + 26.0
+            add_text(font_r, "ui", "Scale", dx + 6.0, iy, 0.5, 0.5, 0.5, 1.0)
+            iy = iy + 22.0
+            add_text(font_r, "ui", "X " + _fn(st["scale"][0]), dx + 8.0, iy, 0.9, 0.3, 0.3, 1.0)
+            add_text(font_r, "ui", "Y " + _fn(st["scale"][1]), dx + 86.0, iy, 0.3, 0.9, 0.3, 1.0)
+            add_text(font_r, "ui", "Z " + _fn(st["scale"][2]), dx + 164.0, iy, 0.3, 0.3, 0.9, 1.0)
+            iy = iy + 28.0
+            if has_component(world, cur_sel, "rigidbody"):
+                let rb = get_component(world, cur_sel, "rigidbody")
+                add_text(font_r, "ui", "Physics", dx + 4.0, iy, 0.910, 0.659, 0.298, 1.0)
+                iy = iy + 22.0
+                if rb["is_kinematic"]:
+                    add_text(font_r, "ui", "Static Body", dx + 8.0, iy, 0.5, 0.5, 0.5, 1.0)
+                else:
+                    add_text(font_r, "ui", "Mass: " + _fn(rb["mass"]) + "  Bounce: " + _fn(rb["restitution"]), dx + 8.0, iy, 0.5, 0.5, 0.5, 1.0)
+                iy = iy + 18.0
+            if has_component(world, cur_sel, "health"):
+                let hp = get_component(world, cur_sel, "health")
+                add_text(font_r, "ui", "Health: " + _fn(hp["current"]) + " / " + _fn(hp["max"]), dx + 8.0, iy, 0.3, 0.9, 0.3, 1.0)
+                iy = iy + 22.0
+            if has_component(world, cur_sel, "imported_asset"):
+                let ia = get_component(world, cur_sel, "imported_asset")
+                add_text(font_r, "ui", "Material", dx + 4.0, iy, 0.910, 0.659, 0.298, 1.0)
+                iy = iy + 22.0
+                if len(ia["materials"]) > 0:
+                    let mat = ia["materials"][0]
+                    add_text(font_r, "ui", mat["name"], dx + 8.0, iy, 0.7, 0.7, 0.7, 1.0)
+                    iy = iy + 18.0
+                    add_text(font_r, "ui", "Metallic: " + _fn(mat["metallic"]), dx + 8.0, iy, 0.5, 0.5, 0.5, 1.0)
+                    iy = iy + 16.0
+                    add_text(font_r, "ui", "Roughness: " + _fn(mat["roughness"]), dx + 8.0, iy, 0.5, 0.5, 0.5, 1.0)
+        else:
+            add_text(font_r, "ui", "Select an entity to view details", dx + 4.0, dy + 4.0, 0.4, 0.4, 0.4, 1.0)
+
+    # --- Content Browser content ---
+    if win_content["visible"] and win_content["collapsed"] == false:
+        let cca = window_content_area(win_content)
+        add_text(font_r, "ui", "R=Cube  F=Sphere  E=Model  D=Del  Q=Dup  TAB=Physics  ENTER=Play", cca["x"] + 4.0, cca["y"] + 4.0, 0.38, 0.38, 0.42, 1.0)
+        add_text(font_r, "ui", "LClick=Select  RMB=Orbit  MMB=Pan  Scroll=Zoom  4=Save  5=Code", cca["x"] + 4.0, cca["y"] + 24.0, 0.38, 0.38, 0.42, 1.0)
+        let model_names = dict_keys(imported_models)
+        if len(model_names) > 0:
+            let model_str = "Imported: "
+            let mn = 0
+            while mn < len(model_names):
+                if mn > 0:
+                    model_str = model_str + ", "
+                model_str = model_str + model_names[mn]
+                mn = mn + 1
+            add_text(font_r, "ui", model_str, cca["x"] + 4.0, cca["y"] + 44.0, 0.306, 0.804, 0.769, 1.0)
     # Menu item text
     if is_menu_open():
         let mitems = get_menu_items()

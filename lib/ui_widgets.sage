@@ -9,26 +9,26 @@ from ui_core import create_widget, create_panel, create_rect, create_label
 from ui_core import add_child
 
 # ============================================================================
-# Color theme (Unreal-style dark)
-# Use ui_core.rgba to avoid from-import nil bug with let variables
+# Color theme — Forge Dark
+# Deep navy-slate base with amber/gold accent (evoking forge fire/metal)
+# Unique identity: no major engine uses amber as primary accent
 # ============================================================================
-# Catppuccin-inspired dark theme — near-black panels, bright viewport
-# Panels: #11111B -> #1E1E2E -> #24243A
-# Viewport: brighter #313244 so it pops against dark panels
-# Accent: teal/cyan #89DCEB or #94E2D5
-let THEME_BG = ui_core.rgba(0.067, 0.067, 0.106, 1.0)
-let THEME_PANEL = ui_core.rgba(0.118, 0.118, 0.180, 1.0)
-let THEME_HEADER = ui_core.rgba(0.141, 0.141, 0.227, 1.0)
-let THEME_BUTTON = ui_core.rgba(0.180, 0.180, 0.271, 1.0)
-let THEME_BUTTON_HOVER = ui_core.rgba(0.220, 0.220, 0.318, 1.0)
-let THEME_ACCENT = ui_core.rgba(0.537, 0.863, 0.922, 1.0)
-let THEME_ACCENT_HOVER = ui_core.rgba(0.580, 0.886, 0.835, 1.0)
-let THEME_TEXT = ui_core.rgba(0.804, 0.839, 0.957, 1.0)
-let THEME_TEXT_DIM = ui_core.rgba(0.427, 0.443, 0.545, 1.0)
-let THEME_BORDER = ui_core.rgba(0.043, 0.043, 0.067, 1.0)
-let THEME_INPUT_BG = ui_core.rgba(0.075, 0.075, 0.118, 1.0)
-let THEME_SELECT = ui_core.rgba(0.537, 0.863, 0.922, 0.20)
-let THEME_SEPARATOR = ui_core.rgba(0.180, 0.180, 0.271, 1.0)
+# Base:    #0D0E12 → #161821 → #1C1E2A → #222536
+# Accent:  #E8A84C (amber gold)  Secondary: #4ECDC4 (teal)
+# Text:    #E8E6E3 (warm white)  Dim: #6E7082
+let THEME_BG = ui_core.rgba(0.051, 0.055, 0.071, 1.0)
+let THEME_PANEL = ui_core.rgba(0.086, 0.094, 0.129, 1.0)
+let THEME_HEADER = ui_core.rgba(0.110, 0.118, 0.165, 1.0)
+let THEME_BUTTON = ui_core.rgba(0.133, 0.145, 0.212, 1.0)
+let THEME_BUTTON_HOVER = ui_core.rgba(0.165, 0.180, 0.263, 1.0)
+let THEME_ACCENT = ui_core.rgba(0.910, 0.659, 0.298, 1.0)
+let THEME_ACCENT_HOVER = ui_core.rgba(0.306, 0.804, 0.769, 1.0)
+let THEME_TEXT = ui_core.rgba(0.910, 0.902, 0.890, 1.0)
+let THEME_TEXT_DIM = ui_core.rgba(0.431, 0.439, 0.510, 1.0)
+let THEME_BORDER = ui_core.rgba(0.063, 0.067, 0.094, 1.0)
+let THEME_INPUT_BG = ui_core.rgba(0.059, 0.063, 0.086, 1.0)
+let THEME_SELECT = ui_core.rgba(0.910, 0.659, 0.298, 0.15)
+let THEME_SEPARATOR = ui_core.rgba(0.133, 0.145, 0.212, 1.0)
 
 # ============================================================================
 # Toolbar button
