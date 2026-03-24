@@ -383,6 +383,70 @@ proc register_deserializer(comp_type, deserialize_fn):
     _deserializers[comp_type] = deserialize_fn
 
 # ============================================================================
+# Prefab system — save/load entity templates
+# ============================================================================
+proc save_prefab(world, entity_id, name, filepath):
+    # Serialize a single entity and all its components to a JSON file
+    # Reuse the existing serializer infrastructure
+    from json import cJSON_CreateObject, cJSON_AddStringToObject, cJSON_AddItemToObject, cJSON_Print
+    from ecs import get_component, has_component
+    let prefab = cJSON_CreateObject()
+    cJSON_AddStringToObject(prefab, "name", name)
+    cJSON_AddStringToObject(prefab, "type", "prefab")
+    let comps = cJSON_CreateObject()
+    # Iterate known component types
+    let comp_types = dict_keys(_serializers)
+    let ci = 0
+    while ci < len(comp_types):
+        let ct = comp_types[ci]
+        if has_component(world, entity_id, ct):
+            let comp = get_component(world, entity_id, ct)
+            let serialized = _serializers[ct](comp)
+            cJSON_AddItemToObject(comps, ct, serialized)
+        ci = ci + 1
+    cJSON_AddItemToObject(prefab, "components", comps)
+    let json_str = cJSON_Print(prefab)
+    io.writefile(filepath, json_str)
+    return true
+
+proc load_prefab(world, filepath):
+    # Load a prefab from JSON and spawn a new entity with all components
+    if io.exists(filepath) == false:
+        return -1
+    let json_str = io.readfile(filepath)
+    from json import cJSON_Parse, cJSON_GetObjectItem, cJSON_GetStringValue
+    let root = cJSON_Parse(json_str)
+    if root == nil:
+        return -1
+    let comps_node = cJSON_GetObjectItem(root, "components")
+    if comps_node == nil:
+        return -1
+    from ecs import spawn, add_component, add_tag
+    let eid = spawn(world)
+    add_tag(world, eid, "editable")
+    let comp_types = dict_keys(_deserializers)
+    let ci = 0
+    while ci < len(comp_types):
+        let ct = comp_types[ci]
+        let comp_node = cJSON_GetObjectItem(comps_node, ct)
+        if comp_node != nil:
+            let comp = _deserializers[ct](comp_node)
+            add_component(world, eid, ct, comp)
+        ci = ci + 1
+    return eid
+
+proc list_prefabs(directory):
+    # Scan a directory for .prefab.json files
+    let files = io.listdir(directory)
+    let prefabs = []
+    let i = 0
+    while i < len(files):
+        if endswith(files[i], ".prefab.json"):
+            push(prefabs, files[i])
+        i = i + 1
+    return prefabs
+
+# ============================================================================
 # Load scene from JSON string
 # ============================================================================
 proc load_scene_string(json_str):

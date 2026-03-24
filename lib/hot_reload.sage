@@ -145,3 +145,49 @@ proc reload_stats(hrm):
     s["reload_count"] = hrm["reload_count"]
     s["enabled"] = hrm["enabled"]
     return s
+
+proc watch_asset_directory(hr, directory, on_change):
+    # Store directory watch info
+    if dict_has(hr, "watches") == false:
+        hr["watches"] = []
+    let watch = {"directory": directory, "callback": on_change, "last_scan": {}}
+    # Initial scan
+    let files = io.listdir(directory)
+    let i = 0
+    while i < len(files):
+        let path = directory + "/" + files[i]
+        if io.exists(path) and io.isdir(path) == false:
+            watch["last_scan"][files[i]] = io.filesize(path)
+        i = i + 1
+    push(hr["watches"], watch)
+
+proc check_asset_changes(hr):
+    # Check all watched directories for changes
+    if dict_has(hr, "watches") == false:
+        return []
+    let changes = []
+    let wi = 0
+    while wi < len(hr["watches"]):
+        let watch = hr["watches"][wi]
+        let dir = watch["directory"]
+        let files = io.listdir(dir)
+        let fi = 0
+        while fi < len(files):
+            let fname = files[fi]
+            let path = dir + "/" + fname
+            if io.exists(path) and io.isdir(path) == false:
+                let size = io.filesize(path)
+                if dict_has(watch["last_scan"], fname):
+                    if watch["last_scan"][fname] != size:
+                        push(changes, {"file": fname, "path": path, "type": "modified"})
+                        watch["last_scan"][fname] = size
+                        if watch["callback"] != nil:
+                            watch["callback"](fname, path, "modified")
+                else:
+                    push(changes, {"file": fname, "path": path, "type": "added"})
+                    watch["last_scan"][fname] = size
+                    if watch["callback"] != nil:
+                        watch["callback"](fname, path, "added")
+            fi = fi + 1
+        wi = wi + 1
+    return changes

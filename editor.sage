@@ -72,6 +72,7 @@ from gameplay import HealthComponent
 import sys
 from game_loop import create_time_state, update_time
 from frustum import extract_frustum_planes, aabb_in_frustum
+from shadow_map import create_shadow_renderer, compute_light_vp
 from post_fx import create_postfx, pfx_cinematic, build_vignette_quads
 from lod import create_lod_config, compute_lod
 from asset_import import import_gltf, scan_importable_assets
@@ -125,6 +126,13 @@ editor_postfx["vignette_softness"] = 0.4
 
 # LOD configuration (distances for mesh detail levels)
 let editor_lod = create_lod_config([30.0, 80.0, 200.0, 500.0, 1000.0])
+
+# Shadow map (2048x2048 resolution)
+let shadow_renderer = create_shadow_renderer(2048)
+if shadow_renderer != nil:
+    let shadow_light_vp = compute_light_vp(vec3(-0.3, -0.8, -0.5), vec3(0.0, 0.0, 0.0), 50.0)
+    shadow_renderer["light_vp"] = shadow_light_vp
+    print "Shadow map initialized (2048x2048)"
 
 # ============================================================================
 # Meshes

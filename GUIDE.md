@@ -491,13 +491,40 @@ connect_to_server(cl, "localhost", 7777, "Player1")
 
 ```python
 from scene_serial import save_scene, load_scene
+from scene_serial import save_prefab, load_prefab, list_prefabs
 
-# Save
+# Save scene
 save_scene(world, "MyScene", "assets/my_scene.json")
 
-# Load
+# Load scene
 let result = load_scene("assets/my_scene.json")
 let loaded_world = result["world"]
+
+# Prefabs — save/load entity templates
+save_prefab(world, entity_id, "EnemyTank", "assets/prefabs/tank.prefab.json")
+let new_eid = load_prefab(world, "assets/prefabs/tank.prefab.json")
+let prefab_list = list_prefabs("assets/prefabs")
+```
+
+### Material Presets
+
+```python
+from material import create_material_preset, get_material_presets
+
+# Available: Metal, Wood, Concrete, Glass, Plastic, Gold, Rubber, Emissive
+let mat = create_material_preset("Gold")
+add_component(world, eid, "material", mat)
+```
+
+### Level Streaming
+
+```python
+from scene import create_level_manager, request_level_load, process_level_queue
+
+let lm = create_level_manager()
+request_level_load(lm, "dungeon_1", "assets/levels/dungeon_1.json")
+# Call each frame:
+process_level_queue(lm, world)
 ```
 
 ---

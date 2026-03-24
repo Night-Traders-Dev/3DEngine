@@ -180,3 +180,44 @@ proc rebuild_browser_ui(ab):
         y_off = y_off + 18.0
         i = i + 1
     ab["panel"]["height"] = y_off + 10.0
+
+proc search_assets(browser, query):
+    # Filter assets by name containing query string
+    let results = []
+    let all = browser["entries"]
+    let i = 0
+    while i < len(all):
+        if contains(lower(all[i]["name"]), lower(query)):
+            push(results, all[i])
+        i = i + 1
+    return results
+
+proc get_asset_by_name(browser, name):
+    let all = browser["entries"]
+    let i = 0
+    while i < len(all):
+        if all[i]["name"] == name:
+            return all[i]
+        i = i + 1
+    return nil
+
+proc add_custom_asset(browser, name, category, data):
+    let asset = {}
+    asset["name"] = name
+    asset["category"] = category
+    asset["data"] = data
+    asset["custom"] = true
+    push(browser["entries"], asset)
+    return asset
+
+proc get_asset_categories(browser):
+    let cats = {}
+    let all = browser["entries"]
+    let i = 0
+    while i < len(all):
+        let cat = all[i]["type"]
+        if dict_has(cats, cat) == false:
+            cats[cat] = 0
+        cats[cat] = cats[cat] + 1
+        i = i + 1
+    return cats

@@ -89,3 +89,87 @@ proc pbr_material(vert_path, frag_path, push_size):
     b0["stage"] = gpu.STAGE_FRAGMENT
     b0["count"] = 1
     return create_material(vert_path, frag_path, [b0], push_size)
+
+# ============================================================================
+# Material presets library
+# ============================================================================
+proc mat_preset_metal():
+    from components import MaterialComponent
+    let m = MaterialComponent(0.8, 0.8, 0.85)
+    m["metallic"] = 0.95
+    m["roughness"] = 0.15
+    return m
+
+proc mat_preset_wood():
+    from components import MaterialComponent
+    let m = MaterialComponent(0.55, 0.35, 0.18)
+    m["metallic"] = 0.0
+    m["roughness"] = 0.7
+    return m
+
+proc mat_preset_concrete():
+    from components import MaterialComponent
+    let m = MaterialComponent(0.6, 0.58, 0.55)
+    m["metallic"] = 0.0
+    m["roughness"] = 0.9
+    return m
+
+proc mat_preset_glass():
+    from components import MaterialComponent
+    let m = MaterialComponent(0.95, 0.95, 0.98)
+    m["metallic"] = 0.0
+    m["roughness"] = 0.05
+    m["alpha"] = 0.3
+    return m
+
+proc mat_preset_plastic():
+    from components import MaterialComponent
+    let m = MaterialComponent(0.8, 0.2, 0.2)
+    m["metallic"] = 0.0
+    m["roughness"] = 0.4
+    return m
+
+proc mat_preset_gold():
+    from components import MaterialComponent
+    let m = MaterialComponent(1.0, 0.84, 0.0)
+    m["metallic"] = 1.0
+    m["roughness"] = 0.2
+    return m
+
+proc mat_preset_rubber():
+    from components import MaterialComponent
+    let m = MaterialComponent(0.15, 0.15, 0.15)
+    m["metallic"] = 0.0
+    m["roughness"] = 0.95
+    return m
+
+proc mat_preset_emissive(r, g, b, strength):
+    from components import MaterialComponent
+    let m = MaterialComponent(r, g, b)
+    m["metallic"] = 0.0
+    m["roughness"] = 0.5
+    m["emission"] = [r, g, b]
+    m["emission_strength"] = strength
+    return m
+
+proc get_material_presets():
+    return ["Metal", "Wood", "Concrete", "Glass", "Plastic", "Gold", "Rubber", "Emissive"]
+
+proc create_material_preset(name):
+    if name == "Metal":
+        return mat_preset_metal()
+    if name == "Wood":
+        return mat_preset_wood()
+    if name == "Concrete":
+        return mat_preset_concrete()
+    if name == "Glass":
+        return mat_preset_glass()
+    if name == "Plastic":
+        return mat_preset_plastic()
+    if name == "Gold":
+        return mat_preset_gold()
+    if name == "Rubber":
+        return mat_preset_rubber()
+    if name == "Emissive":
+        return mat_preset_emissive(1.0, 0.5, 0.0, 2.0)
+    return nil

@@ -98,25 +98,25 @@ forge-engine/
 `renderer` · `render_system` · `lighting` (16 dynamic lights, fog) · `sky` (procedural, presets) · `pbr_material` (Cook-Torrance BRDF) · `textures` (PNG/JPG) · `shadow_map` (PCF) · `frustum` (culling) · `editor_grid` · `post_fx` (vignette, color grading) · `postprocess` (bloom, tone mapping)
 
 ### Physics
-`collision` (AABB/sphere/ray/capsule) · `physics` (rigidbody, gravity, restitution) · `spatial_grid` (broadphase)
+`collision` (AABB/sphere/ray/capsule, **collision callbacks/events**) · `physics` (rigidbody, gravity, restitution, **fixed/distance/hinge constraints**) · `spatial_grid` (broadphase)
 
 ### Gameplay
-`player_controller` (FPS) · `gameplay` (health, timers, state machines, scoring)
+`player_controller` (FPS, **ground check, step climbing, slope limits**) · `gameplay` (health, timers, state machines, scoring, spawners)
 
 ### Content
-`asset_manager` · `scene_serial` (JSON save/load) · `asset_import` (glTF 2.0 via cgltf) · `audio` (OpenAL FFI) · `hot_reload` · `codegen` (full game script generation)
+`asset_manager` · `scene_serial` (JSON save/load, **prefab save/load**) · `asset_import` (glTF 2.0 via cgltf) · `asset_browser` (**search, custom assets**) · `audio` (OpenAL FFI) · `hot_reload` (**directory watching**) · `codegen` (full game script generation) · `material` (**8 PBR presets**: metal, wood, glass, gold, etc.)
 
 ### Animation & AI
-`tween` (18 easings) · `animation` (skeletal, blend trees, state machine) · `navigation` (A* pathfinding) · `behavior_tree`
+`tween` (18 easings) · `animation` (skeletal, blend trees, state machine, **IK solver, animation events**) · `navigation` (A* pathfinding, steering behaviors) · `behavior_tree` (sequence/selector/inverter/repeater)
 
 ### UI
 `ui_core` (widget hierarchy, anchoring, hit testing) · `ui_renderer` (batched quads) · `ui_widgets` (buttons, sliders, checkboxes, dropdowns, **text input fields**, number fields, tree views, scroll panels) · `ui_window` (floating windows, menus, **modal dialogs**, snap-to-edge) · `font` (TrueType via stb_truetype) · `hud` · `menu`
 
 ### World
-`terrain` (heightmap + noise) · `water` (animated waves) · `foliage` (scatter) · `day_night` (sun cycle)
+`terrain` (heightmap + noise) · `water` (animated waves) · `foliage` (scatter) · `day_night` (sun cycle) · `scene` (scene graph, **level streaming**)
 
-### VFX
-`particles` (CPU pool) · `vfx_presets` (fire/smoke/sparks/rain/magic) · `particle_renderer` · `post_fx`
+### VFX & Post-Processing
+`particles` (CPU pool) · `vfx_presets` (fire/smoke/sparks/rain/magic) · `particle_renderer` · `post_fx` (vignette, color grading, fade) · `postprocess` (**bloom extract/blur/composite, tone mapping: Reinhard/ACES/Uncharted2, fullscreen pass infrastructure**)
 
 ### Networking
 `net_protocol` · `net_server` · `net_client` · `net_replication` · `lobby`
@@ -140,7 +140,7 @@ forge-engine/
 ## Testing
 
 ```bash
-./tests/run_all.sh            # 47 suites, 1,299 checks
+./tests/run_all.sh            # 47 suites, 1,343 checks
 ./run.sh tests/test_ecs.sage  # Individual suite
 ```
 
@@ -156,11 +156,29 @@ Forge Engine includes improvements to the SageLang interpreter and GPU module:
 - **glTF import** — cgltf integration for model/material/animation loading
 - **Extended key constants** — KEY_Z, KEY_Y, KEY_BACKSPACE, KEY_DELETE, KEY_F1, etc.
 
+## Shaders
+
+21 shader pairs (GLSL source + compiled SPIR-V):
+
+| Shader | Purpose |
+|--------|---------|
+| engine_lit | Blinn-Phong forward lighting (16 lights, fog, gamma) |
+| engine_pbr | Cook-Torrance PBR (metallic-roughness, normal mapping) |
+| engine_sky | Procedural sky dome with sun disc |
+| engine_grid | Infinite editor grid with axis colors |
+| engine_shadow_depth | Depth-only shadow map pass |
+| engine_bloom_extract | Bright pixel extraction for bloom |
+| engine_bloom_blur | 9-tap separable Gaussian blur |
+| engine_tonemap | HDR tone mapping (Reinhard/ACES/Uncharted2) + bloom composite |
+| engine_ssao | Screen-space ambient occlusion |
+| engine_fullscreen | Vertex-bufferless fullscreen triangle |
+| engine_ui / engine_ui_text | 2D UI quads and TrueType text |
+
 ## Known Issues
 
 - Audio requires OpenAL; gracefully degrades if absent
-- No MSAA yet (planned for next release)
-- Deferred rendering pipeline and SSAO are stub implementations
+- No MSAA yet (pipeline hardcoded to 1x sample)
+- Deferred G-buffer fill pass not yet wired (infrastructure ready)
 - Networking is TCP-only (UDP planned)
 
 ## License

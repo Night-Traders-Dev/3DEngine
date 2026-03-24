@@ -72,3 +72,38 @@ proc tonemap_params(pp):
     push(params, pp["bloom_threshold"])
     push(params, pp["tonemap_mode"])
     return params
+
+# ============================================================================
+# Fullscreen pass infrastructure
+# ============================================================================
+proc create_fullscreen_pipeline(render_pass, desc_layout, push_size, frag_shader_path):
+    let vert = gpu.load_shader("shaders/engine_fullscreen.vert.spv", gpu.STAGE_VERTEX)
+    let frag = gpu.load_shader(frag_shader_path, gpu.STAGE_FRAGMENT)
+    if vert < 0 or frag < 0:
+        print "ERROR: Failed to load fullscreen shaders: " + frag_shader_path
+        return nil
+    let pipe_layout = gpu.create_pipeline_layout([desc_layout], push_size, gpu.STAGE_ALL)
+    let cfg = {}
+    cfg["layout"] = pipe_layout
+    cfg["render_pass"] = render_pass
+    cfg["vertex_shader"] = vert
+    cfg["fragment_shader"] = frag
+    cfg["topology"] = gpu.TOPO_TRIANGLE_LIST
+    cfg["cull_mode"] = gpu.CULL_NONE
+    cfg["depth_test"] = false
+    cfg["depth_write"] = false
+    let pipeline = gpu.create_graphics_pipeline(cfg)
+    if pipeline < 0:
+        print "ERROR: Failed to create fullscreen pipeline"
+        return nil
+    let result = {}
+    result["pipeline"] = pipeline
+    result["pipe_layout"] = pipe_layout
+    return result
+
+proc draw_fullscreen(cmd, fp, push_data, desc_set):
+    gpu.cmd_bind_graphics_pipeline(cmd, fp["pipeline"])
+    gpu.cmd_push_constants(cmd, fp["pipe_layout"], gpu.STAGE_ALL, push_data)
+    if desc_set >= 0:
+        gpu.cmd_bind_descriptor_set(cmd, fp["pipe_layout"], 0, desc_set, 0)
+    gpu.cmd_draw(cmd, 3, 1, 0, 0)
