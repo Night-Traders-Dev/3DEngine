@@ -208,8 +208,20 @@ print ""
 while running:
     update_time(ts)
     let dt = ts["dt"]
-    if check_resize(r):
-        resize_editor_layout(layout, r["width"] + 0.0, r["height"] + 0.0)
+
+    # Poll events FIRST, then handle resize, then input
+    gpu.poll_events()
+    if gpu.window_should_close():
+        running = false
+        continue
+    # Handle resize after events are processed
+    check_resize(r)
+    let cur_w = r["width"] + 0.0
+    let cur_h = r["height"] + 0.0
+    if cur_w < 1.0 or cur_h < 1.0:
+        continue
+    if cur_w != layout["screen_w"] or cur_h != layout["screen_h"]:
+        resize_editor_layout(layout, cur_w, cur_h)
     gpu.update_input()
     update_input(inp)
 
@@ -363,11 +375,12 @@ while running:
     update_light_ubo(ls)
 
     # --- Render ---
+    if gpu.window_should_close():
+        running = false
+        continue
     let frame = begin_frame(r)
     if frame == nil:
-        # Frame failed (resize in progress) - skip but don't quit
-        if gpu.window_should_close():
-            running = false
+        # Frame failed (resize/minimize) - skip but don't quit
         continue
     let cmd = frame["cmd"]
 
@@ -558,6 +571,9 @@ while running:
     end_frame(r, frame)
     update_title_fps(r, "Forge Engine Editor")
 
-gpu.device_wait_idle()
-shutdown_renderer(r)
+try:
+    gpu.device_wait_idle()
+    shutdown_renderer(r)
+catch e:
+    print "Shutdown warning: " + str(e)
 print "Editor closed"

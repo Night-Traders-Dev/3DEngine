@@ -92,7 +92,14 @@ proc begin_frame(r):
 
     let img_idx = gpu.acquire_next_image(r["img_sems"][cf])
     if img_idx < 0:
-        return nil
+        # Swapchain out of date (resize happened) - recreate and retry
+        check_resize(r)
+        # Re-wait the fence since we reset it
+        gpu.wait_fence(r["fences"][cf])
+        gpu.reset_fence(r["fences"][cf])
+        img_idx = gpu.acquire_next_image(r["img_sems"][cf])
+        if img_idx < 0:
+            return nil
 
     let cmd = r["cmd_bufs"][img_idx]
     let t = clock() - r["start_time"]
