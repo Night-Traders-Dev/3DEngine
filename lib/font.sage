@@ -118,29 +118,48 @@ proc load_font(fr, name, ttf_path, pixel_size):
     return font
 
 # ============================================================================
-# Draw text using loaded font
+# Batched text rendering (all text in one draw call)
 # ============================================================================
-proc draw_text(fr, cmd, font_name, text, x, y, r, g, b, a, screen_w, screen_h):
-    if fr == nil or fr["initialized"] == false:
-        return nil
+proc begin_text(fr):
+    fr["_batch_verts"] = []
+    fr["_batch_font"] = nil
+
+proc add_text(fr, font_name, text, x, y, r, g, b, a):
     if dict_has(fr["fonts"], font_name) == false:
         return nil
     let font = fr["fonts"][font_name]
-    # Get vertex data from native font rasterizer
     let verts = gpu.font_text_verts(font["handle"], text, x, y, r, g, b, a)
     if verts == nil or len(verts) == 0:
         return nil
-    let vert_count = len(verts) / 8
+    # Store font for descriptor binding (all text must use same atlas for now)
+    if fr["_batch_font"] == nil:
+        fr["_batch_font"] = font
+    # Append vertices using native array_extend (fast C memcpy)
+    array_extend(fr["_batch_verts"], verts)
+
+proc flush_text(fr, cmd, screen_w, screen_h):
+    let batch = fr["_batch_verts"]
+    if len(batch) == 0:
+        return nil
+    let vert_count = len(batch) / 8
     if vert_count > 3072:
         vert_count = 3072
-    # Upload and draw
-    gpu.buffer_upload(fr["vbuf"], verts)
+    gpu.buffer_upload(fr["vbuf"], batch)
     gpu.cmd_bind_graphics_pipeline(cmd, fr["pipeline"])
-    gpu.cmd_bind_descriptor_set(cmd, fr["pipe_layout"], 0, font["desc_set"])
+    if fr["_batch_font"] != nil:
+        gpu.cmd_bind_descriptor_set(cmd, fr["pipe_layout"], 0, fr["_batch_font"]["desc_set"], 0)
     let pc = [screen_w, screen_h, 0.0, 0.0]
     gpu.cmd_push_constants(cmd, fr["pipe_layout"], gpu.STAGE_VERTEX, pc)
     gpu.cmd_bind_vertex_buffer(cmd, fr["vbuf"])
     gpu.cmd_draw(cmd, vert_count, 1, 0, 0)
+    fr["_batch_verts"] = []
+    fr["_batch_font"] = nil
+
+# Legacy single-draw (for simple cases)
+proc draw_text(fr, cmd, font_name, text, x, y, r, g, b, a, screen_w, screen_h):
+    begin_text(fr)
+    add_text(fr, font_name, text, x, y, r, g, b, a)
+    flush_text(fr, cmd, screen_w, screen_h)
 
 # ============================================================================
 # Measure text

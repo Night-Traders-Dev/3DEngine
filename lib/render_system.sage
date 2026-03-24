@@ -109,7 +109,7 @@ proc create_unlit_material(render_pass):
 proc draw_mesh_lit(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set):
     gpu.cmd_bind_graphics_pipeline(cmd, mat["pipeline"])
     let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
-    gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 0, desc_set)
+    gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 0, desc_set, 0)
     # Pack MVP + Model (32 floats = 128 bytes)
     let push_data = []
     let i = 0

@@ -40,26 +40,18 @@ void main() {
     // Distance fade
     float fade = 1.0 - smoothstep(fadeStart, fadeEnd, fragDist);
 
-    // Colors (Unreal-style dark gray)
-    vec3 bgColor = vec3(0.16, 0.16, 0.18);
-    vec3 smallGridColor = vec3(0.22, 0.22, 0.24);
-    vec3 bigGridColor = vec3(0.28, 0.28, 0.30);
-    vec3 xAxisColor = vec3(0.7, 0.15, 0.15);  // Red for X
-    vec3 zAxisColor = vec3(0.15, 0.15, 0.7);   // Blue for Z
+    // Colors (Unreal-style dark viewport)
+    vec3 bgColor = vec3(0.18, 0.18, 0.20);
+    vec3 smallGridColor = vec3(0.30, 0.30, 0.32);
+    vec3 bigGridColor = vec3(0.38, 0.38, 0.42);
+    vec3 xAxisColor = vec3(0.8, 0.2, 0.2);   // Red for X
+    vec3 zAxisColor = vec3(0.2, 0.2, 0.8);    // Blue for Z
 
     vec3 color = bgColor;
-    color = mix(color, smallGridColor, smallGrid * 0.6 * fade);
-    color = mix(color, bigGridColor, bigGrid * 0.8 * fade);
+    color = mix(color, smallGridColor, smallGrid * fade);
+    color = mix(color, bigGridColor, bigGrid * fade);
     color = mix(color, xAxisColor, xAxis * fade);
     color = mix(color, zAxisColor, zAxis * fade);
-
-    float alpha = max(smallGrid * 0.4, bigGrid * 0.6);
-    alpha = max(alpha, max(xAxis, zAxis));
-    alpha *= fade;
-
-    // Background always visible, grid fades
-    float bgAlpha = fade * 0.95 + 0.05;
-    color = mix(vec3(0.14, 0.14, 0.16), color, bgAlpha);
 
     outColor = vec4(color, 1.0);
 }

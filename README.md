@@ -1,6 +1,8 @@
 # Forge Engine
 
-A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Visual editor with auto-generated SageLang output.
+A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Features a visual editor with auto-generated SageLang code output, TrueType font rendering, real-time lighting, and 50+ engine modules.
+
+For the complete engine guide, see **[GUIDE.md](GUIDE.md)**.
 
 ## Quick Start
 

@@ -23,8 +23,8 @@ from input import create_input, update_input, bind_action
 from input import action_held, action_just_pressed
 from input import mouse_delta, scroll_value, mouse_position
 from engine_math import transform_to_matrix
-from math3d import vec3, v3_add, v3_scale, mat4_mul, mat4_identity, radians
-from math3d import mat4_perspective, mat4_translate, mat4_scale
+from math3d import vec3, v3_add, v3_sub, v3_scale, v3_normalize, v3_cross
+from math3d import mat4_mul, mat4_identity, radians, mat4_perspective, mat4_translate, mat4_scale
 from mesh import cube_mesh, sphere_mesh, plane_mesh, upload_mesh
 from lighting import create_light_scene, directional_light, point_light
 from lighting import add_light, set_ambient, set_view_position
@@ -34,7 +34,7 @@ from sky import create_sky, sky_preset_day, init_sky_gpu, draw_sky
 from editor_grid import create_editor_grid, draw_editor_grid
 from ui_renderer import create_ui_renderer, draw_ui, build_ui_vertices
 from ui_core import create_widget, create_rect, create_panel, add_child, collect_quads, compute_layout
-from font import create_font_renderer, load_font, draw_text
+from font import create_font_renderer, load_font, begin_text, add_text, flush_text
 import ui_widgets
 
 # Theme colors (accessed via module to work around from-import limitation)
@@ -49,7 +49,7 @@ let THEME_SELECT = ui_widgets.THEME_SELECT
 from editor_layout import create_editor_layout, get_viewport_bounds
 from editor_viewport import create_editor_camera, editor_camera_view
 from editor_viewport import editor_camera_position
-from scene_editor import create_scene_editor, select_entity, deselect
+from scene_editor import create_scene_editor, select_entity, deselect, select_by_ray
 from scene_editor import place_entity, delete_selected, duplicate_selected
 from scene_editor import apply_gizmo_delta, editor_stats
 from gizmo import set_gizmo_mode, get_gizmo_visuals
@@ -58,6 +58,7 @@ from inspector import create_inspector, inspect_entity, clear_inspection, refres
 from codegen import generate_game_script
 from scene_serial import save_scene
 from game_loop import create_time_state, update_time
+from frustum import extract_frustum_planes, aabb_in_frustum
 import io
 
 print "=== Forge Engine Editor ==="
@@ -77,9 +78,10 @@ print "GPU: " + gpu.device_name()
 # ============================================================================
 let ls = create_light_scene()
 init_light_gpu(ls)
-add_light(ls, directional_light(0.3, -0.7, 0.5, 1.0, 0.95, 0.85, 1.0))
-add_light(ls, point_light(5.0, 4.0, 3.0, 1.0, 0.8, 0.6, 3.0, 20.0))
-set_ambient(ls, 0.25, 0.25, 0.3, 0.5)
+add_light(ls, directional_light(-0.3, -0.8, -0.5, 1.0, 0.98, 0.92, 1.5))
+add_light(ls, point_light(8.0, 6.0, 5.0, 1.0, 0.9, 0.8, 4.0, 30.0))
+add_light(ls, point_light(-5.0, 4.0, -3.0, 0.8, 0.85, 1.0, 3.0, 25.0))
+set_ambient(ls, 0.35, 0.35, 0.4, 0.6)
 # Force initial UBO upload
 set_view_position(ls, vec3(0.0, 5.0, 10.0))
 update_light_ubo(ls)
@@ -97,7 +99,7 @@ let grid = create_editor_grid(r["render_pass"])
 # ============================================================================
 let cube_gpu = upload_mesh(cube_mesh())
 let sphere_gpu = upload_mesh(sphere_mesh(16, 16))
-let ground_gpu = upload_mesh(plane_mesh(40.0))
+# No ground plane - the editor grid serves as the ground reference
 
 # ============================================================================
 # UI
@@ -107,10 +109,8 @@ let layout = create_editor_layout(1440.0, 900.0)
 
 # Load TrueType fonts
 let font_r = create_font_renderer(r["render_pass"])
-let font_regular = load_font(font_r, "regular", "assets/DejaVuSans.ttf", 14.0)
-let font_bold = load_font(font_r, "bold", "assets/DejaVuSans-Bold.ttf", 14.0)
-let font_small = load_font(font_r, "small", "assets/DejaVuSans.ttf", 11.0)
-let font_title = load_font(font_r, "title", "assets/DejaVuSans-Bold.ttf", 16.0)
+# Single font atlas for all editor text (avoids multi-atlas batching issues)
+let font_ui = load_font(font_r, "ui", "assets/DejaVuSans.ttf", 18.0)
 
 # ============================================================================
 # ECS World (editor scene)
@@ -122,7 +122,7 @@ let editor = create_scene_editor(world)
 let ge = spawn(world)
 add_component(world, ge, "transform", TransformComponent(0.0, 0.0, 0.0))
 add_component(world, ge, "name", NameComponent("Ground"))
-add_component(world, ge, "mesh_id", {"mesh": ground_gpu, "name": "ground"})
+# No mesh - grid replaces ground plane visually
 add_tag(world, ge, "editable")
 
 # A few starter objects
@@ -142,9 +142,9 @@ print "Editor loaded with " + str(entity_count(world)) + " entities"
 # Editor camera
 # ============================================================================
 let cam = create_editor_camera()
-cam["distance"] = 12.0
-cam["pitch"] = 0.5
-cam["yaw"] = 0.8
+cam["distance"] = 20.0
+cam["pitch"] = 0.6
+cam["yaw"] = 0.5
 
 # ============================================================================
 # Input
@@ -197,32 +197,36 @@ while running:
         running = false
         continue
 
-    # --- Camera orbit/pan/zoom ---
+    # --- Camera orbit/pan/zoom (only when mouse is in viewport) ---
     let md = mouse_delta(inp)
     let sv = scroll_value(inp)
+    let mp_temp = mouse_position(inp)
+    let vp_b = get_viewport_bounds(layout)
+    let mouse_in_viewport = mp_temp[0] > vp_b["x"] and mp_temp[0] < vp_b["x"] + vp_b["w"] and mp_temp[1] > vp_b["y"] and mp_temp[1] < vp_b["y"] + vp_b["h"]
 
-    if action_held(inp, "orbit"):
-        cam["yaw"] = cam["yaw"] + md[0] * 0.005
-        cam["pitch"] = cam["pitch"] + md[1] * 0.005
-        if cam["pitch"] < -1.5:
-            cam["pitch"] = -1.5
-        if cam["pitch"] > 1.5:
-            cam["pitch"] = 1.5
+    if mouse_in_viewport:
+        if gpu.mouse_button(gpu.MOUSE_RIGHT):
+            cam["yaw"] = cam["yaw"] + md[0] * 0.005
+            cam["pitch"] = cam["pitch"] + md[1] * 0.005
+            if cam["pitch"] < -1.5:
+                cam["pitch"] = -1.5
+            if cam["pitch"] > 1.5:
+                cam["pitch"] = 1.5
 
-    if action_held(inp, "pan"):
-        let cy = math.cos(cam["yaw"])
-        let sy = math.sin(cam["yaw"])
-        let pan_scale = cam["distance"] * 0.003
-        cam["target"][0] = cam["target"][0] - md[0] * cy * pan_scale
-        cam["target"][2] = cam["target"][2] + md[0] * sy * pan_scale
-        cam["target"][1] = cam["target"][1] + md[1] * pan_scale
+        if gpu.mouse_button(gpu.MOUSE_MIDDLE):
+            let cy = math.cos(cam["yaw"])
+            let sy = math.sin(cam["yaw"])
+            let pan_scale = cam["distance"] * 0.003
+            cam["target"][0] = cam["target"][0] - md[0] * cy * pan_scale
+            cam["target"][2] = cam["target"][2] + md[0] * sy * pan_scale
+            cam["target"][1] = cam["target"][1] + md[1] * pan_scale
 
-    if sv[1] != 0.0:
-        cam["distance"] = cam["distance"] - sv[1] * 0.8
-        if cam["distance"] < 1.0:
-            cam["distance"] = 1.0
-        if cam["distance"] > 100.0:
-            cam["distance"] = 100.0
+        if sv[1] != 0.0:
+            cam["distance"] = cam["distance"] - sv[1] * 0.8
+            if cam["distance"] < 1.0:
+                cam["distance"] = 1.0
+            if cam["distance"] > 200.0:
+                cam["distance"] = 200.0
 
     # --- Gizmo mode ---
     if action_just_pressed(inp, "mode_translate"):
@@ -255,33 +259,14 @@ while running:
                 let tan_half = math.tan(fov * 0.5)
                 let rx = norm_x * aspect * tan_half
                 let ry = norm_y * tan_half
-                from math3d import v3_sub, v3_normalize, v3_cross
                 let cam_fwd = v3_normalize(v3_sub(cam["target"], cam_pos))
                 let cam_right = v3_normalize(v3_cross(cam_fwd, vec3(0.0, 1.0, 0.0)))
                 let cam_up = v3_cross(cam_right, cam_fwd)
                 let ray_dir = v3_normalize(v3_add(v3_add(v3_scale(cam_right, rx), v3_scale(cam_up, ry)), cam_fwd))
                 # Raycast against all entities
-                from scene_editor import select_by_ray
                 select_by_ray(editor, cam_pos, ray_dir)
 
-    # Right mouse = orbit (already handled above via E key)
-    # Also allow right mouse button for orbit
-    if gpu.mouse_button(gpu.MOUSE_RIGHT):
-        cam["yaw"] = cam["yaw"] + md[0] * 0.005
-        cam["pitch"] = cam["pitch"] + md[1] * 0.005
-        if cam["pitch"] < -1.5:
-            cam["pitch"] = -1.5
-        if cam["pitch"] > 1.5:
-            cam["pitch"] = 1.5
-
-    # Middle mouse = pan
-    if gpu.mouse_button(gpu.MOUSE_MIDDLE):
-        let cy_pan = math.cos(cam["yaw"])
-        let sy_pan = math.sin(cam["yaw"])
-        let ps = cam["distance"] * 0.003
-        cam["target"][0] = cam["target"][0] - md[0] * cy_pan * ps
-        cam["target"][2] = cam["target"][2] + md[0] * sy_pan * ps
-        cam["target"][1] = cam["target"][1] + md[1] * ps
+    # (Orbit/pan/zoom handled above with viewport check)
 
     # --- Entity operations ---
     if action_just_pressed(inp, "select"):
@@ -306,22 +291,22 @@ while running:
     if action_just_pressed(inp, "duplicate"):
         duplicate_selected(editor)
 
-    # --- Keyboard nudge for selected entity ---
+    # --- Keyboard nudge for selected entity (arrow keys) ---
     if editor["selected"] >= 0 and has_component(world, editor["selected"], "transform"):
-        let nudge_speed = 2.0 * dt
-        if gpu.key_pressed(gpu.KEY_W):
+        let nudge_speed = 3.0 * dt
+        if gpu.key_pressed(gpu.KEY_UP):
             apply_gizmo_delta(editor, vec3(0.0, 0.0, 0.0 - nudge_speed))
-        if gpu.key_pressed(gpu.KEY_S):
+        if gpu.key_pressed(gpu.KEY_DOWN):
             apply_gizmo_delta(editor, vec3(0.0, 0.0, nudge_speed))
-        if gpu.key_pressed(gpu.KEY_A):
+        if gpu.key_pressed(gpu.KEY_LEFT):
             apply_gizmo_delta(editor, vec3(0.0 - nudge_speed, 0.0, 0.0))
-        if gpu.key_pressed(gpu.KEY_D):
+        if gpu.key_pressed(gpu.KEY_RIGHT):
             apply_gizmo_delta(editor, vec3(nudge_speed, 0.0, 0.0))
 
     # --- Hierarchy click-to-select (left panel entity list) ---
     if gpu.key_just_pressed(gpu.MOUSE_LEFT):
         if mx < layout["left_panel_w"] and my > 60.0:
-            let click_idx = math.floor((my - 60.0) / 19.0)
+            let click_idx = math.floor((my - 60.0) / 24.0)
             let all_ents = query(world, ["transform"])
             if click_idx >= 0 and click_idx < len(all_ents):
                 select_entity(editor, all_ents[click_idx])
@@ -364,7 +349,6 @@ while running:
     draw_editor_grid(grid, cmd, vp)
 
     # 3D scene with frustum culling
-    from frustum import extract_frustum_planes, aabb_in_frustum
     let frustum_planes = extract_frustum_planes(vp)
     let renderers = query(world, ["transform", "mesh_id"])
     let draw_count = 0
@@ -432,7 +416,7 @@ while running:
     while ei < len(ents) and ei < 25:
         if ents[ei] == cur_sel:
             push(ui_quads, {"x": 2.0, "y": ey - 1.0, "w": lw - 4.0, "h": 18.0, "color": [0.18, 0.35, 0.65, 0.5]})
-        ey = ey + 19.0
+        ey = ey + 24.0
         ei = ei + 1
     if len(ui_quads) > 0:
         let uv = build_quad_verts(ui_quads)
@@ -442,17 +426,19 @@ while running:
         gpu.cmd_bind_vertex_buffer(cmd, ui_r["vbuf"])
         gpu.cmd_draw(cmd, len(ui_quads) * 6, 1, 0, 0)
 
-    # --- TrueType text ---
+    # --- TrueType text (batched: begin -> add_text calls -> flush) ---
+    begin_text(font_r)
+
     proc _fn(n):
         return str(math.floor(n * 100.0 + 0.5) / 100.0)
 
-    draw_text(font_r, cmd, "title", "FORGE", 10.0, 6.0, 0.3, 0.6, 1.0, 1.0, sw, sh)
-    draw_text(font_r, cmd, "regular", "Move", 140.0, 8.0, 0.9, 0.9, 0.9, 1.0, sw, sh)
-    draw_text(font_r, cmd, "regular", "Rotate", 230.0, 8.0, 0.9, 0.9, 0.9, 1.0, sw, sh)
-    draw_text(font_r, cmd, "regular", "Scale", 320.0, 8.0, 0.9, 0.9, 0.9, 1.0, sw, sh)
-    draw_text(font_r, cmd, "small", "4=Save  5=Generate Code", 430.0, 10.0, 0.45, 0.45, 0.45, 1.0, sw, sh)
+    add_text(font_r, "ui", "FORGE", 10.0, 6.0, 0.3, 0.6, 1.0, 1.0)
+    add_text(font_r, "ui", "Move", 140.0, 8.0, 0.9, 0.9, 0.9, 1.0)
+    add_text(font_r, "ui", "Rotate", 230.0, 8.0, 0.9, 0.9, 0.9, 1.0)
+    add_text(font_r, "ui", "Scale", 320.0, 8.0, 0.9, 0.9, 0.9, 1.0)
+    add_text(font_r, "ui", "4=Save  5=Generate Code", 430.0, 10.0, 0.45, 0.45, 0.45, 1.0)
 
-    draw_text(font_r, cmd, "bold", "Outliner", 8.0, tb_h + 4.0, 0.8, 0.8, 0.8, 1.0, sw, sh)
+    add_text(font_r, "ui", "Outliner", 8.0, tb_h + 4.0, 0.8, 0.8, 0.8, 1.0)
     ey = tb_h + 28.0
     ei = 0
     while ei < len(ents) and ei < 25:
@@ -461,53 +447,56 @@ while running:
         if has_component(world, eid, "name"):
             ename = get_component(world, eid, "name")["name"]
         if eid == cur_sel:
-            draw_text(font_r, cmd, "regular", ename, 16.0, ey + 1.0, 1.0, 1.0, 1.0, 1.0, sw, sh)
+            add_text(font_r, "ui", ename, 16.0, ey + 1.0, 1.0, 1.0, 1.0, 1.0)
         else:
-            draw_text(font_r, cmd, "small", ename, 16.0, ey + 2.0, 0.55, 0.55, 0.55, 1.0, sw, sh)
-        ey = ey + 19.0
+            add_text(font_r, "ui", ename, 16.0, ey + 2.0, 0.55, 0.55, 0.55, 1.0)
+        ey = ey + 24.0
         ei = ei + 1
 
-    draw_text(font_r, cmd, "bold", "Details", rp_x + 8.0, tb_h + 4.0, 0.8, 0.8, 0.8, 1.0, sw, sh)
+    add_text(font_r, "ui", "Details", rp_x + 8.0, tb_h + 4.0, 0.8, 0.8, 0.8, 1.0)
     if cur_sel >= 0 and has_component(world, cur_sel, "transform"):
         let st = get_component(world, cur_sel, "transform")
         let iy = tb_h + 30.0
         if has_component(world, cur_sel, "name"):
-            draw_text(font_r, cmd, "bold", get_component(world, cur_sel, "name")["name"], rp_x + 10.0, iy, 1.0, 1.0, 1.0, 1.0, sw, sh)
-            iy = iy + 22.0
-        draw_text(font_r, cmd, "regular", "Transform", rp_x + 10.0, iy, 0.6, 0.8, 1.0, 1.0, sw, sh)
-        iy = iy + 20.0
-        draw_text(font_r, cmd, "small", "Location", rp_x + 12.0, iy, 0.5, 0.5, 0.5, 1.0, sw, sh)
-        iy = iy + 16.0
-        draw_text(font_r, cmd, "small", "X " + _fn(st["position"][0]), rp_x + 14.0, iy, 0.9, 0.3, 0.3, 1.0, sw, sh)
-        draw_text(font_r, cmd, "small", "Y " + _fn(st["position"][1]), rp_x + 100.0, iy, 0.3, 0.9, 0.3, 1.0, sw, sh)
-        draw_text(font_r, cmd, "small", "Z " + _fn(st["position"][2]), rp_x + 186.0, iy, 0.3, 0.3, 0.9, 1.0, sw, sh)
-        iy = iy + 18.0
-        draw_text(font_r, cmd, "small", "Rotation", rp_x + 12.0, iy, 0.5, 0.5, 0.5, 1.0, sw, sh)
-        iy = iy + 16.0
-        draw_text(font_r, cmd, "small", "X " + _fn(st["rotation"][0]), rp_x + 14.0, iy, 0.9, 0.3, 0.3, 1.0, sw, sh)
-        draw_text(font_r, cmd, "small", "Y " + _fn(st["rotation"][1]), rp_x + 100.0, iy, 0.3, 0.9, 0.3, 1.0, sw, sh)
-        draw_text(font_r, cmd, "small", "Z " + _fn(st["rotation"][2]), rp_x + 186.0, iy, 0.3, 0.3, 0.9, 1.0, sw, sh)
-        iy = iy + 18.0
-        draw_text(font_r, cmd, "small", "Scale", rp_x + 12.0, iy, 0.5, 0.5, 0.5, 1.0, sw, sh)
-        iy = iy + 16.0
-        draw_text(font_r, cmd, "small", "X " + _fn(st["scale"][0]), rp_x + 14.0, iy, 0.9, 0.3, 0.3, 1.0, sw, sh)
-        draw_text(font_r, cmd, "small", "Y " + _fn(st["scale"][1]), rp_x + 100.0, iy, 0.3, 0.9, 0.3, 1.0, sw, sh)
-        draw_text(font_r, cmd, "small", "Z " + _fn(st["scale"][2]), rp_x + 186.0, iy, 0.3, 0.3, 0.9, 1.0, sw, sh)
+            add_text(font_r, "ui", get_component(world, cur_sel, "name")["name"], rp_x + 10.0, iy, 1.0, 1.0, 1.0, 1.0)
+            iy = iy + 28.0
+        add_text(font_r, "ui", "Transform", rp_x + 10.0, iy, 0.6, 0.8, 1.0, 1.0)
+        iy = iy + 26.0
+        add_text(font_r, "ui", "Location", rp_x + 12.0, iy, 0.5, 0.5, 0.5, 1.0)
+        iy = iy + 22.0
+        add_text(font_r, "ui", "X " + _fn(st["position"][0]), rp_x + 14.0, iy, 0.9, 0.3, 0.3, 1.0)
+        add_text(font_r, "ui", "Y " + _fn(st["position"][1]), rp_x + 100.0, iy, 0.3, 0.9, 0.3, 1.0)
+        add_text(font_r, "ui", "Z " + _fn(st["position"][2]), rp_x + 186.0, iy, 0.3, 0.3, 0.9, 1.0)
+        iy = iy + 26.0
+        add_text(font_r, "ui", "Rotation", rp_x + 12.0, iy, 0.5, 0.5, 0.5, 1.0)
+        iy = iy + 22.0
+        add_text(font_r, "ui", "X " + _fn(st["rotation"][0]), rp_x + 14.0, iy, 0.9, 0.3, 0.3, 1.0)
+        add_text(font_r, "ui", "Y " + _fn(st["rotation"][1]), rp_x + 100.0, iy, 0.3, 0.9, 0.3, 1.0)
+        add_text(font_r, "ui", "Z " + _fn(st["rotation"][2]), rp_x + 186.0, iy, 0.3, 0.3, 0.9, 1.0)
+        iy = iy + 26.0
+        add_text(font_r, "ui", "Scale", rp_x + 12.0, iy, 0.5, 0.5, 0.5, 1.0)
+        iy = iy + 22.0
+        add_text(font_r, "ui", "X " + _fn(st["scale"][0]), rp_x + 14.0, iy, 0.9, 0.3, 0.3, 1.0)
+        add_text(font_r, "ui", "Y " + _fn(st["scale"][1]), rp_x + 100.0, iy, 0.3, 0.9, 0.3, 1.0)
+        add_text(font_r, "ui", "Z " + _fn(st["scale"][2]), rp_x + 186.0, iy, 0.3, 0.3, 0.9, 1.0)
     else:
-        draw_text(font_r, cmd, "small", "Select an entity to view details", rp_x + 10.0, tb_h + 34.0, 0.4, 0.4, 0.4, 1.0, sw, sh)
+        add_text(font_r, "ui", "Select an entity to view details", rp_x + 10.0, tb_h + 34.0, 0.4, 0.4, 0.4, 1.0)
 
     let bp_y = sh - bp_h - sb_h
-    draw_text(font_r, cmd, "bold", "Content Browser", lw + 8.0, bp_y + 4.0, 0.8, 0.8, 0.8, 1.0, sw, sh)
-    draw_text(font_r, cmd, "small", "R=Cube  F=Sphere  D=Delete  Q=Duplicate", lw + 10.0, bp_y + 28.0, 0.4, 0.4, 0.4, 1.0, sw, sh)
-    draw_text(font_r, cmd, "small", "4=Save Scene  5=Generate SageLang Code", lw + 10.0, bp_y + 44.0, 0.4, 0.4, 0.4, 1.0, sw, sh)
-    draw_text(font_r, cmd, "small", "LMB=Select  RMB=Orbit  MMB=Pan  Scroll=Zoom", lw + 10.0, bp_y + 60.0, 0.4, 0.4, 0.4, 1.0, sw, sh)
+    add_text(font_r, "ui", "Content Browser", lw + 8.0, bp_y + 4.0, 0.8, 0.8, 0.8, 1.0)
+    add_text(font_r, "ui", "R=Cube  F=Sphere  D=Delete  Q=Duplicate", lw + 10.0, bp_y + 28.0, 0.4, 0.4, 0.4, 1.0)
+    add_text(font_r, "ui", "4=Save Scene  5=Generate SageLang Code", lw + 10.0, bp_y + 44.0, 0.4, 0.4, 0.4, 1.0)
+    add_text(font_r, "ui", "LMB=Select  RMB=Orbit  MMB=Pan  Scroll=Zoom", lw + 10.0, bp_y + 60.0, 0.4, 0.4, 0.4, 1.0)
 
     let stats = editor_stats(editor)
     let status = str(stats["entities"]) + " entities  " + str(draw_count) + " drawn  " + stats["mode"]
     if stats["selected"] >= 0:
         status = status + "  |  #" + str(stats["selected"])
     status = status + "  |  FPS: " + str(math.floor(ts["fps"]))
-    draw_text(font_r, cmd, "small", status, 8.0, sh - sb_h + 5.0, 0.4, 0.4, 0.4, 1.0, sw, sh)
+    add_text(font_r, "ui", status, 8.0, sh - sb_h + 5.0, 0.4, 0.4, 0.4, 1.0)
+
+    flush_text(font_r, cmd, sw, sh)
+
     end_frame(r, frame)
     update_title_fps(r, "Forge Engine Editor")
 
