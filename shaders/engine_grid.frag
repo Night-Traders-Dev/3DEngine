@@ -40,12 +40,12 @@ void main() {
     // Distance fade
     float fade = 1.0 - smoothstep(fadeStart, fadeEnd, fragDist);
 
-    // Colors (Unreal-style dark viewport)
-    vec3 bgColor = vec3(0.18, 0.18, 0.20);
-    vec3 smallGridColor = vec3(0.30, 0.30, 0.32);
-    vec3 bigGridColor = vec3(0.38, 0.38, 0.42);
-    vec3 xAxisColor = vec3(0.8, 0.2, 0.2);   // Red for X
-    vec3 zAxisColor = vec3(0.2, 0.2, 0.8);    // Blue for Z
+    // Dark viewport with subtle grid
+    vec3 bgColor = vec3(0.15, 0.15, 0.17);
+    vec3 smallGridColor = vec3(0.22, 0.22, 0.25);
+    vec3 bigGridColor = vec3(0.30, 0.30, 0.34);
+    vec3 xAxisColor = vec3(0.75, 0.18, 0.18);  // Red for X
+    vec3 zAxisColor = vec3(0.18, 0.18, 0.75);  // Blue for Z
 
     vec3 color = bgColor;
     color = mix(color, smallGridColor, smallGrid * fade);
