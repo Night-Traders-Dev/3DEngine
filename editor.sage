@@ -394,7 +394,9 @@ while running:
 
     # Global editor shortcuts (suppressed during text editing)
     if gpu.key_pressed(gpu.KEY_CTRL) and gpu.key_just_pressed(gpu.KEY_Q):
-        show_modal("Quit", "Are you sure you want to quit?", proc(): running = false, nil)
+        proc _quit_yes():
+            running = false
+        show_modal("Quit", "Are you sure you want to quit?", _quit_yes, nil)
         continue
     if gpu.key_pressed(gpu.KEY_CTRL) and gpu.key_just_pressed(gpu.KEY_Z):
         if undo(editor["history"]):
@@ -822,17 +824,18 @@ while running:
                 col = 1
             if mx >= dx + fw3 * 2.0 + 10.0 and mx < dx + fw3 * 2.0 + 10.0 + fw3:
                 col = 2
+            proc _commit_field(val):
+                let n = ui_widgets.parse_number(val)
+                let t = get_component(world, editor["selected"], "transform")
+                let cmd = cmd_set_vec3(t, active_details_field["key"], active_details_field["axis"], n)
+                execute_command(editor["history"], cmd)
+                active_details_field = nil
+                details_edit_tf = nil
             if col >= 0 and my >= iy and my < iy + 20.0:
                 active_details_field = {"key": "position", "axis": col}
                 let cur_val = get_component(world, editor["selected"], "transform")["position"][col]
                 details_edit_tf = ui_widgets.create_text_field(0.0, 0.0, 80.0, str(math.floor(cur_val * 1000.0 + 0.5) / 1000.0))
-                details_edit_tf["on_commit"] = proc(val):
-                    let n = ui_widgets.parse_number(val)
-                    let t = get_component(world, editor["selected"], "transform")
-                    let cmd = cmd_set_vec3(t, "position", active_details_field["axis"], n)
-                    execute_command(editor["history"], cmd)
-                    active_details_field = nil
-                    details_edit_tf = nil
+                details_edit_tf["on_commit"] = _commit_field
                 ui_widgets.focus_text_field(details_edit_tf)
             iy = iy + 26.0
             iy = iy + 22.0
@@ -840,13 +843,7 @@ while running:
                 active_details_field = {"key": "rotation", "axis": col}
                 let cur_val = get_component(world, editor["selected"], "transform")["rotation"][col]
                 details_edit_tf = ui_widgets.create_text_field(0.0, 0.0, 80.0, str(math.floor(cur_val * 1000.0 + 0.5) / 1000.0))
-                details_edit_tf["on_commit"] = proc(val):
-                    let n = ui_widgets.parse_number(val)
-                    let t = get_component(world, editor["selected"], "transform")
-                    let cmd = cmd_set_vec3(t, "rotation", active_details_field["axis"], n)
-                    execute_command(editor["history"], cmd)
-                    active_details_field = nil
-                    details_edit_tf = nil
+                details_edit_tf["on_commit"] = _commit_field
                 ui_widgets.focus_text_field(details_edit_tf)
             iy = iy + 26.0
             iy = iy + 22.0
@@ -854,13 +851,7 @@ while running:
                 active_details_field = {"key": "scale", "axis": col}
                 let cur_val = get_component(world, editor["selected"], "transform")["scale"][col]
                 details_edit_tf = ui_widgets.create_text_field(0.0, 0.0, 80.0, str(math.floor(cur_val * 1000.0 + 0.5) / 1000.0))
-                details_edit_tf["on_commit"] = proc(val):
-                    let n = ui_widgets.parse_number(val)
-                    let t = get_component(world, editor["selected"], "transform")
-                    let cmd = cmd_set_vec3(t, "scale", active_details_field["axis"], n)
-                    execute_command(editor["history"], cmd)
-                    active_details_field = nil
-                    details_edit_tf = nil
+                details_edit_tf["on_commit"] = _commit_field
                 ui_widgets.focus_text_field(details_edit_tf)
             window_consumed = true
         let cca_click = window_content_area(win_content)
