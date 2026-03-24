@@ -12,19 +12,20 @@ from ui_core import add_child
 # Color theme (Unreal-style dark)
 # Use ui_core.rgba to avoid from-import nil bug with let variables
 # ============================================================================
-let THEME_BG = ui_core.rgba(0.12, 0.12, 0.14, 1.0)
-let THEME_PANEL = ui_core.rgba(0.16, 0.16, 0.18, 1.0)
-let THEME_HEADER = ui_core.rgba(0.20, 0.22, 0.26, 1.0)
-let THEME_BUTTON = ui_core.rgba(0.24, 0.26, 0.30, 1.0)
-let THEME_BUTTON_HOVER = ui_core.rgba(0.30, 0.33, 0.38, 1.0)
-let THEME_ACCENT = ui_core.rgba(0.20, 0.45, 0.85, 1.0)
-let THEME_ACCENT_HOVER = ui_core.rgba(0.25, 0.55, 0.95, 1.0)
-let THEME_TEXT = ui_core.rgba(0.85, 0.85, 0.85, 1.0)
-let THEME_TEXT_DIM = ui_core.rgba(0.55, 0.55, 0.55, 1.0)
-let THEME_BORDER = ui_core.rgba(0.08, 0.08, 0.10, 1.0)
-let THEME_INPUT_BG = ui_core.rgba(0.10, 0.10, 0.12, 1.0)
-let THEME_SELECT = ui_core.rgba(0.20, 0.40, 0.70, 0.5)
-let THEME_SEPARATOR = ui_core.rgba(0.25, 0.25, 0.28, 1.0)
+# Darker, more contrasty theme inspired by UE5 / Blender
+let THEME_BG = ui_core.rgba(0.10, 0.10, 0.11, 1.0)
+let THEME_PANEL = ui_core.rgba(0.13, 0.13, 0.15, 1.0)
+let THEME_HEADER = ui_core.rgba(0.17, 0.17, 0.20, 1.0)
+let THEME_BUTTON = ui_core.rgba(0.22, 0.22, 0.26, 1.0)
+let THEME_BUTTON_HOVER = ui_core.rgba(0.28, 0.30, 0.35, 1.0)
+let THEME_ACCENT = ui_core.rgba(0.15, 0.40, 0.82, 1.0)
+let THEME_ACCENT_HOVER = ui_core.rgba(0.20, 0.50, 0.92, 1.0)
+let THEME_TEXT = ui_core.rgba(0.88, 0.88, 0.90, 1.0)
+let THEME_TEXT_DIM = ui_core.rgba(0.50, 0.50, 0.55, 1.0)
+let THEME_BORDER = ui_core.rgba(0.06, 0.06, 0.07, 1.0)
+let THEME_INPUT_BG = ui_core.rgba(0.08, 0.08, 0.10, 1.0)
+let THEME_SELECT = ui_core.rgba(0.15, 0.35, 0.65, 0.5)
+let THEME_SEPARATOR = ui_core.rgba(0.22, 0.22, 0.25, 1.0)
 
 # ============================================================================
 # Toolbar button

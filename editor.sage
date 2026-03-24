@@ -46,7 +46,7 @@ let THEME_ACCENT = ui_widgets.THEME_ACCENT
 let THEME_TEXT = ui_widgets.THEME_TEXT
 let THEME_TEXT_DIM = ui_widgets.THEME_TEXT_DIM
 let THEME_SELECT = ui_widgets.THEME_SELECT
-from editor_layout import create_editor_layout, get_viewport_bounds
+from editor_layout import create_editor_layout, get_viewport_bounds, resize_editor_layout
 from editor_viewport import create_editor_camera, editor_camera_view
 from editor_viewport import editor_camera_position
 from scene_editor import create_scene_editor, select_entity, deselect, select_by_ray
@@ -71,7 +71,7 @@ let r = create_renderer(1440, 900, "Forge Engine Editor")
 if r == nil:
     raise "Failed to create renderer"
 # Dark gray background (Unreal-style viewport)
-r["clear_color"] = [0.14, 0.14, 0.16, 1.0]
+r["clear_color"] = [0.20, 0.20, 0.22, 1.0]
 print "GPU: " + gpu.device_name()
 
 # ============================================================================
@@ -208,7 +208,9 @@ print ""
 while running:
     update_time(ts)
     let dt = ts["dt"]
-    check_resize(r)
+    if check_resize(r):
+        resize_editor_layout(layout, r["width"] + 0.0, r["height"] + 0.0)
+    gpu.update_input()
     update_input(inp)
 
     if action_just_pressed(inp, "quit"):
@@ -261,17 +263,24 @@ while running:
     let sw_f = r["width"] + 0.0
     let sh_f = r["height"] + 0.0
 
-    # Left click = select entity via raycast
-    if gpu.key_just_pressed(gpu.MOUSE_LEFT):
-        # Build pick ray from mouse position and editor camera
+    # --- Left click handler (routes based on mouse position) ---
+    if gpu.mouse_just_pressed(gpu.MOUSE_LEFT):
         let vp_bounds = get_viewport_bounds(layout)
-        # Check if click is in viewport area
-        if mx > vp_bounds["x"] and mx < vp_bounds["x"] + vp_bounds["w"]:
-            if my > vp_bounds["y"] and my < vp_bounds["y"] + vp_bounds["h"]:
+        let in_vp = mx > vp_bounds["x"] and mx < vp_bounds["x"] + vp_bounds["w"] and my > vp_bounds["y"] and my < vp_bounds["y"] + vp_bounds["h"]
+        let in_outliner = mx < layout["left_panel_w"] and my > 60.0 and my < sh_f - layout["bottom_panel_h"] - layout["statusbar_h"]
+
+        if in_outliner:
+            # Click in outliner panel — select entity from list
+            let click_idx = math.floor((my - 60.0) / 24.0)
+            let all_ents = query(world, ["transform"])
+            if click_idx >= 0 and click_idx < len(all_ents):
+                select_entity(editor, all_ents[click_idx])
+        else:
+            if in_vp:
+                # Click in viewport — raycast select
                 let cam_pos = editor_camera_position(cam)
                 let fov = radians(60.0)
                 let aspect = vp_bounds["w"] / vp_bounds["h"]
-                # Normalize mouse to viewport
                 let norm_x = (mx - vp_bounds["x"]) / vp_bounds["w"] * 2.0 - 1.0
                 let norm_y = 1.0 - (my - vp_bounds["y"]) / vp_bounds["h"] * 2.0
                 let tan_half = math.tan(fov * 0.5)
@@ -281,10 +290,7 @@ while running:
                 let cam_right = v3_normalize(v3_cross(cam_fwd, vec3(0.0, 1.0, 0.0)))
                 let cam_up = v3_cross(cam_right, cam_fwd)
                 let ray_dir = v3_normalize(v3_add(v3_add(v3_scale(cam_right, rx), v3_scale(cam_up, ry)), cam_fwd))
-                # Raycast against all entities
                 select_by_ray(editor, cam_pos, ray_dir)
-
-    # (Orbit/pan/zoom handled above with viewport check)
 
     # --- Entity operations ---
     if action_just_pressed(inp, "select"):
@@ -336,13 +342,7 @@ while running:
         if gpu.key_pressed(gpu.KEY_RIGHT):
             apply_gizmo_delta(editor, vec3(nudge_speed, 0.0, 0.0))
 
-    # --- Hierarchy click-to-select (left panel entity list) ---
-    if gpu.key_just_pressed(gpu.MOUSE_LEFT):
-        if mx < layout["left_panel_w"] and my > 60.0:
-            let click_idx = math.floor((my - 60.0) / 24.0)
-            let all_ents = query(world, ["transform"])
-            if click_idx >= 0 and click_idx < len(all_ents):
-                select_entity(editor, all_ents[click_idx])
+    # (Click handling done above in unified handler)
 
     # --- Save / Generate ---
     if action_just_pressed(inp, "save_scene"):
@@ -365,7 +365,9 @@ while running:
     # --- Render ---
     let frame = begin_frame(r)
     if frame == nil:
-        running = false
+        # Frame failed (resize in progress) - skip but don't quit
+        if gpu.window_should_close():
+            running = false
         continue
     let cmd = frame["cmd"]
 
@@ -433,9 +435,9 @@ while running:
     let mx_b = 130.0
     let mi_b = 0
     while mi_b < 3:
-        let bc = [0.22, 0.22, 0.25, 1.0]
+        let bc = [0.20, 0.20, 0.24, 1.0]
         if cur_mode == modes[mi_b]:
-            bc = [0.2, 0.45, 0.85, 1.0]
+            bc = [0.15, 0.40, 0.82, 1.0]
         push(ui_quads, {"x": mx_b, "y": 4.0, "w": 85.0, "h": 24.0, "color": bc})
         mx_b = mx_b + 90.0
         mi_b = mi_b + 1
@@ -529,21 +531,20 @@ while running:
         add_text(font_r, "ui", "Select an entity to view details", rp_x + 10.0, tb_h + 34.0, 0.4, 0.4, 0.4, 1.0)
 
     let bp_y = sh - bp_h - sb_h
-    add_text(font_r, "ui", "Content Browser", lw + 8.0, bp_y + 4.0, 0.8, 0.8, 0.8, 1.0)
-    add_text(font_r, "ui", "R=Cube  F=Sphere  E=Import Model  D=Delete  Q=Dup", lw + 10.0, bp_y + 28.0, 0.4, 0.4, 0.4, 1.0)
-    add_text(font_r, "ui", "4=Save Scene  5=Generate Code  ESC=Deselect", lw + 10.0, bp_y + 44.0, 0.4, 0.4, 0.4, 1.0)
+    add_text(font_r, "ui", "Content Browser", lw + 8.0, bp_y + 4.0, 0.75, 0.75, 0.8, 1.0)
+    add_text(font_r, "ui", "R=Cube  F=Sphere  E=Model  D=Del  Q=Dup  4=Save  5=Generate", lw + 10.0, bp_y + 28.0, 0.38, 0.38, 0.42, 1.0)
+    add_text(font_r, "ui", "LClick=Select  RMB=Orbit  MMB=Pan  Scroll=Zoom  Arrows=Nudge", lw + 10.0, bp_y + 48.0, 0.38, 0.38, 0.42, 1.0)
     # Show imported models
     let model_names = dict_keys(imported_models)
     if len(model_names) > 0:
-        let model_str = "Models: "
+        let model_str = "Imported: "
         let mn = 0
         while mn < len(model_names):
             if mn > 0:
                 model_str = model_str + ", "
             model_str = model_str + model_names[mn]
             mn = mn + 1
-        add_text(font_r, "ui", model_str, lw + 10.0, bp_y + 60.0, 0.3, 0.6, 1.0, 1.0)
-    add_text(font_r, "ui", "LMB=Select  RMB=Orbit  MMB=Pan  Scroll=Zoom", lw + 10.0, bp_y + 60.0, 0.4, 0.4, 0.4, 1.0)
+        add_text(font_r, "ui", model_str, lw + 10.0, bp_y + 68.0, 0.25, 0.55, 0.9, 1.0)
 
     let stats = editor_stats(editor)
     let status = str(stats["entities"]) + " entities  " + str(draw_count) + " drawn  " + stats["mode"]

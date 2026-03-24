@@ -27,7 +27,7 @@ proc create_editor_layout(screen_w, screen_h):
     layout["statusbar_h"] = 24.0
     layout["left_panel_w"] = 220.0
     layout["right_panel_w"] = 280.0
-    layout["bottom_panel_h"] = 180.0
+    layout["bottom_panel_h"] = 140.0
     # Root widget
     layout["root"] = create_widget("editor_root")
     layout["root"]["width"] = screen_w

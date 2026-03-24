@@ -153,8 +153,13 @@ proc check_resize(r):
         gpu.device_wait_idle()
         gpu.recreate_swapchain()
         let ext = gpu.swapchain_extent()
-        r["width"] = ext["width"]
-        r["height"] = ext["height"]
+        let new_w = ext["width"]
+        let new_h = ext["height"]
+        # Skip if minimized (0x0 dimensions)
+        if new_w < 1 or new_h < 1:
+            return false
+        r["width"] = new_w
+        r["height"] = new_h
         # Recreate depth buffer + framebuffers
         r["depth_image"] = gpu.create_depth_buffer(r["width"], r["height"])
         r["framebuffers"] = gpu.create_swapchain_framebuffers_depth(r["render_pass"], r["depth_image"])
