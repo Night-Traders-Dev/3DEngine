@@ -8,8 +8,9 @@ gc_disable()
 import ui_core
 from ui_core import create_widget, create_panel, create_rect, create_progress_bar
 from ui_core import create_label, add_child
-from ui_core import rgba, rgb, color_with_alpha, color_lerp, clamp
+from ui_core import rgba, rgb, color_with_alpha, color_lerp
 from ui_core import _push_border_quads, _push_inset_quads
+from engine_math import clamp
 
 # Re-export anchors for convenience
 let ANCHOR_TOP_LEFT = ui_core.ANCHOR_TOP_LEFT

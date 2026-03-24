@@ -101,7 +101,7 @@ if r == nil:
     raise "Failed to create renderer"
 # Dark gray background (Unreal-style viewport)
 # Viewport is brighter than panels (key design principle from UE5/Blender)
-r["clear_color"] = [0.118, 0.118, 0.118, 1.0]
+r["clear_color"] = [THEME_BG[0], THEME_BG[1], THEME_BG[2], 1.0]
 print "GPU: " + gpu.device_name()
 
 # ============================================================================
@@ -410,6 +410,7 @@ while running:
     if cur_w != layout["screen_w"] or cur_h != layout["screen_h"]:
         resize_editor_layout(layout, cur_w, cur_h)
         set_screen_dims(cur_w, cur_h)
+        reset_layout_windows()
     gpu.update_input()
     update_input(inp)
 
@@ -806,18 +807,7 @@ while running:
                 win_content["visible"] = true
                 bring_to_front(win_content)
             if item == "Reset Layout":
-                win_outliner["x"] = 10.0
-                win_outliner["y"] = 66.0
-                win_outliner["width"] = 220.0
-                win_outliner["height"] = 450.0
-                win_details["x"] = sw_f - 260.0
-                win_details["y"] = 66.0
-                win_details["width"] = 250.0
-                win_details["height"] = 500.0
-                win_content["x"] = 240.0
-                win_content["y"] = sh_f - 220.0
-                win_content["width"] = 700.0
-                win_content["height"] = 160.0
+                reset_layout_windows()
                 print "Layout reset"
             # --- Tools menu ---
             if item == "Toggle Physics":
@@ -1206,7 +1196,7 @@ while running:
     let mhi = 0
     while mhi < 5:
         if menubar_active == mhi:
-            push(ui_quads, {"x": menu_x_pos[mhi] - 4.0, "y": 0.0, "w": menu_widths[mhi], "h": mb_h, "color": [0.290, 0.565, 0.851, 0.4]})
+            push(ui_quads, {"x": menu_x_pos[mhi] - 4.0, "y": 0.0, "w": menu_widths[mhi], "h": mb_h, "color": [THEME_ACCENT[0], THEME_ACCENT[1], THEME_ACCENT[2], 0.4]})
         mhi = mhi + 1
 
     # Toolbar mode buttons (below menu bar)
@@ -1215,26 +1205,26 @@ while running:
     let mx_b = 10.0
     let mi_b = 0
     while mi_b < 3:
-        let bc = [0.212, 0.212, 0.212, 1.0]
+        let bc = [THEME_BUTTON[0], THEME_BUTTON[1], THEME_BUTTON[2], 1.0]
         if cur_mode == modes[mi_b]:
-            bc = [0.290, 0.565, 0.851, 0.8]
+            bc = [THEME_ACCENT[0], THEME_ACCENT[1], THEME_ACCENT[2], 0.8]
         push(ui_quads, {"x": mx_b, "y": mb_h + 4.0, "w": 70.0, "h": 26.0, "color": bc})
         mx_b = mx_b + 75.0
         mi_b = mi_b + 1
 
     # Play button
-    let play_btn_col = [0.15, 0.45, 0.15, 1.0]
+    let play_btn_col = [0.18, 0.50, 0.24, 1.0]
     if play_mode:
-        play_btn_col = [0.55, 0.20, 0.20, 1.0]
+        play_btn_col = [0.60, 0.22, 0.22, 1.0]
     push(ui_quads, {"x": sw / 2.0 - 40.0, "y": mb_h + 4.0, "w": 80.0, "h": 26.0, "color": play_btn_col})
 
     # Save button
-    push(ui_quads, {"x": sw / 2.0 + 50.0, "y": mb_h + 4.0, "w": 60.0, "h": 26.0, "color": [0.212, 0.212, 0.212, 1.0]})
+    push(ui_quads, {"x": sw / 2.0 + 50.0, "y": mb_h + 4.0, "w": 60.0, "h": 26.0, "color": [THEME_BUTTON[0], THEME_BUTTON[1], THEME_BUTTON[2], 1.0]})
 
     # Viewport overlay bar (top of viewport area)
     let vp_b = get_viewport_bounds(layout)
-    push(ui_quads, {"x": vp_b["x"], "y": vp_b["y"], "w": vp_b["w"], "h": 28.0, "color": [0.098, 0.098, 0.098, 0.75]})
-    push(ui_quads, {"x": vp_b["x"], "y": vp_b["y"] + 28.0, "w": vp_b["w"], "h": 1.0, "color": [0.065, 0.065, 0.065, 0.5]})
+    push(ui_quads, {"x": vp_b["x"], "y": vp_b["y"], "w": vp_b["w"], "h": 28.0, "color": [THEME_BG[0], THEME_BG[1], THEME_BG[2], 0.75]})
+    push(ui_quads, {"x": vp_b["x"], "y": vp_b["y"] + 28.0, "w": vp_b["w"], "h": 1.0, "color": [0.06, 0.06, 0.06, 0.5]})
 
     let ents = query(world, ["transform"])
     if len(ui_quads) > 0:
@@ -1254,7 +1244,7 @@ while running:
     # Menu bar text (bright white on dark header)
     let mti = 0
     while mti < 5:
-        let mc = [0.78, 0.78, 0.78, 1.0]
+        let mc = [THEME_TEXT[0], THEME_TEXT[1], THEME_TEXT[2], 1.0]
         if menubar_active == mti:
             mc = [1.0, 1.0, 1.0, 1.0]
         add_text(font_r, "ui", menu_labels[mti], menu_x_pos[mti], 4.0, mc[0], mc[1], mc[2], 1.0)
@@ -1308,43 +1298,43 @@ while running:
         let dqw = dca_q["w"]
         # Entity name bar
         if has_component(world, cur_sel, "name"):
-            push(all_win_quads, {"x": dqx, "y": dqy, "w": dqw, "h": 24.0, "color": [0.176, 0.176, 0.176, 1.0]})
+            push(all_win_quads, {"x": dqx, "y": dqy, "w": dqw, "h": 24.0, "color": [THEME_HEADER[0], THEME_HEADER[1], THEME_HEADER[2], 1.0]})
             dqy = dqy + 28.0
         # Transform section header
-        push(all_win_quads, {"x": dqx, "y": dqy, "w": dqw, "h": 22.0, "color": [0.120, 0.120, 0.120, 1.0]})
+        push(all_win_quads, {"x": dqx, "y": dqy, "w": dqw, "h": 22.0, "color": [THEME_PANEL[0], THEME_PANEL[1], THEME_PANEL[2], 1.0]})
         dqy = dqy + 26.0
         # Location row
-        push(all_win_quads, {"x": dqx, "y": dqy, "w": dqw, "h": 18.0, "color": [0.110, 0.110, 0.110, 0.5]})
+        push(all_win_quads, {"x": dqx, "y": dqy, "w": dqw, "h": 18.0, "color": [THEME_BG[0], THEME_BG[1], THEME_BG[2], 0.5]})
         dqy = dqy + 22.0
         # XYZ input fields for location
         let fw3 = (dqw - 16.0) / 3.0
-        push(all_win_quads, {"x": dqx + 2.0, "y": dqy, "w": fw3, "h": 20.0, "color": [0.098, 0.098, 0.098, 1.0]})
+        push(all_win_quads, {"x": dqx + 2.0, "y": dqy, "w": fw3, "h": 20.0, "color": [THEME_BG[0], THEME_BG[1], THEME_BG[2], 1.0]})
         push(all_win_quads, {"x": dqx + 2.0, "y": dqy, "w": 3.0, "h": 20.0, "color": [0.9, 0.22, 0.22, 0.8]})
-        push(all_win_quads, {"x": dqx + fw3 + 6.0, "y": dqy, "w": fw3, "h": 20.0, "color": [0.098, 0.098, 0.098, 1.0]})
+        push(all_win_quads, {"x": dqx + fw3 + 6.0, "y": dqy, "w": fw3, "h": 20.0, "color": [THEME_BG[0], THEME_BG[1], THEME_BG[2], 1.0]})
         push(all_win_quads, {"x": dqx + fw3 + 6.0, "y": dqy, "w": 3.0, "h": 20.0, "color": [0.22, 0.9, 0.22, 0.8]})
-        push(all_win_quads, {"x": dqx + fw3 * 2.0 + 10.0, "y": dqy, "w": fw3, "h": 20.0, "color": [0.098, 0.098, 0.098, 1.0]})
+        push(all_win_quads, {"x": dqx + fw3 * 2.0 + 10.0, "y": dqy, "w": fw3, "h": 20.0, "color": [THEME_BG[0], THEME_BG[1], THEME_BG[2], 1.0]})
         push(all_win_quads, {"x": dqx + fw3 * 2.0 + 10.0, "y": dqy, "w": 3.0, "h": 20.0, "color": [0.22, 0.22, 0.9, 0.8]})
         dqy = dqy + 26.0
         # Rotation row
-        push(all_win_quads, {"x": dqx, "y": dqy, "w": dqw, "h": 18.0, "color": [0.110, 0.110, 0.110, 0.5]})
+        push(all_win_quads, {"x": dqx, "y": dqy, "w": dqw, "h": 18.0, "color": [THEME_BG[0], THEME_BG[1], THEME_BG[2], 0.5]})
         dqy = dqy + 22.0
         # XYZ input fields for rotation
-        push(all_win_quads, {"x": dqx + 2.0, "y": dqy, "w": fw3, "h": 20.0, "color": [0.098, 0.098, 0.098, 1.0]})
+        push(all_win_quads, {"x": dqx + 2.0, "y": dqy, "w": fw3, "h": 20.0, "color": [THEME_BG[0], THEME_BG[1], THEME_BG[2], 1.0]})
         push(all_win_quads, {"x": dqx + 2.0, "y": dqy, "w": 3.0, "h": 20.0, "color": [0.9, 0.22, 0.22, 0.8]})
-        push(all_win_quads, {"x": dqx + fw3 + 6.0, "y": dqy, "w": fw3, "h": 20.0, "color": [0.098, 0.098, 0.098, 1.0]})
+        push(all_win_quads, {"x": dqx + fw3 + 6.0, "y": dqy, "w": fw3, "h": 20.0, "color": [THEME_BG[0], THEME_BG[1], THEME_BG[2], 1.0]})
         push(all_win_quads, {"x": dqx + fw3 + 6.0, "y": dqy, "w": 3.0, "h": 20.0, "color": [0.22, 0.9, 0.22, 0.8]})
-        push(all_win_quads, {"x": dqx + fw3 * 2.0 + 10.0, "y": dqy, "w": fw3, "h": 20.0, "color": [0.098, 0.098, 0.098, 1.0]})
+        push(all_win_quads, {"x": dqx + fw3 * 2.0 + 10.0, "y": dqy, "w": fw3, "h": 20.0, "color": [THEME_BG[0], THEME_BG[1], THEME_BG[2], 1.0]})
         push(all_win_quads, {"x": dqx + fw3 * 2.0 + 10.0, "y": dqy, "w": 3.0, "h": 20.0, "color": [0.22, 0.22, 0.9, 0.8]})
         dqy = dqy + 26.0
         # Scale row
-        push(all_win_quads, {"x": dqx, "y": dqy, "w": dqw, "h": 18.0, "color": [0.110, 0.110, 0.110, 0.5]})
+        push(all_win_quads, {"x": dqx, "y": dqy, "w": dqw, "h": 18.0, "color": [THEME_BG[0], THEME_BG[1], THEME_BG[2], 0.5]})
         dqy = dqy + 22.0
         # XYZ input fields for scale
-        push(all_win_quads, {"x": dqx + 2.0, "y": dqy, "w": fw3, "h": 20.0, "color": [0.098, 0.098, 0.098, 1.0]})
+        push(all_win_quads, {"x": dqx + 2.0, "y": dqy, "w": fw3, "h": 20.0, "color": [THEME_BG[0], THEME_BG[1], THEME_BG[2], 1.0]})
         push(all_win_quads, {"x": dqx + 2.0, "y": dqy, "w": 3.0, "h": 20.0, "color": [0.9, 0.22, 0.22, 0.8]})
-        push(all_win_quads, {"x": dqx + fw3 + 6.0, "y": dqy, "w": fw3, "h": 20.0, "color": [0.098, 0.098, 0.098, 1.0]})
+        push(all_win_quads, {"x": dqx + fw3 + 6.0, "y": dqy, "w": fw3, "h": 20.0, "color": [THEME_BG[0], THEME_BG[1], THEME_BG[2], 1.0]})
         push(all_win_quads, {"x": dqx + fw3 + 6.0, "y": dqy, "w": 3.0, "h": 20.0, "color": [0.22, 0.9, 0.22, 0.8]})
-        push(all_win_quads, {"x": dqx + fw3 * 2.0 + 10.0, "y": dqy, "w": fw3, "h": 20.0, "color": [0.098, 0.098, 0.098, 1.0]})
+        push(all_win_quads, {"x": dqx + fw3 * 2.0 + 10.0, "y": dqy, "w": fw3, "h": 20.0, "color": [THEME_BG[0], THEME_BG[1], THEME_BG[2], 1.0]})
         push(all_win_quads, {"x": dqx + fw3 * 2.0 + 10.0, "y": dqy, "w": 3.0, "h": 20.0, "color": [0.22, 0.22, 0.9, 0.8]})
 
     # Selection highlight in outliner window
@@ -1361,7 +1351,7 @@ while running:
                     is_sel = true
                 si = si + 1
             if is_sel:
-                push(all_win_quads, {"x": oca_h["x"], "y": hey - 1.0, "w": oca_h["w"], "h": 20.0, "color": [0.290, 0.565, 0.851, 0.15]})
+                push(all_win_quads, {"x": oca_h["x"], "y": hey - 1.0, "w": oca_h["w"], "h": 20.0, "color": [THEME_ACCENT[0], THEME_ACCENT[1], THEME_ACCENT[2], 0.15]})
             hey = hey + 24.0
             hei = hei + 1
     # Menu quads rendered separately AFTER all window text (see below)
@@ -1630,9 +1620,9 @@ while running:
         let skx = (sw - skw) / 2.0
         let sky_pos = (sh - skh) / 2.0
         let sk_quads = []
-        push(sk_quads, {"x": skx + 3.0, "y": sky_pos + 3.0, "w": skw, "h": skh, "color": [0.0, 0.0, 0.0, 0.4]})
-        push(sk_quads, {"x": skx, "y": sky_pos, "w": skw, "h": skh, "color": [0.141, 0.141, 0.141, 0.95]})
-        push(sk_quads, {"x": skx, "y": sky_pos, "w": skw, "h": 28.0, "color": [0.176, 0.176, 0.176, 1.0]})
+        push(sk_quads, {"x": skx + 4.0, "y": sky_pos + 4.0, "w": skw, "h": skh, "color": [0.0, 0.0, 0.0, 0.35]})
+        push(sk_quads, {"x": skx, "y": sky_pos, "w": skw, "h": skh, "color": [THEME_PANEL[0], THEME_PANEL[1], THEME_PANEL[2], 0.97]})
+        push(sk_quads, {"x": skx, "y": sky_pos, "w": skw, "h": 28.0, "color": [THEME_HEADER[0], THEME_HEADER[1], THEME_HEADER[2], 1.0]})
         let skv = build_quad_verts(sk_quads)
         gpu.buffer_upload(ui_r["vbuf"], skv)
         gpu.cmd_bind_graphics_pipeline(cmd, ui_r["pipeline"])

@@ -8,9 +8,10 @@ gc_disable()
 import gpu
 import ui_core
 from ui_core import create_widget, create_panel, create_rect, create_label
-from ui_core import add_child, clamp
+from ui_core import add_child
 from ui_core import rgba, color_brighten, color_with_alpha, color_lerp
 from ui_core import _push_border_quads, _push_inset_quads, _push_shadow_quads
+from engine_math import clamp
 
 # ============================================================================
 # Re-export theme from ui_core for backward compat
