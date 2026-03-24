@@ -283,6 +283,18 @@ proc _set_content_filter(filter_name):
     win_content["visible"] = true
     bring_to_front(win_content)
 
+proc _clip_text_line(text, max_chars):
+    if max_chars < 4:
+        return ""
+    if len(text) <= max_chars:
+        return text
+    let out = ""
+    let i = 0
+    while i < max_chars - 3:
+        out = out + text[i]
+        i = i + 1
+    return out + "..."
+
 print "Found " + str(len(importable_assets)) + " importable assets"
 
 # Auto-import any .gltf files found
@@ -1504,10 +1516,11 @@ while running:
         let cb_max_y = cca["y"] + cca["h"]
         let cb_scroll = win_content["scroll_y"]
         let cb_base_y = cca["y"] - cb_scroll
+        let cb_max_chars = math.floor((cca["w"] - 10.0) / 8.0)
         if cb_base_y + 4.0 < cb_max_y:
-            add_text(font_r, "ui", "R=Cube  F=Sphere  E=Model  D=Del  Q=Dup  TAB=Physics", cca["x"] + 4.0, cb_base_y + 4.0, 0.38, 0.38, 0.42, 1.0)
+            add_text(font_r, "ui", _clip_text_line("R=Cube  F=Sphere  E=Model  D=Del  Q=Dup  TAB=Physics", cb_max_chars), cca["x"] + 4.0, cb_base_y + 4.0, 0.38, 0.38, 0.42, 1.0)
         if cb_base_y + 22.0 < cb_max_y:
-            add_text(font_r, "ui", "LClick=Select  RMB=Orbit  Scroll=Zoom  ENTER=Play", cca["x"] + 4.0, cb_base_y + 22.0, 0.38, 0.38, 0.42, 1.0)
+            add_text(font_r, "ui", _clip_text_line("LClick=Select  RMB=Orbit  Scroll=Zoom  ENTER=Play", cb_max_chars), cca["x"] + 4.0, cb_base_y + 22.0, 0.38, 0.38, 0.42, 1.0)
         let content_rows = _content_filtered()
         let total_h = 44.0 + len(content_rows) * 18.0
         update_window_content_height(win_content, total_h)
@@ -1530,7 +1543,8 @@ while running:
                     if cbi == content_selected_index:
                         row_prefix = "> "
                         rc = [1.0, 1.0, 1.0, 1.0]
-                    add_text(font_r, "ui", row_prefix + "[" + row["kind"] + "] " + row["name"], cca["x"] + 4.0, cy, rc[0], rc[1], rc[2], 1.0)
+                    let row_text = row_prefix + "[" + row["kind"] + "] " + row["name"]
+                    add_text(font_r, "ui", _clip_text_line(row_text, cb_max_chars), cca["x"] + 4.0, cy, rc[0], rc[1], rc[2], 1.0)
                 cy = cy + 18.0
                 cbi = cbi + 1
     # Menu item text

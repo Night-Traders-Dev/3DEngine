@@ -20,9 +20,10 @@ A complete guide to building games and interactive experiences with the Forge En
 14. [Particles and VFX](#particles-and-vfx)
 15. [Networking](#networking)
 16. [Scene Serialization](#scene-serialization)
-17. [Code Generation](#code-generation)
-18. [Performance Tips](#performance-tips)
-19. [SageLang Reference](#sagelang-reference)
+17. [Content Pipeline](#content-pipeline)
+18. [Code Generation](#code-generation)
+19. [Performance Tips](#performance-tips)
+20. [SageLang Reference](#sagelang-reference)
 
 ---
 
@@ -343,6 +344,39 @@ if hit != nil:
     print "Hit at t=" + str(hit["t"])
 ```
 
+### Collision Callbacks
+
+```python
+from physics import register_collision_callback
+
+proc on_hit(event):
+    print "Entity " + str(event["entity_a"]) + " hit " + str(event["entity_b"])
+    print "Normal: " + str(event["normal"]) + " Depth: " + str(event["depth"])
+
+register_collision_callback(physics_world, entity_id, on_hit)
+# Callbacks fire automatically during physics_update
+# Access all frame events: physics_world["collision_events"]
+```
+
+### Physics Constraints
+
+```python
+from physics import FixedConstraint, DistanceConstraint, HingeConstraint
+
+# Fixed: entity_b stays at offset from entity_a
+let fixed = FixedConstraint(entity_a, entity_b, vec3(2.0, 0.0, 0.0))
+push(physics_world["constraints"], fixed)
+
+# Distance: maintain distance between two entities
+let dist = DistanceConstraint(entity_a, entity_b, 5.0)
+dist["stiffness"] = 0.8
+push(physics_world["constraints"], dist)
+
+# Hinge: rotation limits around an axis
+let hinge = HingeConstraint(entity_a, entity_b, vec3(0.0, 1.0, 0.0), [-1.57, 1.57])
+push(physics_world["constraints"], hinge)
+```
+
 ---
 
 ## Input System
@@ -397,6 +431,38 @@ let sk = create_skeleton()
 add_bone(sk, "root", nil)
 add_bone(sk, "spine", "root")
 add_bone(sk, "head", "spine")
+```
+
+### Two-Bone IK
+
+```python
+from animation import solve_ik_two_bone
+
+# Solve IK for arm/leg chains
+let result = solve_ik_two_bone(shoulder_pos, elbow_pos, hand_pos, target_pos, pole_target)
+# result["mid"] = new elbow position
+# result["end"] = new hand position (at or near target)
+
+# Apply to skeleton:
+from animation import apply_ik_to_skeleton
+apply_ik_to_skeleton(skeleton, "upper_arm", "lower_arm", "hand", target_pos, pole_target)
+```
+
+### Animation Events
+
+```python
+from animation import add_animation_event, fire_animation_events
+
+# Attach events to keyframe times
+add_animation_event(walk_clip, 0.25, "footstep_left", {"volume": 0.8})
+add_animation_event(walk_clip, 0.75, "footstep_right", {"volume": 0.8})
+
+# Fire events during playback
+proc on_anim_event(evt):
+    if evt["name"] == "footstep_left":
+        play_sound(audio, "step_l", "sfx", evt["data"]["volume"], false)
+
+fire_animation_events(controller, walk_clip, prev_time, curr_time, on_anim_event)
 ```
 
 ---
@@ -506,14 +572,66 @@ let new_eid = load_prefab(world, "assets/prefabs/tank.prefab.json")
 let prefab_list = list_prefabs("assets/prefabs")
 ```
 
+---
+
+## Content Pipeline
+
+### Asset Import
+
+```python
+from asset_import import import_gltf, scan_importable_assets
+
+# Scan directory for importable files
+let assets = scan_importable_assets("assets")  # finds .gltf, .png, .obj, etc.
+
+# Import a glTF model (meshes + materials + animations)
+let model = import_gltf("assets/character.gltf")
+# model["gpu_meshes"] = [{gpu_mesh, name}]
+# model["materials"] = [{name, albedo, metallic, roughness}]
+# model["animations"] = [{name, channels}]
+```
+
+### Prefabs
+
+```python
+from scene_serial import save_prefab, load_prefab, list_prefabs
+
+# Save entity as reusable template
+save_prefab(world, entity_id, "EnemyTank", "assets/prefabs/tank.prefab.json")
+
+# Load prefab into scene (spawns new entity with all components)
+let new_eid = load_prefab(world, "assets/prefabs/tank.prefab.json")
+
+# List all available prefabs
+let prefabs = list_prefabs("assets/prefabs")
+```
+
 ### Material Presets
 
 ```python
 from material import create_material_preset, get_material_presets
 
 # Available: Metal, Wood, Concrete, Glass, Plastic, Gold, Rubber, Emissive
-let mat = create_material_preset("Gold")
-add_component(world, eid, "material", mat)
+print get_material_presets()
+
+let gold = create_material_preset("Gold")
+add_component(world, entity_id, "material", gold)
+```
+
+### Hot Reload
+
+```python
+from hot_reload import create_file_watcher, watch_asset_directory, check_asset_changes
+
+let hr = create_file_watcher()
+
+proc on_asset_change(filename, path, change_type):
+    print filename + " was " + change_type  # "modified" or "added"
+
+watch_asset_directory(hr, "assets/textures", on_asset_change)
+
+# Poll each frame:
+let changes = check_asset_changes(hr)
 ```
 
 ### Level Streaming
@@ -523,7 +641,8 @@ from scene import create_level_manager, request_level_load, process_level_queue
 
 let lm = create_level_manager()
 request_level_load(lm, "dungeon_1", "assets/levels/dungeon_1.json")
-# Call each frame:
+
+# Process in game loop:
 process_level_queue(lm, world)
 ```
 

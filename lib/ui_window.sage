@@ -6,6 +6,7 @@ gc_disable()
 # -----------------------------------------
 
 import gpu
+import math
 import ui_core
 import ui_widgets
 
@@ -296,13 +297,31 @@ proc close_menu():
 proc is_menu_open():
     return _menu_open[0] != nil
 
+proc _menu_width():
+    if _menu_open[0] == nil:
+        return 180.0
+    let items = _menu_items[0]
+    let max_len = 0
+    let i = 0
+    while i < len(items):
+        if items[i] != "---":
+            if len(items[i]) > max_len:
+                max_len = len(items[i])
+        i = i + 1
+    let w = max_len * 8.0 + 28.0
+    if w < 180.0:
+        w = 180.0
+    if w > 420.0:
+        w = 420.0
+    return w
+
 proc build_menu_quads():
     if _menu_open[0] == nil:
         return []
     let items = _menu_items[0]
     let x = _menu_x[0]
     let y = _menu_y[0]
-    let w = 180.0
+    let w = _menu_width()
     let item_h = 24.0
     let h = len(items) * item_h + 8.0
     let quads = []
@@ -332,7 +351,7 @@ proc menu_item_at(mx, my):
     let items = _menu_items[0]
     let x = _menu_x[0]
     let y = _menu_y[0]
-    let w = 180.0
+    let w = _menu_width()
     let item_h = 24.0
     if mx < x or mx > x + w:
         return -1
