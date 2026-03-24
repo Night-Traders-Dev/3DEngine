@@ -99,9 +99,16 @@ proc load_font(fr, name, ttf_path, pixel_size):
     let atlas = gpu.font_atlas(handle)
     if atlas == nil:
         return nil
+    # Load the atlas PNG texture via gpu.load_texture (works in windowed mode)
+    let tex_handle = gpu.load_texture(atlas["path"])
+    let samp_handle = gpu.create_sampler(gpu.FILTER_LINEAR, gpu.FILTER_LINEAR, gpu.ADDRESS_CLAMP_EDGE)
+    # Store handles back into the C font struct
+    gpu.font_set_atlas(handle, tex_handle, samp_handle)
+    atlas["texture"] = tex_handle
+    atlas["sampler"] = samp_handle
     # Create descriptor set and bind font texture
     let ds = gpu.allocate_descriptor_set(fr["pool"], fr["desc_layout"])
-    gpu.update_descriptor_image(ds, 0, atlas["texture"], atlas["sampler"])
+    gpu.update_descriptor_image(ds, 0, tex_handle, samp_handle)
     let font = {}
     font["handle"] = handle
     font["desc_set"] = ds

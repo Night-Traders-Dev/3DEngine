@@ -320,8 +320,8 @@ while running:
 
     # --- Hierarchy click-to-select (left panel entity list) ---
     if gpu.key_just_pressed(gpu.MOUSE_LEFT):
-        if mx < layout["left_panel_w"] and my > 56.0:
-            let click_idx = math.floor((my - 56.0) / 16.0)
+        if mx < layout["left_panel_w"] and my > 60.0:
+            let click_idx = math.floor((my - 60.0) / 19.0)
             let all_ents = query(world, ["transform"])
             if click_idx >= 0 and click_idx < len(all_ents):
                 select_entity(editor, all_ents[click_idx])
