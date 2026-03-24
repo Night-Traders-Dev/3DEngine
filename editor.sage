@@ -59,6 +59,7 @@ from codegen import generate_game_script
 from scene_serial import save_scene
 from game_loop import create_time_state, update_time
 from frustum import extract_frustum_planes, aabb_in_frustum
+from asset_import import import_gltf, scan_importable_assets
 import io
 
 print "=== Forge Engine Editor ==="
@@ -136,7 +137,24 @@ add_component(world, s1, "mesh_id", {"mesh": sphere_gpu, "name": "sphere"})
 deselect(editor)
 let entity_counter = 4
 
+# Scan for importable assets
+let importable_assets = scan_importable_assets("assets")
+let imported_models = {}
+print "Found " + str(len(importable_assets)) + " importable assets"
+
+# Auto-import any .gltf files found
+let ai = 0
+while ai < len(importable_assets):
+    let ia = importable_assets[ai]
+    if ia["type"] == "model" and endswith(ia["name"], ".gltf"):
+        let asset = import_gltf(ia["path"])
+        if asset != nil:
+            imported_models[ia["name"]] = asset
+    ai = ai + 1
+
 print "Editor loaded with " + str(entity_count(world)) + " entities"
+if len(dict_keys(imported_models)) > 0:
+    print "Imported models: " + str(len(dict_keys(imported_models)))
 
 # ============================================================================
 # Editor camera
@@ -161,7 +179,7 @@ bind_action(inp, "mode_rotate", [gpu.KEY_2])
 bind_action(inp, "mode_scale", [gpu.KEY_3])
 bind_action(inp, "save_scene", [gpu.KEY_4])
 bind_action(inp, "generate_code", [gpu.KEY_5])
-bind_action(inp, "orbit", [gpu.KEY_E])
+bind_action(inp, "place_model", [gpu.KEY_E])
 bind_action(inp, "pan", [gpu.KEY_SHIFT])
 
 # ============================================================================
@@ -283,6 +301,21 @@ while running:
         let pos = vec3(cam["target"][0], 1.0, cam["target"][2])
         let eid = place_entity(editor, pos, "Sphere_" + str(entity_counter), sphere_gpu)
         add_component(world, eid, "mesh_id", {"mesh": sphere_gpu, "name": "sphere"})
+
+    if action_just_pressed(inp, "place_model"):
+        let model_keys = dict_keys(imported_models)
+        if len(model_keys) > 0:
+            let model_asset = imported_models[model_keys[0]]
+            entity_counter = entity_counter + 1
+            let pos = vec3(cam["target"][0], 0.0, cam["target"][2])
+            let eid = place_entity(editor, pos, model_asset["name"] + "_" + str(entity_counter), nil)
+            # Store the imported model's GPU meshes on the entity
+            add_component(world, eid, "imported_asset", model_asset)
+            # Also add the first mesh as mesh_id for basic rendering
+            if len(model_asset["gpu_meshes"]) > 0:
+                add_component(world, eid, "mesh_id", {"mesh": model_asset["gpu_meshes"][0]["gpu_mesh"], "name": "imported"})
+        else:
+            print "No imported models available. Place .gltf files in assets/"
 
     if action_just_pressed(inp, "delete"):
         delete_selected(editor)
@@ -479,13 +512,37 @@ while running:
         add_text(font_r, "ui", "X " + _fn(st["scale"][0]), rp_x + 14.0, iy, 0.9, 0.3, 0.3, 1.0)
         add_text(font_r, "ui", "Y " + _fn(st["scale"][1]), rp_x + 100.0, iy, 0.3, 0.9, 0.3, 1.0)
         add_text(font_r, "ui", "Z " + _fn(st["scale"][2]), rp_x + 186.0, iy, 0.3, 0.3, 0.9, 1.0)
+        iy = iy + 28.0
+        # Material info (if imported asset)
+        if has_component(world, cur_sel, "imported_asset"):
+            let ia = get_component(world, cur_sel, "imported_asset")
+            add_text(font_r, "ui", "Material", rp_x + 10.0, iy, 0.6, 0.8, 1.0, 1.0)
+            iy = iy + 22.0
+            if len(ia["materials"]) > 0:
+                let mat = ia["materials"][0]
+                add_text(font_r, "ui", mat["name"], rp_x + 14.0, iy, 0.7, 0.7, 0.7, 1.0)
+                iy = iy + 18.0
+                add_text(font_r, "ui", "Metallic: " + _fn(mat["metallic"]), rp_x + 14.0, iy, 0.5, 0.5, 0.5, 1.0)
+                iy = iy + 16.0
+                add_text(font_r, "ui", "Roughness: " + _fn(mat["roughness"]), rp_x + 14.0, iy, 0.5, 0.5, 0.5, 1.0)
     else:
         add_text(font_r, "ui", "Select an entity to view details", rp_x + 10.0, tb_h + 34.0, 0.4, 0.4, 0.4, 1.0)
 
     let bp_y = sh - bp_h - sb_h
     add_text(font_r, "ui", "Content Browser", lw + 8.0, bp_y + 4.0, 0.8, 0.8, 0.8, 1.0)
-    add_text(font_r, "ui", "R=Cube  F=Sphere  D=Delete  Q=Duplicate", lw + 10.0, bp_y + 28.0, 0.4, 0.4, 0.4, 1.0)
-    add_text(font_r, "ui", "4=Save Scene  5=Generate SageLang Code", lw + 10.0, bp_y + 44.0, 0.4, 0.4, 0.4, 1.0)
+    add_text(font_r, "ui", "R=Cube  F=Sphere  E=Import Model  D=Delete  Q=Dup", lw + 10.0, bp_y + 28.0, 0.4, 0.4, 0.4, 1.0)
+    add_text(font_r, "ui", "4=Save Scene  5=Generate Code  ESC=Deselect", lw + 10.0, bp_y + 44.0, 0.4, 0.4, 0.4, 1.0)
+    # Show imported models
+    let model_names = dict_keys(imported_models)
+    if len(model_names) > 0:
+        let model_str = "Models: "
+        let mn = 0
+        while mn < len(model_names):
+            if mn > 0:
+                model_str = model_str + ", "
+            model_str = model_str + model_names[mn]
+            mn = mn + 1
+        add_text(font_r, "ui", model_str, lw + 10.0, bp_y + 60.0, 0.3, 0.6, 1.0, 1.0)
     add_text(font_r, "ui", "LMB=Select  RMB=Orbit  MMB=Pan  Scroll=Zoom", lw + 10.0, bp_y + 60.0, 0.4, 0.4, 0.4, 1.0)
 
     let stats = editor_stats(editor)
