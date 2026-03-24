@@ -196,9 +196,9 @@ proc build_window_quads(win):
     # Title bar (slightly elevated)
     push(quads, {"x": x, "y": y, "w": w, "h": WIN_TITLE_H, "color": ui_widgets.THEME_HEADER})
 
-    # Title bar accent underline (amber glow)
+    # Title bar accent underline
     let acc = ui_widgets.THEME_ACCENT
-    push(quads, {"x": x, "y": y + WIN_TITLE_H - 2.0, "w": w, "h": 2.0, "color": [acc[0], acc[1], acc[2], 0.5]})
+    push(quads, {"x": x, "y": y + WIN_TITLE_H - 1.0, "w": w, "h": 1.0, "color": [acc[0], acc[1], acc[2], 0.4]})
 
     # Border (subtle)
     let bc = ui_widgets.THEME_BORDER

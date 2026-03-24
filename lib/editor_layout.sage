@@ -15,16 +15,17 @@ let THEME_BORDER = ui_widgets.THEME_BORDER
 let THEME_ACCENT = ui_widgets.THEME_ACCENT
 
 # Depth colors
-let COL_SHADOW = ui_core.rgba(0.02, 0.02, 0.035, 1.0)
-let COL_ACCENT_LINE = ui_core.rgba(THEME_ACCENT[0], THEME_ACCENT[1], THEME_ACCENT[2], 0.30)
-let COL_VP_BORDER = ui_core.rgba(THEME_ACCENT[0], THEME_ACCENT[1], THEME_ACCENT[2], 0.10)
-let COL_INNER = ui_core.rgba(0.055, 0.059, 0.078, 1.0)
+let COL_SHADOW = ui_core.rgba(0.055, 0.055, 0.055, 1.0)
+let COL_ACCENT_LINE = ui_core.rgba(THEME_ACCENT[0], THEME_ACCENT[1], THEME_ACCENT[2], 0.35)
+let COL_VP_BORDER = ui_core.rgba(THEME_ACCENT[0], THEME_ACCENT[1], THEME_ACCENT[2], 0.08)
+let COL_INNER = ui_core.rgba(0.110, 0.110, 0.110, 1.0)
 
 proc create_editor_layout(screen_w, screen_h):
     let layout = {}
     layout["screen_w"] = screen_w
     layout["screen_h"] = screen_h
-    layout["toolbar_h"] = 36.0
+    layout["menubar_h"] = 26.0
+    layout["toolbar_h"] = 34.0
     layout["statusbar_h"] = 24.0
     layout["left_panel_w"] = 220.0
     layout["right_panel_w"] = 260.0
@@ -39,26 +40,24 @@ proc create_editor_layout(screen_w, screen_h):
 proc _build_all(layout):
     let sw = layout["screen_w"]
     let sh = layout["screen_h"]
+    let mb = layout["menubar_h"]
     let tb = layout["toolbar_h"]
     let sb = layout["statusbar_h"]
-    let lw = layout["left_panel_w"]
-    let rw = layout["right_panel_w"]
-    let bh = layout["bottom_panel_h"]
-    let rx = sw - rw
-    let my = tb
-    let mh = sh - tb - bh - sb
-    let by = sh - bh - sb
+    let top_h = mb + tb
 
-    # --- Toolbar ---
-    add_child(layout["root"], create_rect(0.0, 0.0, sw, tb, THEME_HEADER))
-    add_child(layout["root"], create_rect(0.0, tb - 2.0, sw, 2.0, COL_SHADOW))
-    add_child(layout["root"], create_rect(0.0, tb - 1.0, sw, 1.0, COL_ACCENT_LINE))
+    # --- Menu bar (topmost row) ---
+    add_child(layout["root"], create_rect(0.0, 0.0, sw, mb, THEME_BG))
+    add_child(layout["root"], create_rect(0.0, mb - 1.0, sw, 1.0, COL_SHADOW))
 
-    # Viewport fills the area between toolbar and statusbar (floating windows overlay)
+    # --- Toolbar (below menu bar) ---
+    add_child(layout["root"], create_rect(0.0, mb, sw, tb, THEME_HEADER))
+    add_child(layout["root"], create_rect(0.0, mb + tb - 1.0, sw, 1.0, COL_SHADOW))
+
+    # Viewport fills area between toolbar and statusbar
     let vx = 0.0
-    let vy = my
+    let vy = top_h
     let vw = sw
-    let vh = sh - tb - sb
+    let vh = sh - top_h - sb
 
     # --- Status bar ---
     add_child(layout["root"], create_rect(0.0, sh - sb, sw, sb, COL_INNER))

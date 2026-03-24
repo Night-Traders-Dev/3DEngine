@@ -79,7 +79,7 @@ if r == nil:
     raise "Failed to create renderer"
 # Dark gray background (Unreal-style viewport)
 # Viewport is brighter than panels (key design principle from UE5/Blender)
-r["clear_color"] = [0.118, 0.122, 0.149, 1.0]
+r["clear_color"] = [0.141, 0.141, 0.141, 1.0]
 print "GPU: " + gpu.device_name()
 
 # ============================================================================
@@ -121,10 +121,13 @@ let font_r = create_font_renderer(r["render_pass"])
 # Single font atlas for all editor text (avoids multi-atlas batching issues)
 let font_ui = load_font(font_r, "ui", "assets/DejaVuSans.ttf", 18.0)
 
-# Floating windows
-let win_outliner = create_ui_window("Outliner", 10.0, 46.0, 200.0, 400.0)
-let win_details = create_ui_window("Details", 1180.0, 46.0, 250.0, 500.0)
-let win_content = create_ui_window("Content Browser", 220.0, 680.0, 740.0, 160.0)
+# Floating windows (positioned below menu bar + toolbar = 60px)
+let win_outliner = create_ui_window("Outliner", 10.0, 66.0, 220.0, 450.0)
+let win_details = create_ui_window("Details", 1180.0, 66.0, 250.0, 500.0)
+let win_content = create_ui_window("Content Browser", 240.0, 700.0, 700.0, 160.0)
+
+# Menu bar state
+let menubar_active = -1
 
 # ============================================================================
 # ECS World (editor scene)
@@ -297,6 +300,59 @@ while running:
     let left_released = gpu.mouse_just_released(gpu.MOUSE_LEFT)
     let window_consumed = update_windows(mx, my, left_pressed, left_held, left_released)
 
+    # --- Menu bar click handling ---
+    if left_pressed and my < layout["menubar_h"]:
+        let menu_x_positions = [8.0, 58.0, 108.0, 178.0, 240.0]
+        let menu_w = [45.0, 45.0, 65.0, 55.0, 50.0]
+        let clicked_menu = -1
+        let cmi = 0
+        while cmi < 5:
+            if mx >= menu_x_positions[cmi] - 4.0 and mx < menu_x_positions[cmi] + menu_w[cmi]:
+                clicked_menu = cmi
+            cmi = cmi + 1
+        if clicked_menu >= 0:
+            if menubar_active == clicked_menu:
+                menubar_active = -1
+                close_menu()
+            else:
+                menubar_active = clicked_menu
+                let menu_items_list = []
+                if clicked_menu == 0:
+                    menu_items_list = ["New Scene", "Open Scene...", "Save Scene", "---", "Export Game", "---", "Quit"]
+                if clicked_menu == 1:
+                    menu_items_list = ["Undo", "Redo", "---", "Delete", "Duplicate", "Select All"]
+                if clicked_menu == 2:
+                    menu_items_list = ["Outliner", "Details", "Content Browser", "---", "Reset Layout"]
+                if clicked_menu == 3:
+                    menu_items_list = ["Add Cube", "Add Sphere", "Add Physics Cube", "---", "Toggle Physics", "Generate Code"]
+                if clicked_menu == 4:
+                    menu_items_list = ["Controls", "---", "About Forge Engine"]
+                open_menu(menu_x_positions[clicked_menu] - 4.0, layout["menubar_h"], menu_items_list)
+            window_consumed = true
+        else:
+            menubar_active = -1
+    # Close menu bar when clicking elsewhere
+    if left_pressed and menubar_active >= 0 and my >= layout["menubar_h"]:
+        if is_menu_open() and menu_item_at(mx, my) < 0:
+            menubar_active = -1
+            close_menu()
+
+    # --- Toolbar button clicks ---
+    if left_pressed and my >= layout["menubar_h"] and my < layout["menubar_h"] + layout["toolbar_h"]:
+        # Play button
+        if mx >= sw_f / 2.0 - 40.0 and mx < sw_f / 2.0 + 40.0:
+            save_scene(world, "EditorScene", "assets/editor_scene.json")
+            let code = generate_game_script(world, "ForgeGame", {"width": 1280, "height": 720})
+            io.writefile("assets/generated_game.sage", code)
+            print "=== GAME GENERATED === Run: ./run.sh assets/generated_game.sage"
+            gpu.set_title("Forge Engine Editor | Game Generated!")
+            window_consumed = true
+        # Save button
+        if mx >= sw_f / 2.0 + 50.0 and mx < sw_f / 2.0 + 110.0:
+            save_scene(world, "EditorScene", "assets/editor_scene.json")
+            print "Scene saved: assets/editor_scene.json"
+            window_consumed = true
+
     # Handle right-click context menu
     if gpu.mouse_just_pressed(gpu.MOUSE_RIGHT) and mouse_in_viewport:
         if is_menu_open():
@@ -304,12 +360,13 @@ while running:
         else:
             open_menu(mx, my, ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Light", "---", "Select All", "Delete Selected"])
 
-    # Menu click
+    # Menu click (handles both context menu and menu bar dropdowns)
     if left_pressed and is_menu_open():
         let menu_idx = menu_item_at(mx, my)
         if menu_idx >= 0:
             let items = get_menu_items()
             let item = items[menu_idx]
+            # --- Tools / Context menu actions ---
             if item == "Add Cube":
                 entity_counter = entity_counter + 1
                 let pos = vec3(cam["target"][0], 0.5, cam["target"][2])
@@ -328,13 +385,59 @@ while running:
                 add_component(world, eid, "rigidbody", RigidbodyComponent(1.0))
                 add_component(world, eid, "collider", BoxColliderComponent(0.5, 0.5, 0.5))
                 add_component(world, eid, "health", HealthComponent(50.0))
-            if item == "Delete Selected":
+            # --- File menu ---
+            if item == "Save Scene":
+                save_scene(world, "EditorScene", "assets/editor_scene.json")
+                print "Scene saved: assets/editor_scene.json"
+            if item == "Export Game":
+                let code = generate_game_script(world, "ForgeGame", {"width": 1280, "height": 720})
+                io.writefile("assets/generated_game.sage", code)
+                print "Game exported: assets/generated_game.sage"
+            if item == "Quit":
+                running = false
+            # --- Edit menu ---
+            if item == "Delete" or item == "Delete Selected":
                 delete_selected(editor)
                 flush_dead(world)
+            if item == "Duplicate":
+                duplicate_selected(editor)
+            if item == "Select All":
+                let all_e = query(world, ["transform"])
+                if len(all_e) > 0:
+                    select_entity(editor, all_e[0])
+            # --- Window menu ---
+            if item == "Outliner":
+                win_outliner["visible"] = true
+                bring_to_front(win_outliner)
+            if item == "Details":
+                win_details["visible"] = true
+                bring_to_front(win_details)
+            if item == "Content Browser":
+                win_content["visible"] = true
+                bring_to_front(win_content)
+            # --- Tools menu ---
+            if item == "Toggle Physics":
+                if editor["selected"] >= 0:
+                    let sel = editor["selected"]
+                    if has_component(world, sel, "rigidbody"):
+                        remove_component(world, sel, "rigidbody")
+                        remove_component(world, sel, "collider")
+                    else:
+                        add_component(world, sel, "rigidbody", RigidbodyComponent(1.0))
+                        add_component(world, sel, "collider", BoxColliderComponent(0.5, 0.5, 0.5))
+                        add_component(world, sel, "health", HealthComponent(50.0))
+            if item == "Generate Code":
+                let code = generate_game_script(world, "GeneratedGame", {"width": 1280, "height": 720})
+                io.writefile("assets/generated_game.sage", code)
+                print "Generated: assets/generated_game.sage"
             close_menu()
+            menubar_active = -1
             window_consumed = true
         else:
-            close_menu()
+            # Clicked outside menu — close it (unless clicking another menu bar item)
+            if my >= layout["menubar_h"] or mx < 0.0 or mx > 300.0:
+                close_menu()
+                menubar_active = -1
 
     # --- Floating window content clicks (handled even though window_consumed is true) ---
     if left_pressed:
@@ -522,26 +625,53 @@ while running:
 
 
     # --- Editor UI (TrueType font rendering) ---
+    let mb_h = layout["menubar_h"]
     let tb_h = layout["toolbar_h"]
     let sb_h = layout["statusbar_h"]
+    let top_h = mb_h + tb_h
     let cur_sel = editor["selected"]
     let cur_mode = editor["gizmo"]["mode"]
 
-    # Draw panel backgrounds
+    # Draw panel backgrounds (menu bar + toolbar + status bar)
     draw_ui(ui_r, cmd, layout["root"], sw, sh)
 
-    # Mode button backgrounds + separators + selection highlight
+    # Extra quads: menu bar hover, toolbar mode buttons, viewport overlay
     let ui_quads = []
+
+    # Menu bar hover highlight
+    let menu_labels = ["File", "Edit", "Window", "Tools", "Help"]
+    let menu_x_pos = [8.0, 58.0, 108.0, 178.0, 240.0]
+    let menu_widths = [45.0, 45.0, 65.0, 55.0, 50.0]
+    let mhi = 0
+    while mhi < 5:
+        if menubar_active == mhi:
+            push(ui_quads, {"x": menu_x_pos[mhi] - 4.0, "y": 0.0, "w": menu_widths[mhi], "h": mb_h, "color": [0.290, 0.565, 0.851, 0.4]})
+        mhi = mhi + 1
+
+    # Toolbar mode buttons (below menu bar)
     let modes = ["translate", "rotate", "scale"]
-    let mx_b = 130.0
+    let mode_labels = ["Move", "Rotate", "Scale"]
+    let mx_b = 10.0
     let mi_b = 0
     while mi_b < 3:
-        let bc = [0.133, 0.145, 0.212, 1.0]
+        let bc = [0.212, 0.212, 0.212, 1.0]
         if cur_mode == modes[mi_b]:
-            bc = [0.910, 0.659, 0.298, 0.8]
-        push(ui_quads, {"x": mx_b, "y": 4.0, "w": 85.0, "h": 24.0, "color": bc})
-        mx_b = mx_b + 90.0
+            bc = [0.290, 0.565, 0.851, 0.8]
+        push(ui_quads, {"x": mx_b, "y": mb_h + 4.0, "w": 70.0, "h": 26.0, "color": bc})
+        mx_b = mx_b + 75.0
         mi_b = mi_b + 1
+
+    # Play button
+    push(ui_quads, {"x": sw / 2.0 - 40.0, "y": mb_h + 4.0, "w": 80.0, "h": 26.0, "color": [0.15, 0.45, 0.15, 1.0]})
+
+    # Save button
+    push(ui_quads, {"x": sw / 2.0 + 50.0, "y": mb_h + 4.0, "w": 60.0, "h": 26.0, "color": [0.212, 0.212, 0.212, 1.0]})
+
+    # Viewport overlay bar (top of viewport area)
+    let vp_b = get_viewport_bounds(layout)
+    push(ui_quads, {"x": vp_b["x"], "y": vp_b["y"], "w": vp_b["w"], "h": 28.0, "color": [0.098, 0.098, 0.098, 0.75]})
+    push(ui_quads, {"x": vp_b["x"], "y": vp_b["y"] + 28.0, "w": vp_b["w"], "h": 1.0, "color": [0.065, 0.065, 0.065, 0.5]})
+
     let ents = query(world, ["transform"])
     if len(ui_quads) > 0:
         let uv = build_quad_verts(ui_quads)
@@ -557,18 +687,36 @@ while running:
     proc _fn(n):
         return str(math.floor(n * 100.0 + 0.5) / 100.0)
 
-    add_text(font_r, "ui", "FORGE", 10.0, 8.0, 0.910, 0.659, 0.298, 1.0)
-    add_text(font_r, "ui", "Move", 143.0, 9.0, 0.9, 0.9, 0.9, 1.0)
-    add_text(font_r, "ui", "Rotate", 232.0, 9.0, 0.9, 0.9, 0.9, 1.0)
-    add_text(font_r, "ui", "Scale", 324.0, 9.0, 0.9, 0.9, 0.9, 1.0)
-    add_text(font_r, "ui", "4=Save  5=Generate Code", 430.0, 10.0, 0.45, 0.45, 0.45, 1.0)
+    # Menu bar text
+    let mti = 0
+    while mti < 5:
+        let mc = [0.65, 0.65, 0.65, 1.0]
+        if menubar_active == mti:
+            mc = [1.0, 1.0, 1.0, 1.0]
+        add_text(font_r, "ui", menu_labels[mti], menu_x_pos[mti], 5.0, mc[0], mc[1], mc[2], 1.0)
+        mti = mti + 1
+    # Project name on right side of menu bar
+    add_text(font_r, "ui", "Forge Engine", sw - 130.0, 5.0, 0.439, 0.439, 0.439, 1.0)
 
+    # Toolbar text
+    add_text(font_r, "ui", "Move", 22.0, mb_h + 8.0, 0.78, 0.78, 0.78, 1.0)
+    add_text(font_r, "ui", "Rotate", 92.0, mb_h + 8.0, 0.78, 0.78, 0.78, 1.0)
+    add_text(font_r, "ui", "Scale", 172.0, mb_h + 8.0, 0.78, 0.78, 0.78, 1.0)
+    add_text(font_r, "ui", "Play", sw / 2.0 - 22.0, mb_h + 8.0, 0.9, 0.9, 0.9, 1.0)
+    add_text(font_r, "ui", "Save", sw / 2.0 + 62.0, mb_h + 8.0, 0.78, 0.78, 0.78, 1.0)
+
+    # Viewport overlay text
+    add_text(font_r, "ui", "Perspective", vp_b["x"] + 10.0, vp_b["y"] + 6.0, 0.65, 0.65, 0.65, 1.0)
+    add_text(font_r, "ui", "Lit", vp_b["x"] + 120.0, vp_b["y"] + 6.0, 0.65, 0.65, 0.65, 1.0)
+    add_text(font_r, "ui", "Show", vp_b["x"] + 160.0, vp_b["y"] + 6.0, 0.65, 0.65, 0.65, 1.0)
+
+    # Status bar
     let stats = editor_stats(editor)
     let status = str(stats["entities"]) + " entities  " + str(draw_count) + " drawn  " + stats["mode"]
     if stats["selected"] >= 0:
         status = status + "  |  #" + str(stats["selected"])
     status = status + "  |  FPS: " + str(math.floor(ts["fps"]))
-    add_text(font_r, "ui", status, 8.0, sh - sb_h + 5.0, 0.4, 0.4, 0.4, 1.0)
+    add_text(font_r, "ui", status, 8.0, sh - sb_h + 5.0, 0.439, 0.439, 0.439, 1.0)
 
     flush_text(font_r, cmd, sw, sh)
 
@@ -580,6 +728,53 @@ while running:
         let wq = build_window_quads(sorted_wins[wi])
         array_extend(all_win_quads, wq)
         wi = wi + 1
+    # Details panel section headers + input field backgrounds
+    if win_details["visible"] and win_details["collapsed"] == false and cur_sel >= 0 and has_component(world, cur_sel, "transform"):
+        let dca_q = window_content_area(win_details)
+        let dqx = dca_q["x"]
+        let dqy = dca_q["y"]
+        let dqw = dca_q["w"]
+        # Entity name bar
+        if has_component(world, cur_sel, "name"):
+            push(all_win_quads, {"x": dqx, "y": dqy, "w": dqw, "h": 24.0, "color": [0.176, 0.176, 0.176, 1.0]})
+            dqy = dqy + 28.0
+        # Transform section header
+        push(all_win_quads, {"x": dqx, "y": dqy, "w": dqw, "h": 22.0, "color": [0.120, 0.120, 0.120, 1.0]})
+        dqy = dqy + 26.0
+        # Location row
+        push(all_win_quads, {"x": dqx, "y": dqy, "w": dqw, "h": 18.0, "color": [0.110, 0.110, 0.110, 0.5]})
+        dqy = dqy + 22.0
+        # XYZ input fields for location
+        let fw3 = (dqw - 16.0) / 3.0
+        push(all_win_quads, {"x": dqx + 2.0, "y": dqy, "w": fw3, "h": 20.0, "color": [0.098, 0.098, 0.098, 1.0]})
+        push(all_win_quads, {"x": dqx + 2.0, "y": dqy, "w": 3.0, "h": 20.0, "color": [0.9, 0.22, 0.22, 0.8]})
+        push(all_win_quads, {"x": dqx + fw3 + 6.0, "y": dqy, "w": fw3, "h": 20.0, "color": [0.098, 0.098, 0.098, 1.0]})
+        push(all_win_quads, {"x": dqx + fw3 + 6.0, "y": dqy, "w": 3.0, "h": 20.0, "color": [0.22, 0.9, 0.22, 0.8]})
+        push(all_win_quads, {"x": dqx + fw3 * 2.0 + 10.0, "y": dqy, "w": fw3, "h": 20.0, "color": [0.098, 0.098, 0.098, 1.0]})
+        push(all_win_quads, {"x": dqx + fw3 * 2.0 + 10.0, "y": dqy, "w": 3.0, "h": 20.0, "color": [0.22, 0.22, 0.9, 0.8]})
+        dqy = dqy + 26.0
+        # Rotation row
+        push(all_win_quads, {"x": dqx, "y": dqy, "w": dqw, "h": 18.0, "color": [0.110, 0.110, 0.110, 0.5]})
+        dqy = dqy + 22.0
+        # XYZ input fields for rotation
+        push(all_win_quads, {"x": dqx + 2.0, "y": dqy, "w": fw3, "h": 20.0, "color": [0.098, 0.098, 0.098, 1.0]})
+        push(all_win_quads, {"x": dqx + 2.0, "y": dqy, "w": 3.0, "h": 20.0, "color": [0.9, 0.22, 0.22, 0.8]})
+        push(all_win_quads, {"x": dqx + fw3 + 6.0, "y": dqy, "w": fw3, "h": 20.0, "color": [0.098, 0.098, 0.098, 1.0]})
+        push(all_win_quads, {"x": dqx + fw3 + 6.0, "y": dqy, "w": 3.0, "h": 20.0, "color": [0.22, 0.9, 0.22, 0.8]})
+        push(all_win_quads, {"x": dqx + fw3 * 2.0 + 10.0, "y": dqy, "w": fw3, "h": 20.0, "color": [0.098, 0.098, 0.098, 1.0]})
+        push(all_win_quads, {"x": dqx + fw3 * 2.0 + 10.0, "y": dqy, "w": 3.0, "h": 20.0, "color": [0.22, 0.22, 0.9, 0.8]})
+        dqy = dqy + 26.0
+        # Scale row
+        push(all_win_quads, {"x": dqx, "y": dqy, "w": dqw, "h": 18.0, "color": [0.110, 0.110, 0.110, 0.5]})
+        dqy = dqy + 22.0
+        # XYZ input fields for scale
+        push(all_win_quads, {"x": dqx + 2.0, "y": dqy, "w": fw3, "h": 20.0, "color": [0.098, 0.098, 0.098, 1.0]})
+        push(all_win_quads, {"x": dqx + 2.0, "y": dqy, "w": 3.0, "h": 20.0, "color": [0.9, 0.22, 0.22, 0.8]})
+        push(all_win_quads, {"x": dqx + fw3 + 6.0, "y": dqy, "w": fw3, "h": 20.0, "color": [0.098, 0.098, 0.098, 1.0]})
+        push(all_win_quads, {"x": dqx + fw3 + 6.0, "y": dqy, "w": 3.0, "h": 20.0, "color": [0.22, 0.9, 0.22, 0.8]})
+        push(all_win_quads, {"x": dqx + fw3 * 2.0 + 10.0, "y": dqy, "w": fw3, "h": 20.0, "color": [0.098, 0.098, 0.098, 1.0]})
+        push(all_win_quads, {"x": dqx + fw3 * 2.0 + 10.0, "y": dqy, "w": 3.0, "h": 20.0, "color": [0.22, 0.22, 0.9, 0.8]})
+
     # Selection highlight in outliner window
     if win_outliner["visible"] and win_outliner["collapsed"] == false:
         let oca_h = window_content_area(win_outliner)
@@ -587,7 +782,7 @@ while running:
         let hei = 0
         while hei < len(ents) and hei < 25:
             if ents[hei] == cur_sel:
-                push(all_win_quads, {"x": oca_h["x"], "y": hey - 1.0, "w": oca_h["w"], "h": 20.0, "color": [0.910, 0.659, 0.298, 0.15]})
+                push(all_win_quads, {"x": oca_h["x"], "y": hey - 1.0, "w": oca_h["w"], "h": 20.0, "color": [0.290, 0.565, 0.851, 0.15]})
             hey = hey + 24.0
             hei = hei + 1
     # Add menu quads if open
@@ -608,7 +803,7 @@ while running:
     while wi < len(sorted_wins):
         let fw = sorted_wins[wi]
         if fw["visible"]:
-            add_text(font_r, "ui", fw["title"], fw["x"] + 8.0, fw["y"] + 4.0, 0.910, 0.659, 0.298, 1.0)
+            add_text(font_r, "ui", fw["title"], fw["x"] + 8.0, fw["y"] + 4.0, 0.784, 0.784, 0.784, 1.0)
         wi = wi + 1
 
     # --- Outliner content ---
@@ -633,58 +828,66 @@ while running:
         let dca = window_content_area(win_details)
         let dx = dca["x"]
         let dy = dca["y"]
+        let dw = dca["w"]
+        let fw3 = (dw - 16.0) / 3.0
         if cur_sel >= 0 and has_component(world, cur_sel, "transform"):
             let st = get_component(world, cur_sel, "transform")
             let iy = dy
             if has_component(world, cur_sel, "name"):
-                add_text(font_r, "ui", get_component(world, cur_sel, "name")["name"], dx + 4.0, iy, 1.0, 1.0, 1.0, 1.0)
+                add_text(font_r, "ui", get_component(world, cur_sel, "name")["name"], dx + 6.0, iy + 3.0, 0.9, 0.9, 0.9, 1.0)
                 iy = iy + 28.0
-            add_text(font_r, "ui", "Transform", dx + 4.0, iy, 0.910, 0.659, 0.298, 1.0)
+            # Transform section header
+            add_text(font_r, "ui", "Transform", dx + 6.0, iy + 2.0, 0.784, 0.784, 0.784, 1.0)
             iy = iy + 26.0
-            add_text(font_r, "ui", "Location", dx + 6.0, iy, 0.5, 0.5, 0.5, 1.0)
+            # Location
+            add_text(font_r, "ui", "Location", dx + 4.0, iy + 1.0, 0.439, 0.439, 0.439, 1.0)
             iy = iy + 22.0
-            add_text(font_r, "ui", "X " + _fn(st["position"][0]), dx + 8.0, iy, 0.9, 0.3, 0.3, 1.0)
-            add_text(font_r, "ui", "Y " + _fn(st["position"][1]), dx + 86.0, iy, 0.3, 0.9, 0.3, 1.0)
-            add_text(font_r, "ui", "Z " + _fn(st["position"][2]), dx + 164.0, iy, 0.3, 0.3, 0.9, 1.0)
+            add_text(font_r, "ui", _fn(st["position"][0]), dx + 10.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
+            add_text(font_r, "ui", _fn(st["position"][1]), dx + fw3 + 14.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
+            add_text(font_r, "ui", _fn(st["position"][2]), dx + fw3 * 2.0 + 18.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
             iy = iy + 26.0
-            add_text(font_r, "ui", "Rotation", dx + 6.0, iy, 0.5, 0.5, 0.5, 1.0)
+            # Rotation
+            add_text(font_r, "ui", "Rotation", dx + 4.0, iy + 1.0, 0.439, 0.439, 0.439, 1.0)
             iy = iy + 22.0
-            add_text(font_r, "ui", "X " + _fn(st["rotation"][0]), dx + 8.0, iy, 0.9, 0.3, 0.3, 1.0)
-            add_text(font_r, "ui", "Y " + _fn(st["rotation"][1]), dx + 86.0, iy, 0.3, 0.9, 0.3, 1.0)
-            add_text(font_r, "ui", "Z " + _fn(st["rotation"][2]), dx + 164.0, iy, 0.3, 0.3, 0.9, 1.0)
+            add_text(font_r, "ui", _fn(st["rotation"][0]), dx + 10.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
+            add_text(font_r, "ui", _fn(st["rotation"][1]), dx + fw3 + 14.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
+            add_text(font_r, "ui", _fn(st["rotation"][2]), dx + fw3 * 2.0 + 18.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
             iy = iy + 26.0
-            add_text(font_r, "ui", "Scale", dx + 6.0, iy, 0.5, 0.5, 0.5, 1.0)
+            # Scale
+            add_text(font_r, "ui", "Scale", dx + 4.0, iy + 1.0, 0.439, 0.439, 0.439, 1.0)
             iy = iy + 22.0
-            add_text(font_r, "ui", "X " + _fn(st["scale"][0]), dx + 8.0, iy, 0.9, 0.3, 0.3, 1.0)
-            add_text(font_r, "ui", "Y " + _fn(st["scale"][1]), dx + 86.0, iy, 0.3, 0.9, 0.3, 1.0)
-            add_text(font_r, "ui", "Z " + _fn(st["scale"][2]), dx + 164.0, iy, 0.3, 0.3, 0.9, 1.0)
+            add_text(font_r, "ui", _fn(st["scale"][0]), dx + 10.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
+            add_text(font_r, "ui", _fn(st["scale"][1]), dx + fw3 + 14.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
+            add_text(font_r, "ui", _fn(st["scale"][2]), dx + fw3 * 2.0 + 18.0, iy + 2.0, 0.78, 0.78, 0.78, 1.0)
             iy = iy + 28.0
+            # Physics section
             if has_component(world, cur_sel, "rigidbody"):
                 let rb = get_component(world, cur_sel, "rigidbody")
-                add_text(font_r, "ui", "Physics", dx + 4.0, iy, 0.910, 0.659, 0.298, 1.0)
-                iy = iy + 22.0
+                add_text(font_r, "ui", "Physics", dx + 6.0, iy + 2.0, 0.784, 0.784, 0.784, 1.0)
+                iy = iy + 24.0
                 if rb["is_kinematic"]:
-                    add_text(font_r, "ui", "Static Body", dx + 8.0, iy, 0.5, 0.5, 0.5, 1.0)
+                    add_text(font_r, "ui", "Static Body", dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
                 else:
-                    add_text(font_r, "ui", "Mass: " + _fn(rb["mass"]) + "  Bounce: " + _fn(rb["restitution"]), dx + 8.0, iy, 0.5, 0.5, 0.5, 1.0)
-                iy = iy + 18.0
+                    add_text(font_r, "ui", "Mass: " + _fn(rb["mass"]) + "  Bounce: " + _fn(rb["restitution"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                iy = iy + 20.0
             if has_component(world, cur_sel, "health"):
                 let hp = get_component(world, cur_sel, "health")
-                add_text(font_r, "ui", "Health: " + _fn(hp["current"]) + " / " + _fn(hp["max"]), dx + 8.0, iy, 0.3, 0.9, 0.3, 1.0)
+                add_text(font_r, "ui", "Health: " + _fn(hp["current"]) + " / " + _fn(hp["max"]), dx + 8.0, iy, 0.3, 0.85, 0.3, 1.0)
                 iy = iy + 22.0
+            # Material section
             if has_component(world, cur_sel, "imported_asset"):
                 let ia = get_component(world, cur_sel, "imported_asset")
-                add_text(font_r, "ui", "Material", dx + 4.0, iy, 0.910, 0.659, 0.298, 1.0)
-                iy = iy + 22.0
+                add_text(font_r, "ui", "Material", dx + 6.0, iy + 2.0, 0.784, 0.784, 0.784, 1.0)
+                iy = iy + 24.0
                 if len(ia["materials"]) > 0:
                     let mat = ia["materials"][0]
-                    add_text(font_r, "ui", mat["name"], dx + 8.0, iy, 0.7, 0.7, 0.7, 1.0)
+                    add_text(font_r, "ui", mat["name"], dx + 8.0, iy, 0.65, 0.65, 0.65, 1.0)
                     iy = iy + 18.0
-                    add_text(font_r, "ui", "Metallic: " + _fn(mat["metallic"]), dx + 8.0, iy, 0.5, 0.5, 0.5, 1.0)
+                    add_text(font_r, "ui", "Metallic: " + _fn(mat["metallic"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
                     iy = iy + 16.0
-                    add_text(font_r, "ui", "Roughness: " + _fn(mat["roughness"]), dx + 8.0, iy, 0.5, 0.5, 0.5, 1.0)
+                    add_text(font_r, "ui", "Roughness: " + _fn(mat["roughness"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
         else:
-            add_text(font_r, "ui", "Select an entity to view details", dx + 4.0, dy + 4.0, 0.4, 0.4, 0.4, 1.0)
+            add_text(font_r, "ui", "Select an entity to view details", dx + 4.0, dy + 8.0, 0.439, 0.439, 0.439, 1.0)
 
     # --- Content Browser content ---
     if win_content["visible"] and win_content["collapsed"] == false:
@@ -700,7 +903,7 @@ while running:
                     model_str = model_str + ", "
                 model_str = model_str + model_names[mn]
                 mn = mn + 1
-            add_text(font_r, "ui", model_str, cca["x"] + 4.0, cca["y"] + 44.0, 0.306, 0.804, 0.769, 1.0)
+            add_text(font_r, "ui", model_str, cca["x"] + 4.0, cca["y"] + 44.0, 0.357, 0.627, 0.914, 1.0)
     # Menu item text
     if is_menu_open():
         let mitems = get_menu_items()
