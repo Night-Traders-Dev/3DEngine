@@ -336,35 +336,35 @@ while running:
         else:
             close_menu()
 
-    # --- Left click handler (routes based on mouse position) ---
-    if left_pressed and window_consumed == false:
-        let vp_bounds = get_viewport_bounds(layout)
-        let in_vp = mx > vp_bounds["x"] and mx < vp_bounds["x"] + vp_bounds["w"] and my > vp_bounds["y"] and my < vp_bounds["y"] + vp_bounds["h"]
+    # --- Floating window content clicks (handled even though window_consumed is true) ---
+    if left_pressed:
         let oca_click = window_content_area(win_outliner)
         let in_outliner = win_outliner["visible"] and mx >= oca_click["x"] and mx < oca_click["x"] + oca_click["w"] and my >= oca_click["y"] and my < oca_click["y"] + oca_click["h"]
-
         if in_outliner:
-            # Click in outliner window — select entity from list
             let click_idx = math.floor((my - oca_click["y"]) / 24.0)
             let all_ents = query(world, ["transform"])
             if click_idx >= 0 and click_idx < len(all_ents):
                 select_entity(editor, all_ents[click_idx])
-        else:
-            if in_vp:
-                # Click in viewport — raycast select
-                let cam_pos = editor_camera_position(cam)
-                let fov = radians(60.0)
-                let aspect = vp_bounds["w"] / vp_bounds["h"]
-                let norm_x = (mx - vp_bounds["x"]) / vp_bounds["w"] * 2.0 - 1.0
-                let norm_y = 1.0 - (my - vp_bounds["y"]) / vp_bounds["h"] * 2.0
-                let tan_half = math.tan(fov * 0.5)
-                let rx = norm_x * aspect * tan_half
-                let ry = norm_y * tan_half
-                let cam_fwd = v3_normalize(v3_sub(cam["target"], cam_pos))
-                let cam_right = v3_normalize(v3_cross(cam_fwd, vec3(0.0, 1.0, 0.0)))
-                let cam_up = v3_cross(cam_right, cam_fwd)
-                let ray_dir = v3_normalize(v3_add(v3_add(v3_scale(cam_right, rx), v3_scale(cam_up, ry)), cam_fwd))
-                select_by_ray(editor, cam_pos, ray_dir)
+            window_consumed = true
+
+    # --- Viewport click handler ---
+    if left_pressed and window_consumed == false:
+        let vp_bounds = get_viewport_bounds(layout)
+        let in_vp = mx > vp_bounds["x"] and mx < vp_bounds["x"] + vp_bounds["w"] and my > vp_bounds["y"] and my < vp_bounds["y"] + vp_bounds["h"]
+        if in_vp:
+            let cam_pos = editor_camera_position(cam)
+            let fov = radians(60.0)
+            let aspect = vp_bounds["w"] / vp_bounds["h"]
+            let norm_x = (mx - vp_bounds["x"]) / vp_bounds["w"] * 2.0 - 1.0
+            let norm_y = 1.0 - (my - vp_bounds["y"]) / vp_bounds["h"] * 2.0
+            let tan_half = math.tan(fov * 0.5)
+            let rx = norm_x * aspect * tan_half
+            let ry = norm_y * tan_half
+            let cam_fwd = v3_normalize(v3_sub(cam["target"], cam_pos))
+            let cam_right = v3_normalize(v3_cross(cam_fwd, vec3(0.0, 1.0, 0.0)))
+            let cam_up = v3_cross(cam_right, cam_fwd)
+            let ray_dir = v3_normalize(v3_add(v3_add(v3_scale(cam_right, rx), v3_scale(cam_up, ry)), cam_fwd))
+            select_by_ray(editor, cam_pos, ray_dir)
 
     # --- Entity operations ---
     if action_just_pressed(inp, "select"):
@@ -522,12 +522,8 @@ while running:
 
 
     # --- Editor UI (TrueType font rendering) ---
-    let lw = layout["left_panel_w"]
-    let rw = layout["right_panel_w"]
     let tb_h = layout["toolbar_h"]
     let sb_h = layout["statusbar_h"]
-    let bp_h = layout["bottom_panel_h"]
-    let rp_x = sw - rw
     let cur_sel = editor["selected"]
     let cur_mode = editor["gizmo"]["mode"]
 

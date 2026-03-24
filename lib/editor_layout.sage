@@ -54,39 +54,11 @@ proc _build_all(layout):
     add_child(layout["root"], create_rect(0.0, tb - 2.0, sw, 2.0, COL_SHADOW))
     add_child(layout["root"], create_rect(0.0, tb - 1.0, sw, 1.0, COL_ACCENT_LINE))
 
-    # --- Left panel ---
-    add_child(layout["root"], create_rect(0.0, my, lw, mh, THEME_PANEL))
-    add_child(layout["root"], create_rect(0.0, my, lw, 26.0, THEME_HEADER))
-    add_child(layout["root"], create_rect(0.0, my + 25.0, lw, 1.0, COL_ACCENT_LINE))
-    add_child(layout["root"], create_rect(0.0, my + 26.0, lw, 2.0, COL_INNER))
-    add_child(layout["root"], create_rect(lw, my, 1.0, mh, COL_SHADOW))
-
-    # --- Right panel ---
-    add_child(layout["root"], create_rect(rx, my, rw, mh, THEME_PANEL))
-    add_child(layout["root"], create_rect(rx, my, rw, 26.0, THEME_HEADER))
-    add_child(layout["root"], create_rect(rx, my + 25.0, rw, 1.0, COL_ACCENT_LINE))
-    add_child(layout["root"], create_rect(rx, my + 26.0, rw, 2.0, COL_INNER))
-    add_child(layout["root"], create_rect(rx - 1.0, my, 1.0, mh, COL_SHADOW))
-
-    # --- Viewport border glow ---
-    let vx = lw + 1.0
+    # Viewport fills the area between toolbar and statusbar (floating windows overlay)
+    let vx = 0.0
     let vy = my
-    let vw = sw - lw - rw - 2.0
-    let vh = mh
-    add_child(layout["root"], create_rect(vx, vy, vw, 1.0, COL_VP_BORDER))
-    add_child(layout["root"], create_rect(vx, vy + vh - 1.0, vw, 1.0, COL_VP_BORDER))
-
-    # --- Bottom panel ---
-    add_child(layout["root"], create_rect(lw, by - 1.0, sw - lw - rw, 1.0, COL_SHADOW))
-    add_child(layout["root"], create_rect(lw, by, sw - lw - rw, bh, THEME_PANEL))
-    add_child(layout["root"], create_rect(lw, by, sw - lw - rw, 26.0, THEME_HEADER))
-    add_child(layout["root"], create_rect(lw, by + 25.0, sw - lw - rw, 1.0, COL_ACCENT_LINE))
-    add_child(layout["root"], create_rect(lw, by + 26.0, sw - lw - rw, 2.0, COL_INNER))
-    # Corner fills
-    add_child(layout["root"], create_rect(0.0, by, lw, bh, THEME_PANEL))
-    add_child(layout["root"], create_rect(0.0, by, lw, 1.0, COL_SHADOW))
-    add_child(layout["root"], create_rect(rx, by, rw, bh, THEME_PANEL))
-    add_child(layout["root"], create_rect(rx, by, rw, 1.0, COL_SHADOW))
+    let vw = sw
+    let vh = sh - tb - sb
 
     # --- Status bar ---
     add_child(layout["root"], create_rect(0.0, sh - sb, sw, sb, COL_INNER))
