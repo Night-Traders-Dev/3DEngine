@@ -127,12 +127,16 @@ editor_postfx["vignette_softness"] = 0.4
 # LOD configuration (distances for mesh detail levels)
 let editor_lod = create_lod_config([30.0, 80.0, 200.0, 500.0, 1000.0])
 
-# Shadow map (2048x2048 resolution)
-let shadow_renderer = create_shadow_renderer(2048)
-if shadow_renderer != nil:
-    let shadow_light_vp = compute_light_vp(vec3(-0.3, -0.8, -0.5), vec3(0.0, 0.0, 0.0), 50.0)
-    shadow_renderer["light_vp"] = shadow_light_vp
-    print "Shadow map initialized (2048x2048)"
+# Shadow map (2048x2048 resolution) — optional, may fail on some GPUs
+let shadow_renderer = nil
+try:
+    shadow_renderer = create_shadow_renderer(2048)
+    if shadow_renderer != nil:
+        let shadow_light_vp = compute_light_vp(vec3(-0.3, -0.8, -0.5), vec3(0.0, 0.0, 0.0), 50.0)
+        shadow_renderer["light_vp"] = shadow_light_vp
+        print "Shadow map initialized (2048x2048)"
+catch e:
+    print "Shadow map skipped: " + str(e)
 
 # ============================================================================
 # Meshes
@@ -553,7 +557,7 @@ while running:
                 if clicked_menu == 2:
                     menu_items_list = ["Outliner", "Details", "Content Browser", "---", "Reset Layout"]
                 if clicked_menu == 3:
-                    menu_items_list = ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Light", "---", "Browse Assets", "Browse Textures", "Browse Sprites", "Browse Animations", "Place Selected Asset", "---", "Toggle Physics", "Generate Code"]
+                    menu_items_list = ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Light", "---", "Apply Metal", "Apply Wood", "Apply Glass", "Apply Gold", "---", "Toggle Physics", "Save as Prefab", "---", "Generate Code"]
                 if clicked_menu == 4:
                     menu_items_list = ["Controls", "---", "About Forge Engine"]
                 open_menu(menu_x_positions[clicked_menu] - 4.0, layout["menubar_h"], menu_items_list)
@@ -741,7 +745,9 @@ while running:
                 io.writefile("assets/generated_game.sage", code)
                 print "Game exported: assets/generated_game.sage"
             if item == "Quit":
-                running = false
+                proc _menu_quit():
+                    running = false
+                show_modal("Quit", "Are you sure you want to quit?", _menu_quit, nil)
             # --- Edit menu ---
             if item == "Undo":
                 if undo(editor["history"]):
@@ -769,7 +775,18 @@ while running:
                 win_content["visible"] = true
                 bring_to_front(win_content)
             if item == "Reset Layout":
-                reset_layout_windows()
+                win_outliner["x"] = 10.0
+                win_outliner["y"] = 66.0
+                win_outliner["width"] = 220.0
+                win_outliner["height"] = 450.0
+                win_details["x"] = sw_f - 260.0
+                win_details["y"] = 66.0
+                win_details["width"] = 250.0
+                win_details["height"] = 500.0
+                win_content["x"] = 240.0
+                win_content["y"] = sh_f - 220.0
+                win_content["width"] = 700.0
+                win_content["height"] = 160.0
                 print "Layout reset"
             # --- Tools menu ---
             if item == "Toggle Physics":
@@ -782,6 +799,23 @@ while running:
                         add_component(world, sel, "rigidbody", RigidbodyComponent(1.0))
                         add_component(world, sel, "collider", BoxColliderComponent(0.5, 0.5, 0.5))
                         add_component(world, sel, "health", HealthComponent(50.0))
+            if item == "Apply Metal" or item == "Apply Wood" or item == "Apply Glass" or item == "Apply Gold":
+                if editor["selected"] >= 0:
+                    let preset_name = replace(item, "Apply ", "")
+                    from material import create_material_preset
+                    let mat_comp = create_material_preset(preset_name)
+                    if mat_comp != nil:
+                        add_component(world, editor["selected"], "material", mat_comp)
+                        print "Applied " + preset_name + " material to #" + str(editor["selected"])
+            if item == "Save as Prefab":
+                if editor["selected"] >= 0:
+                    let sel_id = editor["selected"]
+                    let pname = "Entity_" + str(sel_id)
+                    if has_component(world, sel_id, "name"):
+                        pname = get_component(world, sel_id, "name")["name"]
+                    from scene_serial import save_prefab
+                    save_prefab(world, sel_id, pname, "assets/prefabs/" + pname + ".prefab.json")
+                    print "Prefab saved: assets/prefabs/" + pname + ".prefab.json"
             if item == "Generate Code":
                 let code = generate_game_script(world, "GeneratedGame", {"width": 1280, "height": 720})
                 io.writefile("assets/generated_game.sage", code)
@@ -790,7 +824,7 @@ while running:
             if item == "Controls":
                 show_shortcuts = show_shortcuts == false
             if item == "About Forge Engine":
-                print "Forge Engine Editor - UE-style SageLang editor (Vulkan backend)"
+                show_modal("About", "Forge Engine v0.1 - SageLang 3D Editor (Vulkan)", nil, nil)
             close_menu()
             menubar_active = -1
             window_consumed = true
@@ -1070,7 +1104,7 @@ while running:
     let sh = r["height"] + 0.0
 
     # Sky dome (behind everything)
-    draw_sky(sky, cmd, view, proj)
+    draw_sky(sky, cmd, view, aspect, 60.0, ts["elapsed"])
     # Editor grid overlay
     draw_editor_grid(grid, cmd, vp)
 
