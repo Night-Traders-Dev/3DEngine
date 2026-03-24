@@ -18,7 +18,7 @@ from renderer import shutdown_renderer, check_resize, update_title_fps
 from ecs import create_world, spawn, add_component, get_component
 from ecs import has_component, query, tick_systems, flush_dead
 from ecs import entity_count, destroy, add_tag, has_tag, remove_component, register_system
-from components import TransformComponent, NameComponent, PointLightComponent
+from components import TransformComponent, NameComponent, PointLightComponent, MaterialComponent
 from input import create_input, update_input, bind_action
 from input import action_held, action_just_pressed
 from input import mouse_delta, scroll_value, mouse_position
@@ -72,6 +72,8 @@ from gameplay import HealthComponent
 import sys
 from game_loop import create_time_state, update_time
 from frustum import extract_frustum_planes, aabb_in_frustum
+from post_fx import create_postfx, pfx_cinematic, build_vignette_quads
+from lod import create_lod_config, compute_lod
 from asset_import import import_gltf, scan_importable_assets
 import io
 
@@ -93,10 +95,15 @@ print "GPU: " + gpu.device_name()
 # ============================================================================
 let ls = create_light_scene()
 init_light_gpu(ls)
-add_light(ls, directional_light(-0.3, -0.8, -0.5, 1.0, 0.98, 0.92, 1.5))
-add_light(ls, point_light(8.0, 6.0, 5.0, 1.0, 0.9, 0.8, 4.0, 30.0))
-add_light(ls, point_light(-5.0, 4.0, -3.0, 0.8, 0.85, 1.0, 3.0, 25.0))
-set_ambient(ls, 0.35, 0.35, 0.4, 0.6)
+# Three-point lighting for professional look
+add_light(ls, directional_light(-0.3, -0.8, -0.5, 1.0, 0.98, 0.92, 1.8))
+add_light(ls, point_light(8.0, 6.0, 5.0, 1.0, 0.95, 0.85, 4.5, 35.0))
+add_light(ls, point_light(-5.0, 4.0, -3.0, 0.7, 0.8, 1.0, 3.0, 25.0))
+# Fill light (softer, from opposite side)
+add_light(ls, point_light(-8.0, 3.0, 6.0, 0.6, 0.65, 0.8, 2.0, 30.0))
+# Rim/back light for edge definition
+add_light(ls, point_light(0.0, 8.0, -8.0, 0.9, 0.9, 1.0, 2.5, 40.0))
+set_ambient(ls, 0.25, 0.25, 0.3, 0.5)
 # Force initial UBO upload
 set_view_position(ls, vec3(0.0, 5.0, 10.0))
 update_light_ubo(ls)
@@ -108,6 +115,16 @@ init_sky_gpu(sky, r["render_pass"])
 
 # Editor grid (Unreal-style ground grid)
 let grid = create_editor_grid(r["render_pass"])
+
+# Post-processing effects (subtle vignette for cinematic viewport)
+let editor_postfx = create_postfx()
+editor_postfx["vignette_enabled"] = true
+editor_postfx["vignette_intensity"] = 0.25
+editor_postfx["vignette_radius"] = 0.85
+editor_postfx["vignette_softness"] = 0.4
+
+# LOD configuration (distances for mesh detail levels)
+let editor_lod = create_lod_config([30.0, 80.0, 200.0, 500.0, 1000.0])
 
 # ============================================================================
 # Meshes
@@ -1053,8 +1070,9 @@ while running:
     let sw = r["width"] + 0.0
     let sh = r["height"] + 0.0
 
-    # Sky
-    # Draw editor grid (Unreal-style) instead of sky
+    # Sky dome (behind everything)
+    draw_sky(sky, cmd, view, proj)
+    # Editor grid overlay
     draw_editor_grid(grid, cmd, vp)
 
     # 3D scene with frustum culling
@@ -1066,14 +1084,16 @@ while running:
         let eid = renderers[ri]
         let t = get_component(world, eid, "transform")
         let pos = t["position"]
-        # Frustum cull with generous bounds
+        # Frustum cull + LOD
         let half_ext = vec3(2.0, 2.0, 2.0)
         if aabb_in_frustum(frustum_planes, pos, half_ext):
-            let mi = get_component(world, eid, "mesh_id")
-            let model = transform_to_matrix(t)
-            let mvp = mat4_mul(vp, model)
-            draw_mesh_lit(cmd, lit_mat, mi["mesh"], mvp, model, ls["desc_set"])
-            draw_count = draw_count + 1
+            let lod_level = compute_lod(editor_lod, cam_pos, pos)
+            if lod_level < 5:
+                let mi = get_component(world, eid, "mesh_id")
+                let model = transform_to_matrix(t)
+                let mvp = mat4_mul(vp, model)
+                draw_mesh_lit(cmd, lit_mat, mi["mesh"], mvp, model, ls["desc_set"])
+                draw_count = draw_count + 1
         ri = ri + 1
 
     # Gizmo visualization (draw handles as colored boxes)
@@ -1097,6 +1117,16 @@ while running:
     let top_h = mb_h + tb_h
     let cur_sel = editor["selected"]
     let cur_mode = editor["gizmo"]["mode"]
+
+    # Viewport vignette overlay (subtle cinematic darkening)
+    let vig_quads = build_vignette_quads(editor_postfx, sw, sh)
+    if len(vig_quads) > 0:
+        let vigv = build_quad_verts(vig_quads)
+        gpu.buffer_upload(ui_r["vbuf"], vigv)
+        gpu.cmd_bind_graphics_pipeline(cmd, ui_r["pipeline"])
+        gpu.cmd_push_constants(cmd, ui_r["pipe_layout"], gpu.STAGE_VERTEX, [sw, sh, 0.0, 0.0])
+        gpu.cmd_bind_vertex_buffer(cmd, ui_r["vbuf"])
+        gpu.cmd_draw(cmd, len(vig_quads) * 6, 1, 0, 0)
 
     # Draw panel backgrounds (menu bar + toolbar + status bar)
     draw_ui(ui_r, cmd, layout["root"], sw, sh)
@@ -1419,6 +1449,19 @@ while running:
                     add_text(font_r, "ui", "Metallic: " + _fn(mat["metallic"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
                     iy = iy + 16.0
                     add_text(font_r, "ui", "Roughness: " + _fn(mat["roughness"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+            # MaterialComponent (if present)
+            if has_component(world, cur_sel, "material"):
+                let mc = get_component(world, cur_sel, "material")
+                iy = iy + 22.0
+                add_text(font_r, "ui", "Material", dx + 6.0, iy + 2.0, 0.784, 0.784, 0.784, 1.0)
+                iy = iy + 24.0
+                add_text(font_r, "ui", "Albedo: " + _fn(mc["albedo"][0]) + " " + _fn(mc["albedo"][1]) + " " + _fn(mc["albedo"][2]), dx + 8.0, iy, 0.65, 0.65, 0.65, 1.0)
+                iy = iy + 18.0
+                add_text(font_r, "ui", "Metallic: " + _fn(mc["metallic"]) + "  Roughness: " + _fn(mc["roughness"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                iy = iy + 16.0
+                if mc["emission_strength"] > 0.0:
+                    add_text(font_r, "ui", "Emission: " + _fn(mc["emission_strength"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                    iy = iy + 16.0
         else:
             add_text(font_r, "ui", "Select an entity to view details", dx + 4.0, dy + 8.0, 0.439, 0.439, 0.439, 1.0)
 

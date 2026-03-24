@@ -1,6 +1,6 @@
 # Forge Engine
 
-A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Features a visual editor with auto-generated SageLang code output, TrueType font rendering, real-time lighting, and 50+ engine modules.
+A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Features a UE5-inspired visual editor with floating windows, menu bar, TrueType font rendering, real-time PBR lighting, quaternion math, and 86+ engine modules.
 
 For the complete engine guide, see **[GUIDE.md](GUIDE.md)**.
 
@@ -13,69 +13,52 @@ For the complete engine guide, see **[GUIDE.md](GUIDE.md)**.
 # Run a game demo
 ./run.sh examples/demo_world.sage
 
-# Build distributable
-./build.sh editor.sage -o forge_editor
+# Run tests (47 suites, 1299 checks)
+./tests/run_all.sh
 ```
 
 ## Editor
 
-The Forge Editor is a visual scene editor in the style of Unreal Engine. Build scenes by placing and transforming objects, then press **5** to auto-generate a complete SageLang game script.
+The Forge Editor is a visual scene editor inspired by Unreal Engine 5. Build scenes by placing and transforming objects, edit properties inline, then generate a complete SageLang game script.
+
+### Features
+
+- **Floating windows** — Draggable, resizable Outliner, Details, and Content Browser panels with snap-to-edge docking
+- **Menu bar** — File, Edit, Window, Tools, Help menus with dropdown actions
+- **Editable properties** — Click transform values to type new numbers with blinking cursor
+- **Scrollable panels** — Mouse wheel scrolls Outliner, Details, and Content Browser
+- **Undo/Redo** — CTRL+Z / CTRL+Y for property edits with full command history
+- **Modal dialogs** — Quit confirmation and other modal prompts
+- **Context menus** — Right-click in viewport for quick actions
+- **Play-in-Editor** — Press ENTER to generate and test your game
+- **Viewport overlay** — Perspective/Lit/Show indicator bar
+- **Keyboard shortcuts** — Press F1 to see all shortcuts
 
 ### Controls
 
-**Viewport**
+Press **F1** in the editor to see the full shortcut list, or:
+
 | Input | Action |
 |-------|--------|
-| Right Mouse + Drag | Orbit camera |
-| Middle Mouse + Drag | Pan camera |
-| Scroll Wheel | Zoom in/out |
-| Left Click (viewport) | Select entity |
-| Left Click (outliner) | Select entity from list |
-
-**Scene Editing**
-| Key | Action |
-|-----|--------|
-| R | Place cube |
-| F | Place sphere |
-| D | Delete selected |
-| Q | Duplicate selected |
+| RMB + Drag | Orbit camera |
+| MMB + Drag | Pan camera |
+| Scroll Wheel | Zoom / scroll panels |
+| Left Click | Select entity (viewport raycast or outliner) |
+| Right Click (viewport) | Context menu |
+| 1 / 2 / 3 | Translate / Rotate / Scale gizmo |
+| R / F / E | Place Cube / Sphere / Model |
+| D / Q | Delete / Duplicate selected |
+| TAB | Toggle physics on selected |
+| ENTER | Play-in-Editor (generate + run) |
 | Arrow Keys | Nudge selected entity |
-| Ctrl + Click (outliner/viewport) | Add/remove from selection |
-| ESC | Deselect |
-
-**Gizmo Modes**
-| Key | Mode |
-|-----|------|
-| 1 | Translate |
-| 2 | Rotate |
-| 3 | Scale |
-
-**File Operations**
-| Key | Action |
-|-----|--------|
-| 4 | Save scene (JSON) |
-| Enter | Toggle Play-In-Editor |
-| **5** | **Generate SageLang game script** |
-| Ctrl+N / Ctrl+O / Ctrl+S | New / Open / Save scene |
-| Ctrl+Z / Ctrl+Y | Undo / Redo |
-| Ctrl+A | Select all entities |
-| Ctrl+Q | Quit editor |
-
-### Content Menu
-
-The **Tools** menu and viewport context menu now include content-browser actions:
-
-- `Browse Assets`
-- `Browse Textures`
-- `Browse Sprites`
-- `Browse Animations`
-- `Place Selected Asset`
-
-Use the **Content Browser** panel to filter by type, pick an item, then place it into the scene.
+| CTRL+S / CTRL+N / CTRL+O | Save / New / Open scene |
+| CTRL+Z / CTRL+Y | Undo / Redo |
+| CTRL+Q | Quit (with confirmation) |
+| F1 | Toggle shortcuts overlay |
 
 ### Code Generation
 
-Press **5** → generates `assets/generated_game.sage` — a complete, runnable game with all entities, renderer setup, player controller, and game loop.
+Press **ENTER** or use File > Export Game to generate `assets/generated_game.sage` — a complete, runnable game with all entities, physics, HUD, FPS controls, and game loop.
 
 ```bash
 ./run.sh assets/generated_game.sage
@@ -83,58 +66,63 @@ Press **5** → generates `assets/generated_game.sage` — a complete, runnable 
 
 ## Requirements
 
-- [SageLang](../sagelang) with Vulkan GPU module
+- [SageLang](../sagelang) with Vulkan GPU module (built with `./build.sh`)
 - Vulkan-capable GPU and drivers
-- Linux (tested on Ubuntu/Arch with NVIDIA)
+- Linux (tested on Ubuntu/Arch with NVIDIA and AMD)
 
 ## Architecture
 
 ```
 forge-engine/
-├── editor.sage              # Visual editor
+├── editor.sage              # Visual editor (1500+ lines)
 ├── editor.sh                # Editor launcher
-├── lib/                     # Engine modules (55+)
-├── shaders/                 # GLSL + SPIR-V (18 shaders)
-├── examples/                # 8 demo programs
+├── lib/                     # Engine modules (86 files, 15,675 lines)
+├── shaders/                 # GLSL + SPIR-V (16 shader pairs)
+├── examples/                # 8 demo programs (2,557 lines)
 ├── tests/                   # 47 suites, 1,299 checks
-├── assets/                  # Saved scenes + generated code
+├── assets/                  # Fonts, models, scenes, generated code
 └── build/                   # Distribution output
 ```
+
+**Total codebase:** 145 .sage files, 25,000+ lines of SageLang + 496 lines of GLSL
 
 ## Engine Systems
 
 ### Core
 `engine` · `ecs` · `events` · `game_loop` · `components` · `engine_math` · `input`
 
+### Math
+`math3d` — vec2/3/4, mat4 (full suite), **quaternions** (slerp, euler conversion, rotation), mat4_inverse (Cramer's rule)
+
 ### Rendering
-`render_system` · `lighting` (16 dynamic lights) · `sky` (procedural) · `pbr_material` (Cook-Torrance) · `textures` (PNG/JPG) · `shadow_map` · `frustum` (culling) · `editor_grid`
+`renderer` · `render_system` · `lighting` (16 dynamic lights, fog) · `sky` (procedural, presets) · `pbr_material` (Cook-Torrance BRDF) · `textures` (PNG/JPG) · `shadow_map` (PCF) · `frustum` (culling) · `editor_grid` · `post_fx` (vignette, color grading) · `postprocess` (bloom, tone mapping)
 
 ### Physics
-`collision` (AABB/sphere/ray) · `physics` (rigidbody, gravity) · `spatial_grid` (broadphase)
+`collision` (AABB/sphere/ray/capsule) · `physics` (rigidbody, gravity, restitution) · `spatial_grid` (broadphase)
 
 ### Gameplay
 `player_controller` (FPS) · `gameplay` (health, timers, state machines, scoring)
 
 ### Content
-`asset_manager` · `scene_serial` (JSON) · `gltf_import` (glTF 2.0) · `audio` (OpenAL) · `hot_reload`
+`asset_manager` · `scene_serial` (JSON save/load) · `asset_import` (glTF 2.0 via cgltf) · `audio` (OpenAL FFI) · `hot_reload` · `codegen` (full game script generation)
 
 ### Animation & AI
-`tween` (18 easings) · `animation` (skeletal) · `navigation` (A* pathfinding) · `behavior_tree`
+`tween` (18 easings) · `animation` (skeletal, blend trees, state machine) · `navigation` (A* pathfinding) · `behavior_tree`
 
 ### UI
-`ui_core` · `ui_renderer` · `ui_text` (bitmap font) · `ui_widgets` · `hud` · `menu`
+`ui_core` (widget hierarchy, anchoring, hit testing) · `ui_renderer` (batched quads) · `ui_widgets` (buttons, sliders, checkboxes, dropdowns, **text input fields**, number fields, tree views, scroll panels) · `ui_window` (floating windows, menus, **modal dialogs**, snap-to-edge) · `font` (TrueType via stb_truetype) · `hud` · `menu`
 
 ### World
 `terrain` (heightmap + noise) · `water` (animated waves) · `foliage` (scatter) · `day_night` (sun cycle)
 
 ### VFX
-`particles` (CPU pool) · `vfx_presets` (fire/smoke/sparks/rain) · `particle_renderer` · `post_fx`
+`particles` (CPU pool) · `vfx_presets` (fire/smoke/sparks/rain/magic) · `particle_renderer` · `post_fx`
 
 ### Networking
 `net_protocol` · `net_server` · `net_client` · `net_replication` · `lobby`
 
 ### Editor
-`undo_redo` · `inspector` · `gizmo` · `asset_browser` · `scene_editor` · `editor_viewport` · `editor_layout` · `codegen` · `editor_grid`
+`undo_redo` (command pattern, 100 levels) · `inspector` · `gizmo` (translate/rotate/scale) · `asset_browser` · `scene_editor` (multi-select, raycast picking) · `editor_viewport` · `editor_layout` · `codegen` · `editor_grid`
 
 ## Demos
 
@@ -149,65 +137,31 @@ forge-engine/
 ./run.sh examples/demo_particles.sage    # Particles + VFX
 ```
 
-## Writing a Game
-
-```python
-from engine import create_engine, on_update, on_render, run
-from ecs import spawn, add_component
-from components import TransformComponent
-from mesh import cube_mesh, upload_mesh
-
-let eng = create_engine("My Game", 1280, 720)
-let world = eng["world"]
-
-let cube = upload_mesh(cube_mesh())
-let e = spawn(world)
-add_component(world, e, "transform", TransformComponent(0.0, 1.0, 0.0))
-add_component(world, e, "mesh_id", {"mesh": cube})
-
-proc update(e, dt):
-    pass
-
-proc render(e, frame):
-    pass
-
-on_update(eng, update)
-on_render(eng, render)
-run(eng)
-```
-
-Or just use the editor and press **5**.
-
 ## Testing
 
 ```bash
-./tests/run_all.sh          # 47 suites, 1,299 checks
+./tests/run_all.sh            # 47 suites, 1,299 checks
 ./run.sh tests/test_ecs.sage  # Individual suite
 ```
 
-## Building
+## SageLang Enhancements
 
-```bash
-./build.sh editor.sage -o forge_editor
+Forge Engine includes improvements to the SageLang interpreter and GPU module:
 
-# Output:
-# build/dist/forge_editor    (native launcher)
-# build/dist/lib/             (84 .sage modules)
-# build/dist/shaders/         (18 SPIR-V shaders)
-```
-
-## SageLang Patches
-
-Forge Engine includes improvements to the SageLang interpreter:
-
+- **Text input** — GLFW char callback for keyboard text entry in editor
 - **`str()` for arrays** — arrays display as `[1, 2, 3]` instead of nil
 - **Better runtime errors** — shows function name and value type on call failures
+- **Native performance** — `build_quad_verts`, `array_extend`, `build_line_quads` in C
+- **Font rendering** — stb_truetype integration with atlas-based text pipeline
+- **glTF import** — cgltf integration for model/material/animation loading
+- **Extended key constants** — KEY_Z, KEY_Y, KEY_BACKSPACE, KEY_DELETE, KEY_F1, etc.
 
 ## Known Issues
 
-- Editor bitmap font is pixel-based (no TTF support yet)
 - Audio requires OpenAL; gracefully degrades if absent
-- FFI `void` return supports max 1 argument (SageLang limitation)
+- No MSAA yet (planned for next release)
+- Deferred rendering pipeline and SSAO are stub implementations
+- Networking is TCP-only (UDP planned)
 
 ## License
 

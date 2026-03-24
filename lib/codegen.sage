@@ -139,6 +139,9 @@ proc generate_game_script(world, scene_name, settings):
         if has_component(world, eid, "health"):
             let hp = get_component(world, eid, "health")
             push(L, "add_component(world, " + v + ", " + q + "health" + q + ", HealthComponent(" + _fmt(hp["max"]) + "))")
+        if has_component(world, eid, "material"):
+            let mc = get_component(world, eid, "material")
+            push(L, "add_component(world, " + v + ", " + q + "material" + q + ", MaterialComponent(" + _fmt(mc["albedo"][0]) + ", " + _fmt(mc["albedo"][1]) + ", " + _fmt(mc["albedo"][2]) + "))")
         push(L, "")
         ei = ei + 1
 

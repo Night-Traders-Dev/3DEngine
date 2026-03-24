@@ -99,3 +99,62 @@ proc ParentComponent(parent_entity):
     c["parent"] = parent_entity
     c["children"] = []
     return c
+
+# ============================================================================
+# Material Component - surface appearance properties
+# ============================================================================
+proc MaterialComponent(r, g, b):
+    let c = {}
+    c["albedo"] = vec3(r, g, b)
+    c["metallic"] = 0.0
+    c["roughness"] = 0.5
+    c["emission"] = vec3(0.0, 0.0, 0.0)
+    c["emission_strength"] = 0.0
+    c["alpha"] = 1.0
+    return c
+
+proc MaterialComponentPBR(albedo, metallic, roughness):
+    let c = {}
+    c["albedo"] = albedo
+    c["metallic"] = metallic
+    c["roughness"] = roughness
+    c["emission"] = vec3(0.0, 0.0, 0.0)
+    c["emission_strength"] = 0.0
+    c["alpha"] = 1.0
+    return c
+
+# ============================================================================
+# Audio Listener Component
+# ============================================================================
+proc AudioListenerComponent():
+    let c = {}
+    c["active"] = true
+    c["volume"] = 1.0
+    return c
+
+# ============================================================================
+# Audio Source Component
+# ============================================================================
+proc AudioSourceComponent():
+    let c = {}
+    c["sound_handle"] = -1
+    c["volume"] = 1.0
+    c["pitch"] = 1.0
+    c["loop"] = false
+    c["spatial"] = true
+    c["min_distance"] = 1.0
+    c["max_distance"] = 50.0
+    c["playing"] = false
+    return c
+
+# ============================================================================
+# Tag Components for quick identification
+# ============================================================================
+proc TriggerVolumeComponent(half_x, half_y, half_z):
+    let c = {}
+    c["type"] = "aabb"
+    c["half"] = vec3(half_x, half_y, half_z)
+    c["on_enter"] = nil
+    c["on_exit"] = nil
+    c["entities_inside"] = []
+    return c

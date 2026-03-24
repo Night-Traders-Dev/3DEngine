@@ -43,6 +43,11 @@ proc create_player_controller():
     pc["noclip"] = false
     pc["head_bob_time"] = 0.0
     pc["head_bob_amount"] = 0.03
+    # Step climbing
+    pc["step_height"] = 0.3
+    # Slope limiting
+    pc["max_slope_angle"] = 45.0
+    pc["max_slope_dot"] = math.cos(radians(45.0))
     return pc
 
 # ============================================================================
@@ -63,6 +68,28 @@ proc player_flat_forward(pc):
     let cy = math.cos(pc["yaw"])
     let sy = math.sin(pc["yaw"])
     return v3_normalize(vec3(cy, 0.0, sy))
+
+# ============================================================================
+# Capsule-based ground check
+# ============================================================================
+proc check_ground(controller, world):
+    from collision import ray_vs_plane
+    let pos = controller["position"]
+    let ray_origin = vec3(pos[0], pos[1] - controller["height"] * 0.5, pos[2])
+    let ray_dir = vec3(0.0, -1.0, 0.0)
+    let hit = ray_vs_plane(ray_origin, ray_dir, 0.0)
+    if hit != nil and hit["t"] < controller["step_height"] + 0.1:
+        controller["grounded"] = true
+        controller["ground_y"] = 0.0 - hit["t"] + ray_origin[1]
+    else:
+        controller["grounded"] = false
+
+# ============================================================================
+# Step climbing
+# ============================================================================
+proc handle_step(controller):
+    if controller["grounded"] and controller["position"][1] < controller["ground_y"] + controller["step_height"]:
+        controller["position"][1] = controller["ground_y"]
 
 # ============================================================================
 # Update player controller

@@ -70,71 +70,67 @@ forge-engine/
 
 ## The Editor
 
-The Forge Editor is a visual scene editor. Place objects, transform them, and press **5** to generate a complete SageLang game script.
+The Forge Editor is a UE5-inspired visual scene editor with floating windows, a menu bar, and inline property editing. Build scenes by placing and transforming objects, edit properties directly, then generate a complete SageLang game script.
+
+Press **F1** at any time to see the full keyboard shortcuts overlay.
+
+### Editor Layout
+
+- **Menu Bar** (top) — File, Edit, Window, Tools, Help dropdown menus
+- **Toolbar** (below menu) — Move/Rotate/Scale mode buttons, Play button, Save button
+- **Viewport** (center) — 3D scene with overlay bar showing Perspective/Lit/Show
+- **Floating Windows** — Draggable, resizable panels that snap to screen edges:
+  - **Outliner** — Scrollable list of all entities, click to select
+  - **Details** — Editable transform properties (click values to type new numbers)
+  - **Content Browser** — Asset list, shortcuts, imported model info
+- **Status Bar** (bottom) — Entity count, draw count, mode, FPS
 
 ### Editor Controls
 
-#### Viewport Navigation
-
 | Input | Action |
 |-------|--------|
-| Right Mouse + Drag | Orbit camera around target |
-| Middle Mouse + Drag | Pan camera |
-| Scroll Wheel | Zoom in/out |
-
-#### Entity Manipulation
-
-| Input | Action |
-|-------|--------|
+| RMB + Drag | Orbit camera |
+| MMB + Drag | Pan camera |
+| Scroll Wheel | Zoom viewport / scroll panels |
 | Left Click (viewport) | Select entity by raycast |
 | Left Click (outliner) | Select entity from list |
-| Ctrl + Click (viewport/outliner) | Add/remove entity from multi-selection |
-| R | Place new cube at camera target |
-| F | Place new sphere |
-| D | Delete selected entity |
-| Q | Duplicate selected entity |
+| Left Click (details value) | Edit property inline (type number, Enter to commit) |
+| Right Click (viewport) | Context menu (Add Cube/Sphere/Physics, Delete) |
+| 1 / 2 / 3 | Translate / Rotate / Scale gizmo mode |
+| R / F / E | Place Cube / Sphere / Model |
+| D / Q | Delete / Duplicate selected |
+| TAB | Toggle physics on selected entity |
+| ENTER | Play-in-Editor (generates game, toggles play mode) |
 | Arrow Keys | Nudge selected entity |
-| ESC | Deselect |
+| ESC | Deselect / cancel edit / close modal |
+| CTRL+S / CTRL+N / CTRL+O | Save / New / Open scene |
+| CTRL+Z / CTRL+Y | Undo / Redo (property edits, with command history) |
+| CTRL+A | Select all entities |
+| CTRL+Q | Quit (with confirmation dialog) |
+| F1 | Toggle keyboard shortcuts overlay |
 
-#### Gizmo Modes
+### Inline Property Editing
 
-| Key | Mode |
-|-----|------|
-| 1 | Translate (move) |
-| 2 | Rotate |
-| 3 | Scale |
+Click any X, Y, or Z value in the Details panel to enter edit mode:
+- Type a new number using the keyboard
+- Press **Enter** to commit (creates an undo-able command)
+- Press **Escape** to cancel and restore the original value
+- A blinking cursor shows the current edit position
+- Use **Backspace**, **Delete**, **Home**, **End**, **Left/Right** to navigate
 
-#### File Operations
+### Menu Bar
 
-| Key | Action |
-|-----|--------|
-| 4 | Save scene as JSON |
-| Enter | Toggle Play-In-Editor |
-| 5 | Generate SageLang game script |
-| Ctrl+N / Ctrl+O / Ctrl+S | New / Open / Save scene |
-| Ctrl+Z / Ctrl+Y | Undo / Redo |
-| Ctrl+A | Select all entities |
-| Ctrl+Q | Quit editor |
+| Menu | Actions |
+|------|---------|
+| File | New Scene, Open Scene, Save Scene, Export Game, Quit |
+| Edit | Delete, Duplicate, Select All |
+| Window | Show/hide Outliner, Details, Content Browser |
+| Tools | Add Cube/Sphere/Physics Cube, Toggle Physics, Generate Code |
+| Help | Controls (F1 overlay), About |
 
-### Editor Panels
+### Modal Dialogs
 
-- **Toolbar** (top) — Engine name, gizmo mode buttons, shortcuts
-- **Outliner** (left) — List of all entities in the scene
-- **Details** (right) — Transform properties of selected entity (Location, Rotation, Scale with X/Y/Z colored Red/Green/Blue)
-- **Content Browser** (bottom) — Asset list with filters for Assets, Textures, Sprites, Animations
-- **Status Bar** (bottom) — Entity count, draw count, current mode, FPS
-
-### Content Browser + Tools Menu
-
-The **Tools** menu and viewport context menu expose content workflows:
-
-- `Browse Assets`
-- `Browse Textures`
-- `Browse Sprites`
-- `Browse Animations`
-- `Place Selected Asset`
-
-The content panel shows the active filter, per-category counts, and a selectable row list.
+Certain actions (like Quit) show a modal confirmation dialog with Yes/No buttons. Press Escape to dismiss.
 
 ---
 

@@ -330,12 +330,11 @@ proc quat_inverse(q):
     return [q[0]*inv, (0.0 - q[1])*inv, (0.0 - q[2])*inv, (0.0 - q[3])*inv]
 
 proc quat_mul(a, b):
-    return [
-        a[0]*b[0] - a[1]*b[1] - a[2]*b[2] - a[3]*b[3],
-        a[0]*b[1] + a[1]*b[0] + a[2]*b[3] - a[3]*b[2],
-        a[0]*b[2] - a[1]*b[3] + a[2]*b[0] + a[3]*b[1],
-        a[0]*b[3] + a[1]*b[2] - a[2]*b[1] + a[3]*b[0]
-    ]
+    let w = a[0]*b[0] - a[1]*b[1] - a[2]*b[2] - a[3]*b[3]
+    let x = a[0]*b[1] + a[1]*b[0] + a[2]*b[3] - a[3]*b[2]
+    let y = a[0]*b[2] - a[1]*b[3] + a[2]*b[0] + a[3]*b[1]
+    let z = a[0]*b[3] + a[1]*b[2] - a[2]*b[1] + a[3]*b[0]
+    return [w, x, y, z]
 
 proc quat_from_axis_angle(axis, angle):
     let half = angle * 0.5

@@ -5,7 +5,8 @@ gc_disable()
 # -----------------------------------------
 
 import math
-from math3d import vec3, v3_lerp, mat4_identity, mat4_translate, mat4_rotate_x, mat4_rotate_y, mat4_rotate_z, mat4_scale, mat4_mul
+from math3d import vec3, v3_add, v3_sub, v3_scale, v3_dot, v3_length, v3_normalize, v3_lerp, mat4_identity, mat4_translate, mat4_rotate_x, mat4_rotate_y, mat4_rotate_z, mat4_scale, mat4_mul
+from engine_math import clamp
 
 # ============================================================================
 # Bone
@@ -239,3 +240,97 @@ proc AnimationComponent(controller):
     c["controller"] = controller
     c["playing"] = true
     return c
+
+# ============================================================================
+# Animation Events
+# ============================================================================
+proc add_animation_event(clip, time, name, data):
+    if dict_has(clip, "events") == false:
+        clip["events"] = []
+    push(clip["events"], {"time": time, "name": name, "data": data})
+
+proc check_animation_events(clip, prev_time, curr_time):
+    if dict_has(clip, "events") == false:
+        return []
+    let fired = []
+    let i = 0
+    while i < len(clip["events"]):
+        let evt = clip["events"][i]
+        if evt["time"] > prev_time and evt["time"] <= curr_time:
+            push(fired, evt)
+        i = i + 1
+    return fired
+
+proc fire_animation_events(controller, clip, prev_time, curr_time, callback):
+    let events = check_animation_events(clip, prev_time, curr_time)
+    let i = 0
+    while i < len(events):
+        callback(events[i])
+        i = i + 1
+
+# ============================================================================
+# Two-Bone IK Solver
+# ============================================================================
+proc solve_ik_two_bone(root_pos, mid_pos, end_pos, target_pos, pole_target):
+    # Lengths
+    let upper_len = v3_length(v3_sub(mid_pos, root_pos))
+    let lower_len = v3_length(v3_sub(end_pos, mid_pos))
+    let target_dist = v3_length(v3_sub(target_pos, root_pos))
+
+    # Clamp target distance to reachable range
+    let max_reach = upper_len + lower_len - 0.001
+    if target_dist > max_reach:
+        target_dist = max_reach
+    let min_reach = math.abs(upper_len - lower_len) + 0.001
+    if target_dist < min_reach:
+        target_dist = min_reach
+
+    # Law of cosines for mid joint angle
+    let cos_mid = (upper_len * upper_len + lower_len * lower_len - target_dist * target_dist) / (2.0 * upper_len * lower_len)
+    cos_mid = clamp(cos_mid, -1.0, 1.0)
+    let mid_angle = math.acos(cos_mid)
+
+    # Direction to target
+    let to_target = v3_sub(target_pos, root_pos)
+    let target_dir = v3_normalize(to_target)
+
+    # Angle at root
+    let cos_root = (upper_len * upper_len + target_dist * target_dist - lower_len * lower_len) / (2.0 * upper_len * target_dist)
+    cos_root = clamp(cos_root, -1.0, 1.0)
+    let root_angle = math.acos(cos_root)
+
+    # Compute new mid position
+    let new_mid = v3_add(root_pos, v3_scale(target_dir, upper_len * math.cos(root_angle)))
+    # Perpendicular component toward pole target
+    let pole_dir = v3_sub(pole_target, root_pos)
+    let pole_proj = v3_scale(target_dir, v3_dot(pole_dir, target_dir))
+    let pole_perp = v3_sub(pole_dir, pole_proj)
+    let pole_len = v3_length(pole_perp)
+    if pole_len > 0.001:
+        pole_perp = v3_scale(pole_perp, 1.0 / pole_len)
+    else:
+        pole_perp = vec3(0.0, 1.0, 0.0)
+    let offset = upper_len * math.sin(root_angle)
+    new_mid = v3_add(new_mid, v3_scale(pole_perp, offset))
+
+    # Compute new end position
+    let mid_to_target = v3_sub(target_pos, new_mid)
+    let mid_to_target_len = v3_length(mid_to_target)
+    let new_end = target_pos
+    if mid_to_target_len > 0.001:
+        new_end = v3_add(new_mid, v3_scale(v3_normalize(mid_to_target), lower_len))
+
+    return {"root": root_pos, "mid": new_mid, "end": new_end, "mid_angle": mid_angle}
+
+proc apply_ik_to_skeleton(skeleton, root_bone_name, mid_bone_name, end_bone_name, target_pos, pole_target):
+    let root_idx = get_bone_index(skeleton, root_bone_name)
+    let mid_idx = get_bone_index(skeleton, mid_bone_name)
+    let end_idx = get_bone_index(skeleton, end_bone_name)
+    if root_idx < 0 or mid_idx < 0 or end_idx < 0:
+        return false
+    let root_pos = skeleton["bones"][root_idx]["world_position"]
+    let mid_pos = skeleton["bones"][mid_idx]["world_position"]
+    let end_pos = skeleton["bones"][end_idx]["world_position"]
+    let result = solve_ik_two_bone(root_pos, mid_pos, end_pos, target_pos, pole_target)
+    skeleton["bones"][mid_idx]["local_position"] = result["mid"]
+    return true

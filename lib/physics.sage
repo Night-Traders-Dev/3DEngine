@@ -77,7 +77,65 @@ proc create_physics_world():
     pw["ground_enabled"] = true
     pw["collision_pairs"] = []
     pw["trigger_events"] = []
+    pw["collision_callbacks"] = {}
+    pw["collision_events"] = []
+    pw["constraints"] = []
     return pw
+
+# ============================================================================
+# Collision callback registration
+# ============================================================================
+proc register_collision_callback(pw, entity_id, callback):
+    pw["collision_callbacks"][str(entity_id)] = callback
+
+proc clear_collision_callbacks(pw):
+    pw["collision_callbacks"] = {}
+
+# ============================================================================
+# Physics Constraints
+# ============================================================================
+proc FixedConstraint(entity_a, entity_b, offset):
+    return {"type": "fixed", "entity_a": entity_a, "entity_b": entity_b, "offset": offset}
+
+proc DistanceConstraint(entity_a, entity_b, distance):
+    return {"type": "distance", "entity_a": entity_a, "entity_b": entity_b, "distance": distance, "stiffness": 1.0}
+
+proc HingeConstraint(entity_a, entity_b, axis, limits):
+    return {"type": "hinge", "entity_a": entity_a, "entity_b": entity_b, "axis": axis, "min_angle": limits[0], "max_angle": limits[1]}
+
+# ============================================================================
+# Constraint solver
+# ============================================================================
+proc solve_constraints(pw, world, dt):
+    from ecs import get_component, has_component
+    let i = 0
+    while i < len(pw["constraints"]):
+        let c = pw["constraints"][i]
+        if c["type"] == "fixed":
+            # Keep entity_b at fixed offset from entity_a
+            if has_component(world, c["entity_a"], "transform") and has_component(world, c["entity_b"], "transform"):
+                let ta = get_component(world, c["entity_a"], "transform")
+                let tb = get_component(world, c["entity_b"], "transform")
+                tb["position"][0] = ta["position"][0] + c["offset"][0]
+                tb["position"][1] = ta["position"][1] + c["offset"][1]
+                tb["position"][2] = ta["position"][2] + c["offset"][2]
+                tb["dirty"] = true
+        if c["type"] == "distance":
+            # Push/pull to maintain distance
+            if has_component(world, c["entity_a"], "transform") and has_component(world, c["entity_b"], "transform"):
+                let ta = get_component(world, c["entity_a"], "transform")
+                let tb = get_component(world, c["entity_b"], "transform")
+                let delta = v3_sub(tb["position"], ta["position"])
+                let dist = v3_length(delta)
+                if dist > 0.001:
+                    let dir = v3_scale(delta, 1.0 / dist)
+                    let error = dist - c["distance"]
+                    let correction = v3_scale(dir, error * 0.5 * c["stiffness"])
+                    ta["position"] = v3_add(ta["position"], correction)
+                    tb["position"] = v3_sub(tb["position"], correction)
+                    ta["dirty"] = true
+                    tb["dirty"] = true
+        i = i + 1
 
 # ============================================================================
 # Integration step - updates velocity and position
@@ -239,6 +297,8 @@ proc create_physics_system(physics_world):
     proc physics_update(world, entities, dt):
         from ecs import get_component, has_component
         from spatial_grid import create_spatial_grid, insert_entity, get_collision_pairs
+        # Clear previous frame's collision events
+        pw["collision_events"] = []
         # Integration + ground collision
         let i = 0
         while i < len(entities):
@@ -280,13 +340,26 @@ proc create_physics_system(physics_world):
                         let t_b = get_component(world, b, "transform")
                         let col_a = get_component(world, a, "collider")
                         let col_b = get_component(world, b, "collider")
+                        let hit = nil
                         if col_a["type"] == "aabb" and col_b["type"] == "aabb":
-                            resolve_aabb_pair(rb_a, t_a, col_a, rb_b, t_b, col_b)
+                            hit = resolve_aabb_pair(rb_a, t_a, col_a, rb_b, t_b, col_b)
                         if col_a["type"] == "sphere" and col_b["type"] == "sphere":
-                            resolve_sphere_pair(rb_a, t_a, col_a, rb_b, t_b, col_b)
+                            hit = resolve_sphere_pair(rb_a, t_a, col_a, rb_b, t_b, col_b)
                         if col_a["type"] == "sphere" and col_b["type"] == "aabb":
-                            resolve_sphere_aabb_pair(rb_a, t_a, col_a, rb_b, t_b, col_b)
+                            hit = resolve_sphere_aabb_pair(rb_a, t_a, col_a, rb_b, t_b, col_b)
                         if col_a["type"] == "aabb" and col_b["type"] == "sphere":
-                            resolve_sphere_aabb_pair(rb_b, t_b, col_b, rb_a, t_a, col_a)
+                            hit = resolve_sphere_aabb_pair(rb_b, t_b, col_b, rb_a, t_a, col_a)
+                        # Store collision event and fire callbacks
+                        if hit != nil:
+                            let event = {"entity_a": a, "entity_b": b, "normal": hit["normal"], "depth": hit["depth"]}
+                            push(pw["collision_events"], event)
+                            let key_a = str(a)
+                            let key_b = str(b)
+                            if dict_has(pw["collision_callbacks"], key_a):
+                                pw["collision_callbacks"][key_a](event)
+                            if dict_has(pw["collision_callbacks"], key_b):
+                                pw["collision_callbacks"][key_b](event)
                 pi = pi + 1
+        # Solve constraints after collision resolution
+        solve_constraints(pw, world, dt)
     return physics_update

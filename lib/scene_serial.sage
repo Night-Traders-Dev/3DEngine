@@ -124,6 +124,16 @@ proc serialize_collider(comp):
         cJSON_AddNumberToObject(obj, "radius", comp["radius"])
     return obj
 
+proc serialize_material(comp):
+    let obj = cJSON_CreateObject()
+    cJSON_AddItemToObject(obj, "albedo", vec3_to_json(comp["albedo"]))
+    cJSON_AddNumberToObject(obj, "metallic", comp["metallic"])
+    cJSON_AddNumberToObject(obj, "roughness", comp["roughness"])
+    cJSON_AddItemToObject(obj, "emission", vec3_to_json(comp["emission"]))
+    cJSON_AddNumberToObject(obj, "emission_strength", comp["emission_strength"])
+    cJSON_AddNumberToObject(obj, "alpha", comp["alpha"])
+    return obj
+
 let _serializers = {}
 _serializers["transform"] = serialize_transform
 _serializers["name"] = serialize_name
@@ -135,6 +145,7 @@ _serializers["mesh_renderer"] = serialize_mesh_renderer
 _serializers["health"] = serialize_health
 _serializers["rigidbody"] = serialize_rigidbody
 _serializers["collider"] = serialize_collider
+_serializers["material"] = serialize_material
 
 proc register_serializer(comp_type, serialize_fn):
     _serializers[comp_type] = serialize_fn
@@ -349,6 +360,24 @@ _deserializers["mesh_id"] = deserialize_mesh_id
 _deserializers["mesh_renderer"] = deserialize_mesh_renderer
 _deserializers["rigidbody"] = deserialize_rigidbody
 _deserializers["collider"] = deserialize_collider
+
+proc deserialize_material(node):
+    from components import MaterialComponent
+    let albedo = json_to_vec3(cJSON_GetObjectItem(node, "albedo"))
+    let mc = MaterialComponent(albedo[0], albedo[1], albedo[2])
+    mc["metallic"] = cJSON_GetNumberValue(cJSON_GetObjectItem(node, "metallic"))
+    mc["roughness"] = cJSON_GetNumberValue(cJSON_GetObjectItem(node, "roughness"))
+    let em = cJSON_GetObjectItem(node, "emission")
+    if em != nil:
+        mc["emission"] = json_to_vec3(em)
+    let es = cJSON_GetObjectItem(node, "emission_strength")
+    if es != nil:
+        mc["emission_strength"] = cJSON_GetNumberValue(es)
+    let al = cJSON_GetObjectItem(node, "alpha")
+    if al != nil:
+        mc["alpha"] = cJSON_GetNumberValue(al)
+    return mc
+_deserializers["material"] = deserialize_material
 
 proc register_deserializer(comp_type, deserialize_fn):
     _deserializers[comp_type] = deserialize_fn
