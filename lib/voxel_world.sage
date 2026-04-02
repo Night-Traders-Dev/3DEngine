@@ -56,6 +56,7 @@ proc create_voxel_world(size_x, size_y, size_z):
     vw["dirty"] = true
     vw["solid_count"] = 0
     vw["template_seed"] = 0.0
+    vw["chunk_size"] = 16
     return vw
 
 proc create_voxel_inventory():
@@ -193,6 +194,90 @@ proc voxel_block_world_min(vw, gx, gy, gz):
 proc voxel_block_world_center(vw, gx, gy, gz):
     return vec3(vw["origin_x"] + gx + 0.5, gy + 0.5, vw["origin_z"] + gz + 0.5)
 
+proc voxel_chunk_size(vw):
+    return vw["chunk_size"]
+
+proc _voxel_chunk_count_axis(size, chunk_size):
+    return math.floor((size + chunk_size - 1) / chunk_size)
+
+proc voxel_chunk_count_x(vw):
+    return _voxel_chunk_count_axis(vw["size_x"], voxel_chunk_size(vw))
+
+proc voxel_chunk_count_y(vw):
+    return _voxel_chunk_count_axis(vw["size_y"], voxel_chunk_size(vw))
+
+proc voxel_chunk_count_z(vw):
+    return _voxel_chunk_count_axis(vw["size_z"], voxel_chunk_size(vw))
+
+proc voxel_chunk_key(cx, cy, cz):
+    return str(cx) + ":" + str(cy) + ":" + str(cz)
+
+proc voxel_chunk_coords(vw, gx, gy, gz):
+    let cs = voxel_chunk_size(vw)
+    return {"x": math.floor(gx / cs), "y": math.floor(gy / cs), "z": math.floor(gz / cs)}
+
+proc voxel_chunk_coords_world(vw, wx, wy, wz):
+    let gx = math.floor(wx - vw["origin_x"])
+    let gy = math.floor(wy)
+    let gz = math.floor(wz - vw["origin_z"])
+    return voxel_chunk_coords(vw, gx, gy, gz)
+
+proc voxel_chunk_bounds(vw, cx, cy, cz):
+    let cs = voxel_chunk_size(vw)
+    let x0 = cx * cs
+    let y0 = cy * cs
+    let z0 = cz * cs
+    let x1 = x0 + cs
+    let y1 = y0 + cs
+    let z1 = z0 + cs
+    if x1 > vw["size_x"]:
+        x1 = vw["size_x"]
+    if y1 > vw["size_y"]:
+        y1 = vw["size_y"]
+    if z1 > vw["size_z"]:
+        z1 = vw["size_z"]
+    return {"x0": x0, "y0": y0, "z0": z0, "x1": x1, "y1": y1, "z1": z1}
+
+proc voxel_chunk_world_center(vw, cx, cy, cz):
+    let bounds = voxel_chunk_bounds(vw, cx, cy, cz)
+    let wx = vw["origin_x"] + (bounds["x0"] + bounds["x1"]) / 2.0
+    let wy = (bounds["y0"] + bounds["y1"]) / 2.0
+    let wz = vw["origin_z"] + (bounds["z0"] + bounds["z1"]) / 2.0
+    return vec3(wx, wy, wz)
+
+proc voxel_chunk_solid_count(vw, cx, cy, cz):
+    let bounds = voxel_chunk_bounds(vw, cx, cy, cz)
+    let count = 0
+    let gx = bounds["x0"]
+    while gx < bounds["x1"]:
+        let gy = bounds["y0"]
+        while gy < bounds["y1"]:
+            let gz = bounds["z0"]
+            while gz < bounds["z1"]:
+                if get_voxel(vw, gx, gy, gz) != 0:
+                    count = count + 1
+                gz = gz + 1
+            gy = gy + 1
+        gx = gx + 1
+    return count
+
+proc voxel_nonempty_chunks(vw):
+    let chunks = []
+    let cx = 0
+    while cx < voxel_chunk_count_x(vw):
+        let cy = 0
+        while cy < voxel_chunk_count_y(vw):
+            let cz = 0
+            while cz < voxel_chunk_count_z(vw):
+                let solid_count = voxel_chunk_solid_count(vw, cx, cy, cz)
+                if solid_count > 0:
+                    let entry = {"x": cx, "y": cy, "z": cz, "solid_count": solid_count}
+                    push(chunks, entry)
+                cz = cz + 1
+            cy = cy + 1
+        cx = cx + 1
+    return chunks
+
 proc voxel_is_surface_block(vw, gx, gy, gz):
     let block_id = get_voxel(vw, gx, gy, gz)
     if block_id == 0:
@@ -315,10 +400,55 @@ proc voxel_world_to_sage(vw):
     data["origin_z"] = vw["origin_z"]
     data["solid_count"] = vw["solid_count"]
     data["template_seed"] = vw["template_seed"]
+    data["chunk_size"] = voxel_chunk_size(vw)
     data["blocks"] = _clone_sage(vw["blocks"])
     data["palette"] = _clone_sage(vw["palette"])
     data["palette_ids"] = _clone_sage(vw["palette_ids"])
     return data
+
+proc voxel_world_manifest_to_sage(vw):
+    let data = {}
+    data["size_x"] = vw["size_x"]
+    data["size_y"] = vw["size_y"]
+    data["size_z"] = vw["size_z"]
+    data["origin_x"] = vw["origin_x"]
+    data["origin_z"] = vw["origin_z"]
+    data["solid_count"] = vw["solid_count"]
+    data["template_seed"] = vw["template_seed"]
+    data["chunk_size"] = voxel_chunk_size(vw)
+    data["palette"] = _clone_sage(vw["palette"])
+    data["palette_ids"] = _clone_sage(vw["palette_ids"])
+    data["chunks"] = voxel_nonempty_chunks(vw)
+    return data
+
+proc voxel_chunk_to_sage(vw, cx, cy, cz):
+    let chunk = {}
+    chunk["x"] = cx
+    chunk["y"] = cy
+    chunk["z"] = cz
+    chunk["chunk_size"] = voxel_chunk_size(vw)
+    let bounds = voxel_chunk_bounds(vw, cx, cy, cz)
+    chunk["size_x"] = bounds["x1"] - bounds["x0"]
+    chunk["size_y"] = bounds["y1"] - bounds["y0"]
+    chunk["size_z"] = bounds["z1"] - bounds["z0"]
+    let blocks = []
+    let solid_count = 0
+    let gx = bounds["x0"]
+    while gx < bounds["x1"]:
+        let gy = bounds["y0"]
+        while gy < bounds["y1"]:
+            let gz = bounds["z0"]
+            while gz < bounds["z1"]:
+                let block_id = get_voxel(vw, gx, gy, gz)
+                push(blocks, block_id)
+                if block_id != 0:
+                    solid_count = solid_count + 1
+                gz = gz + 1
+            gy = gy + 1
+        gx = gx + 1
+    chunk["solid_count"] = solid_count
+    chunk["blocks"] = blocks
+    return chunk
 
 proc voxel_world_from_sage(data):
     if data == nil:
@@ -332,6 +462,8 @@ proc voxel_world_from_sage(data):
         vw["origin_z"] = data["origin_z"]
     if dict_has(data, "template_seed"):
         vw["template_seed"] = data["template_seed"]
+    if dict_has(data, "chunk_size"):
+        vw["chunk_size"] = data["chunk_size"]
     if dict_has(data, "palette") and data["palette"] != nil:
         vw["palette"] = _clone_sage(data["palette"])
     if dict_has(data, "palette_ids") and data["palette_ids"] != nil:
@@ -352,6 +484,18 @@ proc voxel_world_from_sage(data):
     vw["gpu_meshes"] = {}
     vw["draws"] = []
     vw["dirty"] = true
+    return vw
+
+proc voxel_world_from_manifest(data):
+    if data == nil:
+        return nil
+    let vw = voxel_world_from_sage(data)
+    if vw == nil:
+        return nil
+    clear_voxel_world(vw)
+    vw["template_seed"] = 0.0
+    if dict_has(data, "template_seed"):
+        vw["template_seed"] = data["template_seed"]
     return vw
 
 proc serialize_voxel_world(vw):
@@ -384,6 +528,76 @@ proc load_voxel_world(file_path):
     if content == nil or content == "":
         return nil
     return deserialize_voxel_world(content)
+
+proc _voxel_chunk_file_path(base_path, cx, cy, cz):
+    return base_path + ".chunk_" + str(cx) + "_" + str(cy) + "_" + str(cz) + ".json"
+
+proc save_voxel_world_chunks(vw, manifest_path):
+    let manifest = voxel_world_manifest_to_sage(vw)
+    let chunks = manifest["chunks"]
+    let i = 0
+    while i < len(chunks):
+        let chunk = chunks[i]
+        let chunk_path = _voxel_chunk_file_path(manifest_path, chunk["x"], chunk["y"], chunk["z"])
+        let chunk_node = cJSON_FromSage(voxel_chunk_to_sage(vw, chunk["x"], chunk["y"], chunk["z"]))
+        if chunk_node == nil:
+            return false
+        let chunk_json = cJSON_Print(chunk_node)
+        cJSON_Delete(chunk_node)
+        if chunk_json == nil:
+            return false
+        io.writefile(chunk_path, chunk_json)
+        chunk["path"] = chunk_path
+        i = i + 1
+    let manifest_node = cJSON_FromSage(manifest)
+    if manifest_node == nil:
+        return false
+    let manifest_json = cJSON_Print(manifest_node)
+    cJSON_Delete(manifest_node)
+    if manifest_json == nil:
+        return false
+    io.writefile(manifest_path, manifest_json)
+    return true
+
+proc load_voxel_world_chunks(manifest_path):
+    if io.exists(manifest_path) == false:
+        return nil
+    let manifest_root = cJSON_Parse(io.readfile(manifest_path))
+    if manifest_root == nil:
+        return nil
+    let manifest = cJSON_ToSage(manifest_root)
+    cJSON_Delete(manifest_root)
+    let vw = voxel_world_from_manifest(manifest)
+    if vw == nil:
+        return nil
+    if dict_has(manifest, "chunks") == false:
+        return vw
+    let chunks = manifest["chunks"]
+    let i = 0
+    while i < len(chunks):
+        let info = chunks[i]
+        if dict_has(info, "path") and io.exists(info["path"]):
+            let chunk_root = cJSON_Parse(io.readfile(info["path"]))
+            if chunk_root != nil:
+                let chunk = cJSON_ToSage(chunk_root)
+                cJSON_Delete(chunk_root)
+                let bounds = voxel_chunk_bounds(vw, chunk["x"], chunk["y"], chunk["z"])
+                let blocks = chunk["blocks"]
+                let bi = 0
+                let gx = bounds["x0"]
+                while gx < bounds["x1"]:
+                    let gy = bounds["y0"]
+                    while gy < bounds["y1"]:
+                        let gz = bounds["z0"]
+                        while gz < bounds["z1"]:
+                            if bi < len(blocks):
+                                set_voxel(vw, gx, gy, gz, blocks[bi])
+                            bi = bi + 1
+                            gz = gz + 1
+                        gy = gy + 1
+                    gx = gx + 1
+        i = i + 1
+    return vw
 
 proc _mesh_bucket(meshes, block_id):
     let key = _palette_key(block_id)
@@ -491,14 +705,14 @@ proc _append_voxel_face(bucket, wx, wy, wz, face_name):
     push(indices, base + 3)
     bucket["face_count"] = bucket["face_count"] + 1
 
-proc build_voxel_meshes(vw):
+proc _build_voxel_meshes_range(vw, x0, y0, z0, x1, y1, z1):
     let meshes = {}
-    let gx = 0
-    while gx < vw["size_x"]:
-        let gy = 0
-        while gy < vw["size_y"]:
-            let gz = 0
-            while gz < vw["size_z"]:
+    let gx = x0
+    while gx < x1:
+        let gy = y0
+        while gy < y1:
+            let gz = z0
+            while gz < z1:
                 let block_id = get_voxel(vw, gx, gy, gz)
                 if block_id != 0:
                     let bucket = _mesh_bucket(meshes, block_id)
@@ -537,31 +751,58 @@ proc build_voxel_meshes(vw):
             mesh_data["face_count"] = bucket["face_count"]
             built[key] = mesh_data
         pi = pi + 1
+    return built
+
+proc build_voxel_meshes(vw):
+    let built = _build_voxel_meshes_range(vw, 0, 0, 0, vw["size_x"], vw["size_y"], vw["size_z"])
     vw["mesh_data"] = built
     return built
 
+proc build_voxel_chunk_meshes(vw, cx, cy, cz):
+    let bounds = voxel_chunk_bounds(vw, cx, cy, cz)
+    return _build_voxel_meshes_range(vw, bounds["x0"], bounds["y0"], bounds["z0"], bounds["x1"], bounds["y1"], bounds["z1"])
+
 proc rebuild_voxel_world(vw):
     from mesh import upload_mesh
-    let built = build_voxel_meshes(vw)
     let gpu_meshes = {}
     let draws = []
-    let pi = 0
-    while pi < len(vw["palette_ids"]):
-        let block_id = vw["palette_ids"][pi]
-        let key = _palette_key(block_id)
-        if dict_has(built, key):
-            let mesh_data = built[key]
-            let gpu_mesh = upload_mesh(mesh_data)
-            gpu_meshes[key] = gpu_mesh
-            let draw = {}
-            draw["block_id"] = block_id
-            draw["gpu_mesh"] = gpu_mesh
-            draw["surface"] = voxel_block_surface(vw, block_id)
-            draw["name"] = voxel_block_name(vw, block_id)
-            draw["face_count"] = mesh_data["face_count"]
-            push(draws, draw)
-        pi = pi + 1
+    let all_mesh_data = {}
+    let cx = 0
+    while cx < voxel_chunk_count_x(vw):
+        let cy = 0
+        while cy < voxel_chunk_count_y(vw):
+            let cz = 0
+            while cz < voxel_chunk_count_z(vw):
+                let chunk_key = voxel_chunk_key(cx, cy, cz)
+                let built = build_voxel_chunk_meshes(vw, cx, cy, cz)
+                let pi = 0
+                while pi < len(vw["palette_ids"]):
+                    let block_id = vw["palette_ids"][pi]
+                    let key = _palette_key(block_id)
+                    if dict_has(built, key):
+                        let mesh_data = built[key]
+                        let draw_key = chunk_key + ":" + key
+                        let gpu_mesh = upload_mesh(mesh_data)
+                        gpu_meshes[draw_key] = gpu_mesh
+                        all_mesh_data[draw_key] = mesh_data
+                        let draw = {}
+                        draw["block_id"] = block_id
+                        draw["gpu_mesh"] = gpu_mesh
+                        draw["surface"] = voxel_block_surface(vw, block_id)
+                        draw["name"] = voxel_block_name(vw, block_id)
+                        draw["face_count"] = mesh_data["face_count"]
+                        draw["chunk_x"] = cx
+                        draw["chunk_y"] = cy
+                        draw["chunk_z"] = cz
+                        draw["chunk_key"] = chunk_key
+                        draw["chunk_center"] = voxel_chunk_world_center(vw, cx, cy, cz)
+                        push(draws, draw)
+                    pi = pi + 1
+                cz = cz + 1
+            cy = cy + 1
+        cx = cx + 1
     vw["gpu_meshes"] = gpu_meshes
+    vw["mesh_data"] = all_mesh_data
     vw["draws"] = draws
     vw["dirty"] = false
     return draws
@@ -570,6 +811,20 @@ proc voxel_draws(vw):
     if vw["dirty"]:
         return rebuild_voxel_world(vw)
     return vw["draws"]
+
+proc voxel_visible_draws(vw, wx, wy, wz, chunk_radius):
+    let draws = voxel_draws(vw)
+    let center_chunk = voxel_chunk_coords_world(vw, wx, wy, wz)
+    let visible = []
+    let i = 0
+    while i < len(draws):
+        let draw = draws[i]
+        if math.abs(draw["chunk_x"] - center_chunk["x"]) <= chunk_radius:
+            if math.abs(draw["chunk_y"] - center_chunk["y"]) <= chunk_radius:
+                if math.abs(draw["chunk_z"] - center_chunk["z"]) <= chunk_radius:
+                    push(visible, draw)
+        i = i + 1
+    return visible
 
 proc raycast_voxel_world(vw, origin, direction, max_dist):
     let dist = 0.0

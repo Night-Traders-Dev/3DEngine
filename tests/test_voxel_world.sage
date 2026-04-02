@@ -10,6 +10,9 @@ from voxel_world import voxel_inventory_count, voxel_inventory_to_sage, voxel_in
 from voxel_world import voxel_world_to_sage, voxel_world_from_sage, serialize_voxel_world
 from voxel_world import deserialize_voxel_world, save_voxel_world, load_voxel_world
 from voxel_world import default_voxel_recipes, try_craft_voxel_recipe
+from voxel_world import voxel_chunk_count_x, voxel_chunk_count_y, voxel_chunk_count_z
+from voxel_world import voxel_chunk_bounds, build_voxel_chunk_meshes, voxel_visible_draws
+from voxel_world import save_voxel_world_chunks, load_voxel_world_chunks
 from math3d import vec3
 
 import math
@@ -90,6 +93,25 @@ save_voxel_world(save_world, voxel_save_path)
 check("voxel world file saved", io.exists(voxel_save_path))
 let world_file = load_voxel_world(voxel_save_path)
 check("voxel world file load preserves data", world_file != nil and get_voxel(world_file, 2, 1, 2) == 4 and get_voxel(world_file, 2, 2, 2) == 5)
+
+let chunk_world = create_voxel_world(17, 9, 17)
+check("chunk counts derived from default chunk size", voxel_chunk_count_x(chunk_world) == 2 and voxel_chunk_count_y(chunk_world) == 1 and voxel_chunk_count_z(chunk_world) == 2)
+let chunk_bounds = voxel_chunk_bounds(chunk_world, 1, 0, 1)
+check("chunk bounds clamp to world edge", chunk_bounds["x0"] == 16 and chunk_bounds["x1"] == 17 and chunk_bounds["y0"] == 0 and chunk_bounds["y1"] == 9 and chunk_bounds["z0"] == 16 and chunk_bounds["z1"] == 17)
+set_voxel(chunk_world, 15, 1, 1, 3)
+set_voxel(chunk_world, 16, 1, 1, 3)
+let chunk_mesh_left = build_voxel_chunk_meshes(chunk_world, 0, 0, 0)
+let chunk_mesh_right = build_voxel_chunk_meshes(chunk_world, 1, 0, 0)
+check("chunk mesh culls faces across chunk boundaries", chunk_mesh_left["3"]["face_count"] == 5 and chunk_mesh_right["3"]["face_count"] == 5)
+let all_chunk_draws = voxel_visible_draws(chunk_world, -7.0, 1.0, -7.0, 8)
+let local_chunk_draws = voxel_visible_draws(chunk_world, -7.0, 1.0, -7.0, 0)
+check("visible draws filter chunk meshes by radius", len(all_chunk_draws) == 2 and len(local_chunk_draws) == 1)
+let chunk_manifest_path = "/tmp/forge_test_voxel_chunks.json"
+save_voxel_world_chunks(chunk_world, chunk_manifest_path)
+check("chunk manifest saved", io.exists(chunk_manifest_path))
+check("chunk payload saved", io.exists(chunk_manifest_path + ".chunk_0_0_0.json") and io.exists(chunk_manifest_path + ".chunk_1_0_0.json"))
+let chunk_loaded = load_voxel_world_chunks(chunk_manifest_path)
+check("chunk manifest load preserves data", chunk_loaded != nil and get_voxel(chunk_loaded, 15, 1, 1) == 3 and get_voxel(chunk_loaded, 16, 1, 1) == 3)
 
 let inventory = create_voxel_inventory()
 check("inventory starts empty", voxel_inventory_count(inventory, 3) == 0)

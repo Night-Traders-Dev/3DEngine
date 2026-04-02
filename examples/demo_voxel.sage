@@ -40,10 +40,13 @@ from voxel_world import create_voxel_inventory, voxel_inventory_add, voxel_inven
 from voxel_world import voxel_inventory_count, voxel_inventory_to_sage, voxel_inventory_from_sage
 from voxel_world import voxel_world_to_sage, voxel_world_from_sage
 from voxel_world import default_voxel_recipes, try_craft_voxel_recipe
+from voxel_world import save_voxel_world_chunks, load_voxel_world_chunks, voxel_visible_draws
+from voxel_world import voxel_chunk_coords_world, voxel_chunk_size
 
 print "=== Forge Engine - Voxel Template Sandbox ==="
 
-let save_file = "/tmp/forge_voxel_template_save.json"
+let save_state_file = "/tmp/forge_voxel_template_save.json"
+let save_world_file = "/tmp/forge_voxel_template_world.json"
 
 # ============================================================================
 # Renderer
@@ -88,7 +91,7 @@ load_font(font_r, "ui", "assets/DejaVuSans.ttf", 18.0)
 let voxel = create_voxel_world(32, 18, 32)
 generate_voxel_template_world(voxel, 7.0)
 let cube_gpu = upload_mesh(cube_mesh())
-let draws = voxel_draws(voxel)
+let draws = voxel_visible_draws(voxel, 0.0, 0.0, 8.0, 2)
 print "Voxel world generated: " + str(voxel["solid_count"]) + " solid blocks"
 
 let inventory = create_voxel_inventory()
@@ -161,7 +164,7 @@ proc _decode_json(text):
 
 proc _make_save_state(vw, inv, selected_id, player):
     let state = {}
-    state["world"] = voxel_world_to_sage(vw)
+    state["world_manifest_path"] = save_world_file
     state["inventory"] = voxel_inventory_to_sage(inv)
     state["selected_block"] = selected_id
     let player_state = {}
@@ -218,27 +221,30 @@ while running:
             _set_status("Need " + str(recipes[0]["input_count"]) + " " + voxel_block_name(voxel, recipes[0]["input_block"]) + " to craft " + voxel_block_name(voxel, recipes[0]["output_block"]))
 
     if gpu.key_just_pressed(gpu.KEY_C):
-        let json_str = _encode_json(_make_save_state(voxel, inventory, selected_block[0], player))
-        if json_str == nil:
-            _set_status("Save failed: unable to serialize sandbox")
+        if save_voxel_world_chunks(voxel, save_world_file) == false:
+            _set_status("Save failed: unable to write chunked voxel world")
         else:
-            io.writefile(save_file, json_str)
-            _set_status("Saved sandbox to " + save_file)
+            let json_str = _encode_json(_make_save_state(voxel, inventory, selected_block[0], player))
+            if json_str == nil:
+                _set_status("Save failed: unable to serialize sandbox state")
+            else:
+                io.writefile(save_state_file, json_str)
+                _set_status("Saved sandbox to " + save_state_file)
 
     if gpu.key_just_pressed(gpu.KEY_V):
-        if io.exists(save_file) == false:
-            _set_status("No save file found at " + save_file)
+        if io.exists(save_state_file) == false:
+            _set_status("No save file found at " + save_state_file)
         else:
-            let state = _decode_json(io.readfile(save_file))
-            if state == nil or dict_has(state, "world") == false:
+            let state = _decode_json(io.readfile(save_state_file))
+            if state == nil or dict_has(state, "world_manifest_path") == false:
                 _set_status("Load failed: invalid sandbox save")
             else:
-                let loaded_world = voxel_world_from_sage(state["world"])
+                let loaded_world = load_voxel_world_chunks(state["world_manifest_path"])
                 if loaded_world == nil:
                     _set_status("Load failed: world data was invalid")
                 else:
                     voxel = loaded_world
-                    draws = voxel_draws(voxel)
+                    voxel_draws(voxel)
                     if dict_has(state, "inventory"):
                         inventory = voxel_inventory_from_sage(state["inventory"])
                     if dict_has(state, "selected_block") and state["selected_block"] > 0:
@@ -261,7 +267,7 @@ while running:
                         player["position"][1] = load_ground
                     if voxel_collides_player(voxel, player["position"], player["radius"], player["height"]):
                         player["position"][1] = sample_voxel_ground_radius(voxel, player["position"][0], player["position"][2], player["radius"])
-                    _set_status("Loaded sandbox from " + save_file)
+                    _set_status("Loaded sandbox from " + save_state_file)
 
     let prev_pos = vec3(player["position"][0], player["position"][1], player["position"][2])
     player["ground_y"] = sample_voxel_ground_radius(voxel, player["position"][0], player["position"][2], player["radius"])
@@ -301,7 +307,7 @@ while running:
         else:
             _set_status("No " + voxel_block_name(voxel, selected_block[0]) + " left in inventory")
 
-    draws = voxel_draws(voxel)
+    draws = voxel_visible_draws(voxel, player["position"][0], player["position"][1], player["position"][2], 2)
     set_view_position(ls, eye)
     update_light_ubo(ls)
 
@@ -345,10 +351,12 @@ while running:
 
     let sw = r["width"] + 0.0
     let sh = r["height"] + 0.0
+    let player_chunk = voxel_chunk_coords_world(voxel, player["position"][0], player["position"][1], player["position"][2])
     begin_text(font_r)
     add_text(font_r, "ui", "VOXEL TEMPLATE SANDBOX", 18.0, 18.0, 0.94, 0.96, 0.98, 1.0)
     add_text(font_r, "ui", "LMB break  RMB place  1-5 palette  Z planks  X craft  C save  V load  TAB noclip  ESC mouse", 18.0, 42.0, 0.70, 0.74, 0.80, 1.0)
     add_text(font_r, "ui", "Selected: [" + str(selected_block[0]) + "] " + voxel_block_name(voxel, selected_block[0]) + " x" + str(voxel_inventory_count(inventory, selected_block[0])) + " | Solid blocks: " + str(voxel["solid_count"]), 18.0, sh - 44.0, 0.90, 0.92, 0.95, 1.0)
+    add_text(font_r, "ui", "Chunk: " + str(player_chunk["x"]) + ", " + str(player_chunk["y"]) + ", " + str(player_chunk["z"]) + " | Chunk size: " + str(voxel_chunk_size(voxel)) + " | Visible chunk draws: " + str(len(draws)), 18.0, sh - 118.0, 0.72, 0.84, 0.92, 1.0)
     if target_hit != nil:
         add_text(font_r, "ui", "Target: " + voxel_block_name(voxel, target_hit["block_id"]) + " @ " + str(target_hit["x"]) + ", " + str(target_hit["y"]) + ", " + str(target_hit["z"]), 18.0, sh - 70.0, 0.86, 0.84, 0.72, 1.0)
     else:
