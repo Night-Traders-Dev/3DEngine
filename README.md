@@ -2,7 +2,7 @@
 
 A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Features a project launcher with game templates, a visual editor with floating windows, TrueType font rendering, PBR lighting, quaternion math, a centralized UI theme system, and 90+ engine modules spanning rendering, physics, animation, AI, networking, and content pipelines.
 
-For the complete engine guide, see **[GUIDE.md](GUIDE.md)**.
+For the complete engine guide, see **[GUIDE.md](GUIDE.md)**. For release numbering rules, see **[VERSIONING.md](VERSIONING.md)**.
 
 ## Quick Start
 
@@ -16,7 +16,7 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 # Run a game demo
 ./run.sh examples/demo_world.sage
 
-# Run tests (50 suites, 1,474 checks)
+# Run tests (50 suites, 1,482 checks)
 ./tests/run_all.sh
 
 # Build distributable package
@@ -24,6 +24,7 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 ```
 
 The engine release version is sourced from the repo-root `VERSION` file and exposed in runtime UI/build paths through `lib/forge_version.sage`.
+Forge stays on `0.y.z` while we are still building toward a fully functional Unreal-style engine release; `1.0.0` is intentionally reserved for when the core workflows are truly there.
 
 ## Project Browser
 
@@ -125,7 +126,7 @@ forge-engine/
 │   └── ...                  # 80+ more engine modules
 ├── shaders/                 # GLSL shader pairs + SPIR-V
 ├── examples/                # 8 demo programs
-├── tests/                   # 50 suites, 1,474 checks
+├── tests/                   # 50 suites, 1,482 checks
 ├── assets/                  # Fonts, models, scenes, prefabs
 │   └── prefabs/             # Saved entity templates
 └── build/                   # Distribution output
@@ -205,7 +206,7 @@ forge-engine/
 ## Testing
 
 ```bash
-./tests/run_all.sh            # 50 suites, 1,474 individual checks
+./tests/run_all.sh            # 50 suites, 1,482 individual checks
 ./run.sh tests/test_ecs.sage  # Run individual suite
 ```
 

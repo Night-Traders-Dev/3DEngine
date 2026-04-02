@@ -13,13 +13,25 @@ DIST="$ENGINE_DIR/build/dist"
 VERSION_FILE="$ENGINE_DIR/VERSION"
 ENGINE_VERSION="unknown"
 
-if [ -f "$VERSION_FILE" ]; then
-    ENGINE_VERSION="$(tr -d '\r\n' < "$VERSION_FILE")"
+if [ ! -f "$VERSION_FILE" ]; then
+    echo "Error: VERSION file not found at $VERSION_FILE"
+    exit 1
+fi
+
+ENGINE_VERSION="$(tr -d '\r\n' < "$VERSION_FILE")"
+if [[ ! "$ENGINE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+    echo "Error: VERSION must use x.y.z semantic versioning (found '$ENGINE_VERSION')"
+    exit 1
 fi
 
 echo "=== Forge Engine Build ==="
 echo "Engine: $ENGINE_DIR"
 echo "Version: $ENGINE_VERSION"
+if [[ "$ENGINE_VERSION" =~ ^0\. ]]; then
+    echo "Stage: pre-1.0.0 development release"
+else
+    echo "Stage: stable release"
+fi
 echo "SageLang: $SAGE_DIR"
 
 # Ensure sage is built
