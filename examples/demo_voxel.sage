@@ -33,7 +33,7 @@ from game_loop import create_time_state, update_time
 from font import create_font_renderer, load_font, begin_text, add_text, flush_text
 from json import cJSON_Parse, cJSON_Print, cJSON_Delete, cJSON_FromSage, cJSON_ToSage
 from voxel_world import create_voxel_world
-from voxel_world import voxel_block_name, voxel_block_world_center, raycast_voxel_world
+from voxel_world import voxel_block_name, voxel_block_surface, voxel_block_world_center, raycast_voxel_world
 from voxel_world import set_voxel, sample_voxel_ground_radius, voxel_collides_player
 from voxel_world import resolve_player_voxel_collision
 from voxel_world import create_voxel_inventory, voxel_inventory_add, voxel_inventory_remove
@@ -42,7 +42,7 @@ from voxel_world import voxel_world_to_sage, voxel_world_from_sage
 from voxel_world import default_voxel_recipes, try_craft_voxel_recipe
 from voxel_world import save_voxel_world_chunks, load_voxel_world_chunks, voxel_visible_draws
 from voxel_world import voxel_chunk_coords_world, voxel_chunk_size
-from voxel_world import ensure_voxel_generated_radius, voxel_generated_chunk_count
+from voxel_world import ensure_voxel_generated_radius, voxel_generated_chunk_count, voxel_palette_ids
 
 print "=== Forge Engine - Voxel Template Sandbox ==="
 
@@ -151,6 +151,11 @@ proc _highlight_surface():
 proc _set_status(text):
     status_line[0] = text
     status_timer[0] = 4.0
+
+proc _palette_slot_label(block_id):
+    if block_id == 6:
+        return "Z"
+    return str(block_id)
 
 proc _encode_json(data):
     let node = cJSON_FromSage(data)
@@ -364,6 +369,19 @@ while running:
     add_text(font_r, "ui", "LMB break  RMB place  1-5 palette  Z planks  X craft  C save  V load  TAB noclip  ESC mouse", 18.0, 42.0, 0.70, 0.74, 0.80, 1.0)
     add_text(font_r, "ui", "Selected: [" + str(selected_block[0]) + "] " + voxel_block_name(voxel, selected_block[0]) + " x" + str(voxel_inventory_count(inventory, selected_block[0])) + " | Solid blocks: " + str(voxel["solid_count"]), 18.0, sh - 44.0, 0.90, 0.92, 0.95, 1.0)
     add_text(font_r, "ui", "Chunk: " + str(player_chunk["x"]) + ", " + str(player_chunk["y"]) + ", " + str(player_chunk["z"]) + " | Chunk size: " + str(voxel_chunk_size(voxel)) + " | Generated chunks: " + str(voxel_generated_chunk_count(voxel)) + " | Visible chunk draws: " + str(len(draws)), 18.0, sh - 118.0, 0.72, 0.84, 0.92, 1.0)
+    let palette_ids = voxel_palette_ids(voxel)
+    let px = 18.0
+    let pi = 0
+    while pi < len(palette_ids):
+        let block_id = palette_ids[pi]
+        let palette_surface = voxel_block_surface(voxel, block_id)
+        let color = palette_surface["albedo"]
+        let alpha = 0.72
+        if selected_block[0] == block_id:
+            alpha = 1.0
+        add_text(font_r, "ui", "[" + _palette_slot_label(block_id) + "] " + voxel_block_name(voxel, block_id) + " x" + str(voxel_inventory_count(inventory, block_id)), px, sh - 144.0, color[0], color[1], color[2], alpha)
+        px = px + 154.0
+        pi = pi + 1
     if target_hit != nil:
         add_text(font_r, "ui", "Target: " + voxel_block_name(voxel, target_hit["block_id"]) + " @ " + str(target_hit["x"]) + ", " + str(target_hit["y"]) + ", " + str(target_hit["z"]), 18.0, sh - 70.0, 0.86, 0.84, 0.72, 1.0)
     else:

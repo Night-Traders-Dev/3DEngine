@@ -1,7 +1,7 @@
 # test_voxel_world.sage - Sanity checks for the voxel template world helpers
 
 from voxel_world import create_voxel_world, voxel_palette_ids, voxel_palette_entry
-from voxel_world import voxel_block_name, voxel_block_surface, voxel_is_surface_block
+from voxel_world import voxel_block_name, voxel_block_surface, voxel_block_face_surface, voxel_is_surface_block
 from voxel_world import get_voxel, set_voxel, fill_voxel_box, build_voxel_meshes, generate_voxel_template_world
 from voxel_world import voxel_top_solid_y, sample_voxel_ground, sample_voxel_ground_radius
 from voxel_world import raycast_voxel_world, voxel_collides_player, resolve_player_voxel_collision
@@ -29,6 +29,26 @@ proc check(name, condition):
         print "  FAIL: " + name
         f = f + 1
 
+proc _block_face_total(meshes, block_id):
+    let total = 0
+    let face_groups = ["top", "side", "bottom"]
+    let i = 0
+    while i < len(face_groups):
+        let key = str(block_id) + ":" + face_groups[i]
+        if dict_has(meshes, key):
+            total = total + meshes[key]["face_count"]
+        i = i + 1
+    return total
+
+proc _unique_chunk_count(draws):
+    let seen = {}
+    let i = 0
+    while i < len(draws):
+        if dict_has(draws[i], "chunk_key"):
+            seen[draws[i]["chunk_key"]] = true
+        i = i + 1
+    return len(dict_keys(seen))
+
 print "=== Voxel World Sanity Checks ==="
 
 let vw = create_voxel_world(8, 8, 8)
@@ -43,25 +63,33 @@ check("set/get voxel block", get_voxel(vw, 1, 1, 1) == 1)
 check("surface block detected", voxel_is_surface_block(vw, 1, 1, 1) == true)
 let grass_surface = voxel_block_surface(vw, 1)
 check("surface color exported", grass_surface["albedo"][1] > 0.7)
+let grass_top = voxel_block_face_surface(vw, 1, "top")
+let grass_side = voxel_block_face_surface(vw, 1, "side")
+let grass_bottom = voxel_block_face_surface(vw, 1, "bottom")
+check("grass top is greener than side", grass_top["albedo"][1] > grass_side["albedo"][1])
+check("grass bottom is earthier than top", grass_bottom["albedo"][0] > grass_top["albedo"][0] and grass_bottom["albedo"][1] < grass_top["albedo"][1])
 
 let single_meshes = build_voxel_meshes(vw)
-check("single grass mesh emitted", dict_has(single_meshes, "1"))
-check("single cube uses six faces", single_meshes["1"]["face_count"] == 6)
-check("single cube has 36 indices", single_meshes["1"]["index_count"] == 36)
+check("single grass top mesh emitted", dict_has(single_meshes, "1:top"))
+check("single grass side mesh emitted", dict_has(single_meshes, "1:side"))
+check("single grass bottom mesh emitted", dict_has(single_meshes, "1:bottom"))
+check("single cube uses six faces across face groups", _block_face_total(single_meshes, 1) == 6)
+check("single cube splits top side bottom faces", single_meshes["1:top"]["face_count"] == 1 and single_meshes["1:side"]["face_count"] == 4 and single_meshes["1:bottom"]["face_count"] == 1)
+check("single cube still has 36 indices across face groups", single_meshes["1:top"]["index_count"] + single_meshes["1:side"]["index_count"] + single_meshes["1:bottom"]["index_count"] == 36)
 
 let adjacent = create_voxel_world(8, 8, 8)
 set_voxel(adjacent, 1, 1, 1, 3)
 set_voxel(adjacent, 2, 1, 1, 3)
 let adjacent_meshes = build_voxel_meshes(adjacent)
-check("adjacent cubes share one material bucket", dict_has(adjacent_meshes, "3"))
-check("internal face culled", adjacent_meshes["3"]["face_count"] == 10)
-check("culled mesh index count", adjacent_meshes["3"]["index_count"] == 60)
+check("adjacent cubes emit side-aware stone buckets", dict_has(adjacent_meshes, "3:side") and dict_has(adjacent_meshes, "3:top") and dict_has(adjacent_meshes, "3:bottom"))
+check("internal face culled across grouped stone faces", _block_face_total(adjacent_meshes, 3) == 10)
+check("culled mesh index count preserved across groups", adjacent_meshes["3:top"]["index_count"] + adjacent_meshes["3:side"]["index_count"] + adjacent_meshes["3:bottom"]["index_count"] == 60)
 
 let enclosed = create_voxel_world(4, 4, 4)
 fill_voxel_box(enclosed, 0, 0, 0, 4, 4, 4, 3)
 set_voxel(enclosed, 1, 1, 1, 2)
 let enclosed_meshes = build_voxel_meshes(enclosed)
-check("zero-face material buckets are omitted", dict_has(enclosed_meshes, "2") == false)
+check("zero-face material buckets are omitted", dict_has(enclosed_meshes, "2:top") == false and dict_has(enclosed_meshes, "2:side") == false and dict_has(enclosed_meshes, "2:bottom") == false)
 
 let ray_world = create_voxel_world(8, 8, 8)
 set_voxel(ray_world, 4, 1, 4, 2)
@@ -119,11 +147,11 @@ set_voxel(chunk_world, 15, 1, 1, 3)
 set_voxel(chunk_world, 16, 1, 1, 3)
 let chunk_mesh_left = build_voxel_chunk_meshes(chunk_world, 0, 0, 0)
 let chunk_mesh_right = build_voxel_chunk_meshes(chunk_world, 1, 0, 0)
-check("chunk mesh culls faces across chunk boundaries", chunk_mesh_left["3"]["face_count"] == 5 and chunk_mesh_right["3"]["face_count"] == 5)
+check("chunk mesh culls faces across chunk boundaries", _block_face_total(chunk_mesh_left, 3) == 5 and _block_face_total(chunk_mesh_right, 3) == 5)
 chunk_world["max_stream_chunk_refresh"] = 8
 let all_chunk_draws = voxel_visible_draws(chunk_world, -7.0, 1.0, -7.0, 8)
 let local_chunk_draws = voxel_visible_draws(chunk_world, -7.0, 1.0, -7.0, 0)
-check("visible draws filter chunk meshes by radius", len(all_chunk_draws) == 2 and len(local_chunk_draws) == 1)
+check("visible draws filter chunk meshes by radius", _unique_chunk_count(all_chunk_draws) == 2 and _unique_chunk_count(local_chunk_draws) == 1)
 let chunk_manifest_path = "/tmp/forge_test_voxel_chunks.json"
 save_voxel_world_chunks(chunk_world, chunk_manifest_path)
 check("chunk manifest saved", io.exists(chunk_manifest_path))

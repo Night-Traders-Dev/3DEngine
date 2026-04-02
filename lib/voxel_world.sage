@@ -54,11 +54,17 @@ proc _clear_voxel_mesh_cache(vw):
 proc _palette_key(block_id):
     return str(block_id)
 
-proc _register_block(vw, block_id, name, color):
+proc _face_palette_key(block_id, face_group):
+    return str(block_id) + ":" + face_group
+
+proc _register_block(vw, block_id, name, top_color, side_color, bottom_color):
     let entry = {}
     entry["id"] = block_id
     entry["name"] = name
-    entry["color"] = color
+    entry["color"] = top_color
+    entry["top_color"] = top_color
+    entry["side_color"] = side_color
+    entry["bottom_color"] = bottom_color
     vw["palette"][_palette_key(block_id)] = entry
     push(vw["palette_ids"], block_id)
 
@@ -77,12 +83,12 @@ proc create_voxel_world(size_x, size_y, size_z):
         i = i + 1
     vw["palette"] = {}
     vw["palette_ids"] = []
-    _register_block(vw, 1, "Grass", vec3(0.42, 0.74, 0.28))
-    _register_block(vw, 2, "Dirt", vec3(0.56, 0.37, 0.22))
-    _register_block(vw, 3, "Stone", vec3(0.56, 0.58, 0.62))
-    _register_block(vw, 4, "Wood", vec3(0.63, 0.45, 0.24))
-    _register_block(vw, 5, "Leaf", vec3(0.28, 0.63, 0.26))
-    _register_block(vw, 6, "Plank", vec3(0.74, 0.58, 0.31))
+    _register_block(vw, 1, "Grass", vec3(0.34, 0.76, 0.22), vec3(0.54, 0.62, 0.25), vec3(0.50, 0.33, 0.19))
+    _register_block(vw, 2, "Dirt", vec3(0.60, 0.40, 0.24), vec3(0.52, 0.34, 0.20), vec3(0.44, 0.28, 0.17))
+    _register_block(vw, 3, "Stone", vec3(0.68, 0.70, 0.74), vec3(0.56, 0.58, 0.62), vec3(0.40, 0.42, 0.46))
+    _register_block(vw, 4, "Wood", vec3(0.78, 0.64, 0.38), vec3(0.60, 0.40, 0.20), vec3(0.70, 0.55, 0.31))
+    _register_block(vw, 5, "Leaf", vec3(0.34, 0.70, 0.28), vec3(0.27, 0.57, 0.23), vec3(0.22, 0.46, 0.19))
+    _register_block(vw, 6, "Plank", vec3(0.84, 0.69, 0.40), vec3(0.74, 0.56, 0.29), vec3(0.62, 0.45, 0.22))
     vw["mesh_data"] = {}
     vw["gpu_meshes"] = {}
     vw["draws"] = []
@@ -187,12 +193,24 @@ proc voxel_block_name(vw, block_id):
     return entry["name"]
 
 proc voxel_block_surface(vw, block_id):
+    return voxel_block_face_surface(vw, block_id, "top")
+
+proc voxel_block_face_surface(vw, block_id, face_group):
     let surface = {}
     surface["albedo"] = vec3(0.75, 0.75, 0.75)
     surface["alpha"] = 1.0
     let entry = voxel_palette_entry(vw, block_id)
     if entry != nil:
-        surface["albedo"] = entry["color"]
+        if face_group == "bottom" and dict_has(entry, "bottom_color"):
+            surface["albedo"] = entry["bottom_color"]
+        else:
+            if face_group == "side" and dict_has(entry, "side_color"):
+                surface["albedo"] = entry["side_color"]
+            else:
+                if face_group == "top" and dict_has(entry, "top_color"):
+                    surface["albedo"] = entry["top_color"]
+                else:
+                    surface["albedo"] = entry["color"]
     return surface
 
 proc voxel_in_bounds(vw, gx, gy, gz):
@@ -788,12 +806,20 @@ proc load_voxel_world_chunks(manifest_path):
         i = i + 1
     return vw
 
-proc _mesh_bucket(meshes, block_id):
-    let key = _palette_key(block_id)
+proc _voxel_face_group(face_name):
+    if face_name == "top":
+        return "top"
+    if face_name == "bottom":
+        return "bottom"
+    return "side"
+
+proc _mesh_bucket(meshes, block_id, face_group):
+    let key = _face_palette_key(block_id, face_group)
     if dict_has(meshes, key):
         return meshes[key]
     let bucket = {}
     bucket["block_id"] = block_id
+    bucket["face_group"] = face_group
     bucket["vertices"] = []
     bucket["indices"] = []
     bucket["face_count"] = 0
@@ -904,19 +930,24 @@ proc _build_voxel_meshes_range(vw, x0, y0, z0, x1, y1, z1):
             while gz < z1:
                 let block_id = get_voxel(vw, gx, gy, gz)
                 if block_id != 0:
-                    let bucket = _mesh_bucket(meshes, block_id)
                     let world_min = voxel_block_world_min(vw, gx, gy, gz)
                     if get_voxel(vw, gx, gy, gz + 1) == 0:
+                        let bucket = _mesh_bucket(meshes, block_id, _voxel_face_group("front"))
                         _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "front")
                     if get_voxel(vw, gx, gy, gz - 1) == 0:
+                        let bucket = _mesh_bucket(meshes, block_id, _voxel_face_group("back"))
                         _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "back")
                     if get_voxel(vw, gx + 1, gy, gz) == 0:
+                        let bucket = _mesh_bucket(meshes, block_id, _voxel_face_group("right"))
                         _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "right")
                     if get_voxel(vw, gx - 1, gy, gz) == 0:
+                        let bucket = _mesh_bucket(meshes, block_id, _voxel_face_group("left"))
                         _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "left")
                     if get_voxel(vw, gx, gy + 1, gz) == 0:
+                        let bucket = _mesh_bucket(meshes, block_id, _voxel_face_group("top"))
                         _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "top")
                     if get_voxel(vw, gx, gy - 1, gz) == 0:
+                        let bucket = _mesh_bucket(meshes, block_id, _voxel_face_group("bottom"))
                         _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "bottom")
                 gz = gz + 1
             gy = gy + 1
@@ -924,22 +955,28 @@ proc _build_voxel_meshes_range(vw, x0, y0, z0, x1, y1, z1):
 
     let built = {}
     let pi = 0
+    let face_groups = ["top", "side", "bottom"]
     while pi < len(vw["palette_ids"]):
         let block_id = vw["palette_ids"][pi]
-        let key = _palette_key(block_id)
-        if dict_has(meshes, key):
-            let bucket = meshes[key]
-            if bucket["face_count"] > 0 and len(bucket["vertices"]) > 0 and len(bucket["indices"]) > 0:
-                let mesh_data = {}
-                mesh_data["block_id"] = block_id
-                mesh_data["vertices"] = bucket["vertices"]
-                mesh_data["indices"] = bucket["indices"]
-                mesh_data["vertex_count"] = len(bucket["vertices"]) / 8
-                mesh_data["index_count"] = len(bucket["indices"])
-                mesh_data["has_normals"] = true
-                mesh_data["has_uvs"] = true
-                mesh_data["face_count"] = bucket["face_count"]
-                built[key] = mesh_data
+        let fi = 0
+        while fi < len(face_groups):
+            let face_group = face_groups[fi]
+            let key = _face_palette_key(block_id, face_group)
+            if dict_has(meshes, key):
+                let bucket = meshes[key]
+                if bucket["face_count"] > 0 and len(bucket["vertices"]) > 0 and len(bucket["indices"]) > 0:
+                    let mesh_data = {}
+                    mesh_data["block_id"] = block_id
+                    mesh_data["face_group"] = face_group
+                    mesh_data["vertices"] = bucket["vertices"]
+                    mesh_data["indices"] = bucket["indices"]
+                    mesh_data["vertex_count"] = len(bucket["vertices"]) / 8
+                    mesh_data["index_count"] = len(bucket["indices"])
+                    mesh_data["has_normals"] = true
+                    mesh_data["has_uvs"] = true
+                    mesh_data["face_count"] = bucket["face_count"]
+                    built[key] = mesh_data
+            fi = fi + 1
         pi = pi + 1
     return built
 
@@ -957,24 +994,30 @@ proc _build_uploaded_voxel_chunk_draws(vw, cx, cy, cz):
     let built = build_voxel_chunk_meshes(vw, cx, cy, cz)
     let draws = []
     let pi = 0
+    let face_groups = ["top", "side", "bottom"]
     while pi < len(vw["palette_ids"]):
         let block_id = vw["palette_ids"][pi]
-        let key = _palette_key(block_id)
-        if dict_has(built, key):
-            let mesh_data = built[key]
-            let gpu_mesh = upload_mesh(mesh_data)
-            let draw = {}
-            draw["block_id"] = block_id
-            draw["gpu_mesh"] = gpu_mesh
-            draw["surface"] = voxel_block_surface(vw, block_id)
-            draw["name"] = voxel_block_name(vw, block_id)
-            draw["face_count"] = mesh_data["face_count"]
-            draw["chunk_x"] = cx
-            draw["chunk_y"] = cy
-            draw["chunk_z"] = cz
-            draw["chunk_key"] = voxel_chunk_key(cx, cy, cz)
-            draw["chunk_center"] = voxel_chunk_world_center(vw, cx, cy, cz)
-            push(draws, draw)
+        let fi = 0
+        while fi < len(face_groups):
+            let face_group = face_groups[fi]
+            let key = _face_palette_key(block_id, face_group)
+            if dict_has(built, key):
+                let mesh_data = built[key]
+                let gpu_mesh = upload_mesh(mesh_data)
+                let draw = {}
+                draw["block_id"] = block_id
+                draw["face_group"] = face_group
+                draw["gpu_mesh"] = gpu_mesh
+                draw["surface"] = voxel_block_face_surface(vw, block_id, face_group)
+                draw["name"] = voxel_block_name(vw, block_id) + " " + face_group
+                draw["face_count"] = mesh_data["face_count"]
+                draw["chunk_x"] = cx
+                draw["chunk_y"] = cy
+                draw["chunk_z"] = cz
+                draw["chunk_key"] = voxel_chunk_key(cx, cy, cz)
+                draw["chunk_center"] = voxel_chunk_world_center(vw, cx, cy, cz)
+                push(draws, draw)
+            fi = fi + 1
         pi = pi + 1
     return {"mesh_data": built, "draws": draws}
 
