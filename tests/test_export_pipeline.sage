@@ -8,7 +8,7 @@ from asset_import import create_imported_animation_state, cycle_imported_animati
 from asset_import import advance_imported_animation_state, step_imported_animation_time
 from asset_import import imported_animation_duration, imported_skin_joint_matrices
 from ecs import create_world, add_component
-from components import MaterialComponent, CameraComponent, PointLightComponent
+from components import MaterialComponent, CameraComponent, PointLightComponent, MeshRendererComponent
 from math3d import vec3, mat4_identity
 
 import math
@@ -34,6 +34,10 @@ surface["metallic"] = 0.4
 surface["roughness"] = 0.25
 add_component(world, cube, "material", surface)
 add_component(world, cube, "mesh_id", {"mesh": nil, "name": "cube"})
+let cube_mr = MeshRendererComponent(nil, "cube")
+cube_mr["cast_shadows"] = false
+cube_mr["receive_shadows"] = false
+add_component(world, cube, "mesh_renderer", cube_mr)
 
 let cam_e = place_entity(editor, vec3(6.0, 3.6, 8.0), "ExportCamera", nil)
 let cam = CameraComponent(75.0, 0.15, 700.0)
@@ -64,13 +68,15 @@ check("point light exported", contains(code, "point_light(-3, 5, 1, 1, 0.7, 0.5,
 check("imported asset export helper present", contains(code, "_import_runtime_asset(\"assets/Box.gltf\""))
 check("imported asset runtime import present", contains(code, "from asset_import import import_gltf"))
 check("imported asset hierarchy helper present", contains(code, "imported_asset_draws"))
-check("imported asset pbr path present", contains(code, "draw_pbr"))
-check("material-aware draw remains enabled", contains(code, "draw_mesh_lit_surface"))
-check("imported asset skinned pbr path present", contains(code, "draw_pbr_skinned"))
-check("imported asset skinned lit path present", contains(code, "draw_mesh_lit_surface_skinned"))
+check("imported asset pbr path present", contains(code, "draw_pbr_controlled"))
+check("material-aware draw remains enabled", contains(code, "draw_mesh_lit_surface_controlled"))
+check("imported asset skinned pbr path present", contains(code, "draw_pbr_skinned_controlled"))
+check("imported asset skinned lit path present", contains(code, "draw_mesh_lit_surface_skinned_controlled"))
 check("shadow helper emitted", contains(code, "proc _render_shadow_world"))
 check("shadow prepass emitted", contains(code, "_render_shadow_world(shadow_renderer, world, ls, player_eye_position(player))"))
 check("shadow renderer init emitted", contains(code, "shadow_renderer = create_shadow_renderer(2048)"))
+check("mesh renderer helper emitted", contains(code, "proc _mesh_receives_shadows"))
+check("mesh renderer flags emitted", contains(code, "[\"cast_shadows\"] = false"))
 check("fallback generated point light omitted", contains(code, "point_light(5.0, 4.0, 3.0, 1.0, 0.8, 0.6, 3.0, 20.0)") == false)
 
 let synthetic_asset = {

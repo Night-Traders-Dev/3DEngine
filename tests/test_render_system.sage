@@ -69,14 +69,16 @@ while i < 16:
     push(mvp, i + 0.0)
     push(model, 100.0 + i)
     i = i + 1
-let lit_push = build_lit_push_data(mvp, model, [0.2, 0.4, 0.6, 0.8])
-check("lit push has 36 floats", len(lit_push) == 36)
+let lit_push = build_lit_push_data(mvp, model, [0.2, 0.4, 0.6, 0.8], true)
+check("lit push has 40 floats", len(lit_push) == 40)
 check("lit push starts with mvp", lit_push[0] == 0.0 and lit_push[15] == 15.0)
 check("lit push includes model", lit_push[16] == 100.0 and lit_push[31] == 115.0)
 check("lit push includes base color", lit_push[32] == 0.2 and lit_push[35] == 0.8)
+check("lit push enables receiving shadows", lit_push[36] == 1.0)
 
-let default_push = build_lit_push_data(mvp, model, nil)
+let default_push = build_lit_push_data(mvp, model, nil, false)
 check("default lit alpha is 1", default_push[35] == 1.0)
+check("default lit can disable receiving shadows", default_push[36] == 0.0)
 
 # --- Mesh vertex normalization ---
 let static_vertices = [1.0, 2.0, 3.0, 0.0, 1.0, 0.0, 0.25, 0.75]

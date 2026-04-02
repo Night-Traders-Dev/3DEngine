@@ -847,7 +847,7 @@ while running:
                 if clicked_menu == 2:
                     menu_items_list = ["Outliner", "Details", "Content Browser", "---", "Reset Layout"]
                 if clicked_menu == 3:
-                    menu_items_list = ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Light", "Add Directional Light", "---", "Apply Metal", "Apply Wood", "Apply Glass", "Apply Gold", "---", "Toggle Physics", "Save as Prefab", "---", "Generate Code"]
+                    menu_items_list = ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Light", "Add Directional Light", "---", "Apply Metal", "Apply Wood", "Apply Glass", "Apply Gold", "---", "Toggle Visibility", "Toggle Cast Shadows", "Toggle Receive Shadows", "Toggle Physics", "Save as Prefab", "---", "Generate Code"]
                 if clicked_menu == 4:
                     menu_items_list = ["Controls", "---", "About Forge Engine"]
                 open_menu(menu_x_positions[clicked_menu] - 4.0, layout["menubar_h"], menu_items_list)
@@ -894,7 +894,7 @@ while running:
         if is_menu_open():
             close_menu()
         else:
-            open_menu(mx, my, ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Light", "Add Directional Light", "---", "Place Selected Asset", "Browse Assets", "Browse Textures", "Browse Sprites", "Browse Animations", "---", "Select All", "Delete Selected"])
+            open_menu(mx, my, ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Light", "Add Directional Light", "---", "Place Selected Asset", "Browse Assets", "Browse Textures", "Browse Sprites", "Browse Animations", "---", "Toggle Visibility", "Toggle Cast Shadows", "Toggle Receive Shadows", "---", "Select All", "Delete Selected"])
 
     # Menu click (handles both context menu and menu bar dropdowns)
     if left_pressed and is_menu_open():
@@ -902,7 +902,7 @@ while running:
         if menu_idx >= 0:
             let items = get_menu_items()
             let item = items[menu_idx]
-            if play_mode and (item == "Add Cube" or item == "Add Sphere" or item == "Add Physics Cube" or item == "Add Light" or item == "Add Directional Light" or item == "Place Selected Asset" or item == "Delete" or item == "Delete Selected" or item == "Duplicate" or item == "Toggle Physics" or item == "New Scene" or item == "Open Scene..."):
+            if play_mode and (item == "Add Cube" or item == "Add Sphere" or item == "Add Physics Cube" or item == "Add Light" or item == "Add Directional Light" or item == "Place Selected Asset" or item == "Delete" or item == "Delete Selected" or item == "Duplicate" or item == "Toggle Visibility" or item == "Toggle Cast Shadows" or item == "Toggle Receive Shadows" or item == "Toggle Physics" or item == "New Scene" or item == "Open Scene..."):
                 print "Stop Play mode before editing the scene"
                 close_menu()
                 menubar_active = -1
@@ -914,16 +914,19 @@ while running:
                 let pos = vec3(cam["target"][0], 0.5, cam["target"][2])
                 let eid = place_entity(editor, pos, "Cube_" + str(entity_counter), cube_gpu)
                 add_component(world, eid, "mesh_id", {"mesh": cube_gpu, "name": "cube"})
+                _ensure_entity_mesh_renderer(world, eid, "cube")
             if item == "Add Sphere":
                 entity_counter = entity_counter + 1
                 let pos = vec3(cam["target"][0], 1.0, cam["target"][2])
                 let eid = place_entity(editor, pos, "Sphere_" + str(entity_counter), sphere_gpu)
                 add_component(world, eid, "mesh_id", {"mesh": sphere_gpu, "name": "sphere"})
+                _ensure_entity_mesh_renderer(world, eid, "sphere")
             if item == "Add Physics Cube":
                 entity_counter = entity_counter + 1
                 let pos = vec3(cam["target"][0], 2.0, cam["target"][2])
                 let eid = place_entity(editor, pos, "PhysCube_" + str(entity_counter), cube_gpu)
                 add_component(world, eid, "mesh_id", {"mesh": cube_gpu, "name": "cube"})
+                _ensure_entity_mesh_renderer(world, eid, "cube")
                 add_component(world, eid, "rigidbody", RigidbodyComponent(1.0))
                 add_component(world, eid, "collider", BoxColliderComponent(0.5, 0.5, 0.5))
                 add_component(world, eid, "health", HealthComponent(50.0))
@@ -932,12 +935,14 @@ while running:
                 let pos = vec3(cam["target"][0], 2.5, cam["target"][2])
                 let eid = place_entity(editor, pos, "Light_" + str(entity_counter), sphere_gpu)
                 add_component(world, eid, "mesh_id", {"mesh": sphere_gpu, "name": "sphere"})
+                _ensure_entity_mesh_renderer(world, eid, "sphere")
                 add_component(world, eid, "light", PointLightComponent(1.0, 0.95, 0.85, 3.0, 18.0))
             if item == "Add Directional Light":
                 entity_counter = entity_counter + 1
                 let pos = vec3(cam["target"][0], 6.0, cam["target"][2] + 4.0)
                 let eid = place_entity(editor, pos, "SunLight_" + str(entity_counter), sphere_gpu)
                 add_component(world, eid, "mesh_id", {"mesh": sphere_gpu, "name": "sphere"})
+                _ensure_entity_mesh_renderer(world, eid, "sphere")
                 let sun = DirectionalLightComponent(1.0, 0.95, 0.9, 1.6)
                 add_component(world, eid, "light", sun)
             if item == "Browse Assets":
@@ -979,6 +984,7 @@ while running:
                             add_component(world, eid, "imported_asset", model_asset)
                             if len(model_asset["gpu_meshes"]) > 0:
                                 add_component(world, eid, "mesh_id", {"mesh": model_asset["gpu_meshes"][0]["gpu_mesh"], "name": "imported"})
+                                _ensure_entity_mesh_renderer(world, eid, "imported")
                         else:
                             print "Model import failed: " + selected_asset["name"]
                     if selected_asset["kind"] == "texture" or selected_asset["kind"] == "sprite":
@@ -986,6 +992,7 @@ while running:
                         let pos = vec3(cam["target"][0], 0.5, cam["target"][2])
                         let eid = place_entity(editor, pos, "Asset_" + str(entity_counter), cube_gpu)
                         add_component(world, eid, "mesh_id", {"mesh": cube_gpu, "name": "cube"})
+                        _ensure_entity_mesh_renderer(world, eid, "cube")
                         add_component(world, eid, "asset_ref", selected_asset)
                     if selected_asset["kind"] == "animation":
                         let model_key = ""
@@ -1010,6 +1017,7 @@ while running:
                             add_component(world, eid, "animation_state", create_imported_animation_state(model_asset, clip_name))
                             if len(model_asset["gpu_meshes"]) > 0:
                                 add_component(world, eid, "mesh_id", {"mesh": model_asset["gpu_meshes"][0]["gpu_mesh"], "name": "imported"})
+                                _ensure_entity_mesh_renderer(world, eid, "imported")
                         else:
                             print "No imported model available for animation placement"
             # --- File menu ---
@@ -1097,6 +1105,33 @@ while running:
                         add_component(world, sel, "rigidbody", RigidbodyComponent(1.0))
                         add_component(world, sel, "collider", BoxColliderComponent(0.5, 0.5, 0.5))
                         add_component(world, sel, "health", HealthComponent(50.0))
+            if item == "Toggle Visibility":
+                if editor["selected"] >= 0:
+                    let sel = editor["selected"]
+                    let mr = _ensure_entity_mesh_renderer(world, sel, "default")
+                    mr["visible"] = _mesh_visible(world, sel) == false
+                    if mr["visible"]:
+                        print "Visibility enabled for #" + str(sel)
+                    else:
+                        print "Visibility disabled for #" + str(sel)
+            if item == "Toggle Cast Shadows":
+                if editor["selected"] >= 0:
+                    let sel = editor["selected"]
+                    let mr = _ensure_entity_mesh_renderer(world, sel, "default")
+                    mr["cast_shadows"] = _mesh_casts_shadows(world, sel) == false
+                    if mr["cast_shadows"]:
+                        print "Cast Shadows enabled for #" + str(sel)
+                    else:
+                        print "Cast Shadows disabled for #" + str(sel)
+            if item == "Toggle Receive Shadows":
+                if editor["selected"] >= 0:
+                    let sel = editor["selected"]
+                    let mr = _ensure_entity_mesh_renderer(world, sel, "default")
+                    mr["receive_shadows"] = _mesh_receives_shadows(world, sel) == false
+                    if mr["receive_shadows"]:
+                        print "Receive Shadows enabled for #" + str(sel)
+                    else:
+                        print "Receive Shadows disabled for #" + str(sel)
             if item == "Apply Metal" or item == "Apply Wood" or item == "Apply Glass" or item == "Apply Gold":
                 if editor["selected"] >= 0:
                     let preset_name = replace(item, "Apply ", "")
@@ -1247,12 +1282,14 @@ while running:
         let pos = vec3(cam["target"][0], 0.5, cam["target"][2])
         let eid = place_entity(editor, pos, "Cube_" + str(entity_counter), cube_gpu)
         add_component(world, eid, "mesh_id", {"mesh": cube_gpu, "name": "cube"})
+        _ensure_entity_mesh_renderer(world, eid, "cube")
 
     if play_mode == false and text_editing == false and action_just_pressed(inp, "place_sphere"):
         entity_counter = entity_counter + 1
         let pos = vec3(cam["target"][0], 1.0, cam["target"][2])
         let eid = place_entity(editor, pos, "Sphere_" + str(entity_counter), sphere_gpu)
         add_component(world, eid, "mesh_id", {"mesh": sphere_gpu, "name": "sphere"})
+        _ensure_entity_mesh_renderer(world, eid, "sphere")
 
     if play_mode == false and text_editing == false and action_just_pressed(inp, "place_model"):
         let model_keys = dict_keys(imported_models)
@@ -1267,6 +1304,7 @@ while running:
             # Also add the first mesh as mesh_id for basic rendering
             if len(model_asset["gpu_meshes"]) > 0:
                 add_component(world, eid, "mesh_id", {"mesh": model_asset["gpu_meshes"][0]["gpu_mesh"], "name": "imported"})
+                _ensure_entity_mesh_renderer(world, eid, "imported")
         else:
             print "No imported models available. Place .gltf files in assets/"
 
@@ -1931,6 +1969,27 @@ while running:
                 if mc["emission_strength"] > 0.0:
                     add_text(font_r, "ui", "Emission: " + _fmt_num(mc["emission_strength"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
                     iy = iy + 16.0
+            if has_component(world, cur_sel, "mesh_renderer"):
+                let mr = get_component(world, cur_sel, "mesh_renderer")
+                iy = iy + 22.0
+                add_text(font_r, "ui", "Render", dx + 6.0, iy + 2.0, 0.784, 0.784, 0.784, 1.0)
+                iy = iy + 24.0
+                let visible_text = "On"
+                if dict_has(mr, "visible") and mr["visible"] == false:
+                    visible_text = "Off"
+                add_text(font_r, "ui", "Visible: " + visible_text, dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                iy = iy + 16.0
+                let cast_text = "On"
+                if dict_has(mr, "cast_shadows") and mr["cast_shadows"] == false:
+                    cast_text = "Off"
+                add_text(font_r, "ui", "Cast Shadows: " + cast_text, dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                iy = iy + 16.0
+                let receive_text = "On"
+                if dict_has(mr, "receive_shadows") and mr["receive_shadows"] == false:
+                    receive_text = "Off"
+                add_text(font_r, "ui", "Receive Shadows: " + receive_text, dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                iy = iy + 16.0
+                add_text(font_r, "ui", "Tools menu toggles render flags", dx + 8.0, iy, 0.357, 0.627, 0.914, 1.0)
         else:
             add_text(font_r, "ui", "Select an entity to view details", dx + 4.0, dy + 8.0, 0.439, 0.439, 0.439, 1.0)
 

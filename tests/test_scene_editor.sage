@@ -6,7 +6,7 @@ from scene_editor import place_entity, delete_selected, duplicate_selected
 from scene_editor import apply_gizmo_delta, editor_stats
 from scene_editor import toggle_entity_selection, select_all_entities, selected_entities
 from ecs import create_world, spawn, add_component, has_component, entity_count, get_component
-from components import TransformComponent, NameComponent, CameraComponent, MaterialComponent
+from components import TransformComponent, NameComponent, CameraComponent, MaterialComponent, MeshRendererComponent
 from collision import ray_vs_aabb
 from math3d import vec3
 from gizmo import GIZMO_TRANSLATE, GIZMO_ROTATE, GIZMO_SCALE
@@ -57,6 +57,11 @@ mat_comp["metallic"] = 0.7
 add_component(w, eid, "material", mat_comp)
 add_component(w, eid, "imported_asset", {"name": "MockImport", "materials": [{"name": "Blue"}], "gpu_meshes": [{"gpu_mesh": 7, "material_index": 0}]})
 add_component(w, eid, "animation_state", {"clip": "Idle", "playing": true, "time": 0.75, "speed": 1.25, "looping": false})
+let mr = MeshRendererComponent(7, "default")
+mr["visible"] = true
+mr["cast_shadows"] = false
+mr["receive_shadows"] = false
+add_component(w, eid, "mesh_renderer", mr)
 
 # --- Select/deselect ---
 deselect(ed)
@@ -105,6 +110,7 @@ check("duplicate has camera", has_component(w, eid2, "camera"))
 check("duplicate has material", has_component(w, eid2, "material"))
 check("duplicate has imported asset", has_component(w, eid2, "imported_asset"))
 check("duplicate has animation state", has_component(w, eid2, "animation_state"))
+check("duplicate has mesh renderer", has_component(w, eid2, "mesh_renderer"))
 let t6 = get_component(w, eid2, "transform")
 let t_orig = get_component(w, eid, "transform")
 check("duplicate offset x", t6["position"][0] > t_orig["position"][0])
@@ -117,6 +123,9 @@ check("duplicate imported asset name", dup_asset["name"] == "MockImport")
 let dup_anim = get_component(w, eid2, "animation_state")
 check("duplicate animation clip", dup_anim["clip"] == "Idle")
 check("duplicate animation time", approx(dup_anim["time"], 0.75))
+let dup_mr = get_component(w, eid2, "mesh_renderer")
+check("duplicate mesh renderer cast shadows", dup_mr["cast_shadows"] == false)
+check("duplicate mesh renderer receive shadows", dup_mr["receive_shadows"] == false)
 
 # --- Delete ---
 let before_count = entity_count(w)

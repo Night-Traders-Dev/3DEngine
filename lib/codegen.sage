@@ -54,6 +54,33 @@ proc _directional_light_dir(transform):
     let sy = math.sin(yaw)
     return vec3(0.0 - sy * cp, 0.0 - sp, 0.0 - cy * cp)
 
+proc _mesh_renderer_data(world, eid, material_id):
+    let data = {}
+    data["material"] = material_id
+    data["visible"] = true
+    data["cast_shadows"] = true
+    data["receive_shadows"] = true
+    if has_component(world, eid, "mesh_renderer"):
+        let mr = get_component(world, eid, "mesh_renderer")
+        if mr != nil:
+            if dict_has(mr, "material") and mr["material"] != nil and mr["material"] != "":
+                data["material"] = str(mr["material"])
+            if dict_has(mr, "visible"):
+                data["visible"] = mr["visible"]
+            if dict_has(mr, "cast_shadows"):
+                data["cast_shadows"] = mr["cast_shadows"]
+            if dict_has(mr, "receive_shadows"):
+                data["receive_shadows"] = mr["receive_shadows"]
+    return data
+
+proc _emit_mesh_renderer_component(L, q, entity_var, mesh_expr, material_id, mr_data, indent):
+    let rv = entity_var + "_mr"
+    push(L, indent + "let " + rv + " = MeshRendererComponent(" + mesh_expr + ", " + q + mr_data["material"] + q + ")")
+    push(L, indent + rv + "[" + q + "visible" + q + "] = " + _bool_lit(mr_data["visible"]))
+    push(L, indent + rv + "[" + q + "cast_shadows" + q + "] = " + _bool_lit(mr_data["cast_shadows"]))
+    push(L, indent + rv + "[" + q + "receive_shadows" + q + "] = " + _bool_lit(mr_data["receive_shadows"]))
+    push(L, indent + "add_component(world, " + entity_var + ", " + q + "mesh_renderer" + q + ", " + rv + ")")
+
 # ============================================================================
 # Generate a complete game script from world state
 # ============================================================================
@@ -73,21 +100,21 @@ proc generate_game_script(world, scene_name, settings):
     push(L, "from renderer import shutdown_renderer, check_resize, update_title_fps")
     push(L, "from ecs import create_world, spawn, add_component, get_component")
     push(L, "from ecs import has_component, query, register_system, tick_systems, flush_dead")
-    push(L, "from components import TransformComponent, TransformComponentFull, NameComponent, MaterialComponent")
+    push(L, "from components import TransformComponent, TransformComponentFull, NameComponent, MaterialComponent, MeshRendererComponent")
     push(L, "from engine_math import transform_to_matrix")
     push(L, "from math3d import vec3, mat4_mul, mat4_perspective, radians")
     push(L, "from mesh import cube_mesh, sphere_mesh, plane_mesh, upload_mesh")
     push(L, "from lighting import create_light_scene, directional_light, point_light")
     push(L, "from lighting import add_light, set_ambient, set_view_position")
     push(L, "from lighting import init_light_gpu, update_light_ubo")
-    push(L, "from render_system import create_lit_material, draw_mesh_lit, draw_mesh_lit_surface")
-    push(L, "from render_system import draw_mesh_lit_surface_skinned")
+    push(L, "from render_system import create_lit_material, draw_mesh_lit_controlled, draw_mesh_lit_surface_controlled")
+    push(L, "from render_system import draw_mesh_lit_surface_skinned_controlled")
     push(L, "from render_system import set_lit_material_shadow_source")
     if has_imported_assets:
         push(L, "from asset_import import import_gltf, imported_asset_draws, advance_imported_animation_state")
         push(L, "from pbr_material import create_pbr_renderer, create_pbr_fallback_textures")
-        push(L, "from pbr_material import create_pbr_material_from_imported, bind_pbr_material, draw_pbr")
-        push(L, "from pbr_material import draw_pbr_skinned")
+        push(L, "from pbr_material import create_pbr_material_from_imported, bind_pbr_material, draw_pbr_controlled")
+        push(L, "from pbr_material import draw_pbr_skinned_controlled")
         push(L, "from pbr_material import set_pbr_shadow_source")
     push(L, "from sky import create_sky, sky_preset_day, init_sky_gpu, draw_sky")
     push(L, "from shadow_map import create_shadow_renderer, compute_light_vp, primary_shadow_light")
@@ -136,6 +163,32 @@ proc generate_game_script(world, scene_name, settings):
         push(L, "    asset[" + q + "pbr_materials" + q + "] = pbr_materials")
         push(L, "    return asset")
         push(L, "")
+    push(L, "proc _mesh_visible(world, eid):")
+    push(L, "    if has_component(world, eid, " + q + "mesh_renderer" + q + "):")
+    push(L, "        let mr = get_component(world, eid, " + q + "mesh_renderer" + q + ")")
+    push(L, "        if mr != nil and dict_has(mr, " + q + "visible" + q + "):")
+    push(L, "            return mr[" + q + "visible" + q + "]")
+    push(L, "    return true")
+    push(L, "")
+    push(L, "proc _mesh_casts_shadows(world, eid):")
+    push(L, "    if _mesh_visible(world, eid) == false:")
+    push(L, "        return false")
+    push(L, "    if has_component(world, eid, " + q + "mesh_renderer" + q + "):")
+    push(L, "        let mr = get_component(world, eid, " + q + "mesh_renderer" + q + ")")
+    push(L, "        if mr != nil and dict_has(mr, " + q + "cast_shadows" + q + "):")
+    push(L, "            return mr[" + q + "cast_shadows" + q + "]")
+    push(L, "    return true")
+    push(L, "")
+    push(L, "proc _mesh_receives_shadows(world, eid):")
+    push(L, "    if _mesh_visible(world, eid) == false:")
+    push(L, "        return false")
+    push(L, "    if has_component(world, eid, " + q + "mesh_renderer" + q + "):")
+    push(L, "        let mr = get_component(world, eid, " + q + "mesh_renderer" + q + ")")
+    push(L, "        if mr != nil and dict_has(mr, " + q + "receive_shadows" + q + "):")
+    push(L, "            return mr[" + q + "receive_shadows" + q + "]")
+    push(L, "    return true")
+    push(L, "")
+    if has_imported_assets:
         push(L, "proc _update_imported_animation_states(world, dt):")
         push(L, "    let animated = query(world, [" + q + "imported_asset" + q + ", " + q + "animation_state" + q + "])")
         push(L, "    let i = 0")
@@ -161,7 +214,7 @@ proc generate_game_script(world, scene_name, settings):
     push(L, "    while ri < len(rl):")
     push(L, "        let eid = rl[ri]")
     push(L, "        let t = get_component(world, eid, " + q + "transform" + q + ")")
-    push(L, "        if t != nil:")
+    push(L, "        if t != nil and _mesh_casts_shadows(world, eid):")
     push(L, "            let model = transform_to_matrix(t)")
     if has_imported_assets:
         push(L, "            if has_component(world, eid, " + q + "imported_asset" + q + "):")
@@ -263,6 +316,12 @@ proc generate_game_script(world, scene_name, settings):
     push(L, "let ge = spawn(world)")
     push(L, "add_component(world, ge, " + q + "transform" + q + ", TransformComponent(0.0, 0.0, 0.0))")
     push(L, "add_component(world, ge, " + q + "mesh_id" + q + ", {" + q + "mesh" + q + ": ground_gpu})")
+    let ground_mr = _mesh_renderer_data(world, -1, "ground")
+    push(L, "let ge_mr = MeshRendererComponent(ground_gpu, " + q + "ground" + q + ")")
+    push(L, "ge_mr[" + q + "visible" + q + "] = " + _bool_lit(ground_mr["visible"]))
+    push(L, "ge_mr[" + q + "cast_shadows" + q + "] = " + _bool_lit(ground_mr["cast_shadows"]))
+    push(L, "ge_mr[" + q + "receive_shadows" + q + "] = " + _bool_lit(ground_mr["receive_shadows"]))
+    push(L, "add_component(world, ge, " + q + "mesh_renderer" + q + ", ge_mr)")
     if has_physics:
         push(L, "add_component(world, ge, " + q + "rigidbody" + q + ", StaticBodyComponent())")
         push(L, "add_component(world, ge, " + q + "collider" + q + ", BoxColliderComponent(20.0, 0.1, 20.0))")
@@ -281,6 +340,14 @@ proc generate_game_script(world, scene_name, settings):
             continue
         let v = "e" + str(ei)
         let t = get_component(world, eid, "transform")
+        let mesh_renderer_material = "default"
+        if has_component(world, eid, "mesh_id"):
+            let mi_src = get_component(world, eid, "mesh_id")
+            if mi_src != nil and dict_has(mi_src, "name"):
+                mesh_renderer_material = str(mi_src["name"])
+        if has_component(world, eid, "imported_asset"):
+            mesh_renderer_material = "imported"
+        let mr_data = _mesh_renderer_data(world, eid, mesh_renderer_material)
         push(L, "let " + v + " = spawn(world)")
         push(L, "add_component(world, " + v + ", " + q + "transform" + q + ", " + _transform_ctor_expr(t) + ")")
         push(L, "add_component(world, " + v + ", " + q + "name" + q + ", NameComponent(" + q + name + q + "))")
@@ -296,6 +363,7 @@ proc generate_game_script(world, scene_name, settings):
                 push(L, "    add_component(world, " + v + ", " + q + "imported_asset" + q + ", " + iv + ")")
                 push(L, "    if len(" + iv + "[" + q + "gpu_meshes" + q + "]) > 0:")
                 push(L, "        add_component(world, " + v + ", " + q + "mesh_id" + q + ", {" + q + "mesh" + q + ": " + iv + "[" + q + "gpu_meshes" + q + "][0][" + q + "gpu_mesh" + q + "], " + q + "name" + q + ": " + q + "imported" + q + "})")
+                _emit_mesh_renderer_component(L, q, v, iv + "[" + q + "gpu_meshes" + q + "][0][" + q + "gpu_mesh" + q + "]", "imported", mr_data, "        ")
         if has_component(world, eid, "mesh_id") and imported_source == "":
             let mi = get_component(world, eid, "mesh_id")
             let mn = "cube_gpu"
@@ -305,6 +373,7 @@ proc generate_game_script(world, scene_name, settings):
                 if mi["name"] == "ground":
                     mn = "ground_gpu"
             push(L, "add_component(world, " + v + ", " + q + "mesh_id" + q + ", {" + q + "mesh" + q + ": " + mn + "})")
+            _emit_mesh_renderer_component(L, q, v, mn, mesh_renderer_material, mr_data, "")
         if has_component(world, eid, "rigidbody"):
             let rb = get_component(world, eid, "rigidbody")
             let rbv = v + "_rb"
@@ -435,9 +504,13 @@ proc generate_game_script(world, scene_name, settings):
         push(L, "    let iri = 0")
         push(L, "    while iri < len(imported_rl):")
         push(L, "        let eid = imported_rl[iri]")
+        push(L, "        if _mesh_visible(world, eid) == false:")
+        push(L, "            iri = iri + 1")
+        push(L, "            continue")
         push(L, "        let t = get_component(world, eid, " + q + "transform" + q + ")")
         push(L, "        let asset = get_component(world, eid, " + q + "imported_asset" + q + ")")
         push(L, "        let model = transform_to_matrix(t)")
+        push(L, "        let receive_shadows = _mesh_receives_shadows(world, eid)")
         push(L, "        let anim_state = nil")
         push(L, "        if has_component(world, eid, " + q + "animation_state" + q + "):")
         push(L, "            anim_state = get_component(world, eid, " + q + "animation_state" + q + ")")
@@ -451,12 +524,12 @@ proc generate_game_script(world, scene_name, settings):
         push(L, "            let imported_model = mat4_mul(model, gm[" + q + "model" + q + "])")
         push(L, "            let imported_mvp = mat4_mul(vp, imported_model)")
         push(L, "            if pbr_renderer != nil and material_index >= 0 and dict_has(asset, " + q + "pbr_materials" + q + ") and material_index < len(asset[" + q + "pbr_materials" + q + "]):")
-        push(L, "                draw_pbr_skinned(cmd, pbr_renderer, gm[" + q + "gpu_mesh" + q + "], imported_mvp, imported_model, ls[" + q + "desc_set" + q + "], asset[" + q + "pbr_materials" + q + "][material_index], gm)")
+        push(L, "                draw_pbr_skinned_controlled(cmd, pbr_renderer, gm[" + q + "gpu_mesh" + q + "], imported_mvp, imported_model, ls[" + q + "desc_set" + q + "], asset[" + q + "pbr_materials" + q + "][material_index], gm, receive_shadows)")
         push(L, "            else:")
         push(L, "                let surface = nil")
         push(L, "                if material_index >= 0 and material_index < len(asset[" + q + "materials" + q + "]):")
         push(L, "                    surface = _imported_runtime_surface(asset[" + q + "materials" + q + "][material_index])")
-        push(L, "                draw_mesh_lit_surface_skinned(cmd, lit_mat, gm[" + q + "gpu_mesh" + q + "], imported_mvp, imported_model, ls[" + q + "desc_set" + q + "], surface, gm)")
+        push(L, "                draw_mesh_lit_surface_skinned_controlled(cmd, lit_mat, gm[" + q + "gpu_mesh" + q + "], imported_mvp, imported_model, ls[" + q + "desc_set" + q + "], surface, gm, receive_shadows)")
         push(L, "            gi = gi + 1")
         push(L, "        iri = iri + 1")
     push(L, "    let rl = query(world, [" + q + "transform" + q + ", " + q + "mesh_id" + q + "])")
@@ -467,15 +540,19 @@ proc generate_game_script(world, scene_name, settings):
         push(L, "        if has_component(world, eid, " + q + "imported_asset" + q + "):")
         push(L, "            ri = ri + 1")
         push(L, "            continue")
+    push(L, "        if _mesh_visible(world, eid) == false:")
+    push(L, "            ri = ri + 1")
+    push(L, "            continue")
     push(L, "        let t = get_component(world, eid, " + q + "transform" + q + ")")
     push(L, "        let mi = get_component(world, eid, " + q + "mesh_id" + q + ")")
     push(L, "        let model = transform_to_matrix(t)")
     push(L, "        let mvp = mat4_mul(vp, model)")
+    push(L, "        let receive_shadows = _mesh_receives_shadows(world, eid)")
     push(L, "        if has_component(world, eid, " + q + "material" + q + "):")
     push(L, "            let surface = get_component(world, eid, " + q + "material" + q + ")")
-    push(L, "            draw_mesh_lit_surface(cmd, lit_mat, mi[" + q + "mesh" + q + "], mvp, model, ls[" + q + "desc_set" + q + "], surface)")
+    push(L, "            draw_mesh_lit_surface_controlled(cmd, lit_mat, mi[" + q + "mesh" + q + "], mvp, model, ls[" + q + "desc_set" + q + "], surface, receive_shadows)")
     push(L, "        else:")
-    push(L, "            draw_mesh_lit(cmd, lit_mat, mi[" + q + "mesh" + q + "], mvp, model, ls[" + q + "desc_set" + q + "])")
+    push(L, "            draw_mesh_lit_controlled(cmd, lit_mat, mi[" + q + "mesh" + q + "], mvp, model, ls[" + q + "desc_set" + q + "], receive_shadows)")
     push(L, "        ri = ri + 1")
     push(L, "    let sw = r[" + q + "width" + q + "] + 0.0")
     push(L, "    let sh = r[" + q + "height" + q + "] + 0.0")

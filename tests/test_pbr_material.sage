@@ -1,5 +1,5 @@
 # test_pbr_material.sage - Sanity checks for PBR material (non-GPU parts)
-from pbr_material import create_pbr_material_data, create_pbr_material_from_imported
+from pbr_material import create_pbr_material_data, create_pbr_material_from_imported, build_pbr_push_data
 
 import math
 
@@ -58,6 +58,18 @@ check("missing normal uses fallback", pm["normal_texture"] == 202)
 check("missing normal flag false", pm["use_normal_texture"] == false)
 check("imported mr texture used", pm["metallic_roughness_texture"] == 33)
 check("imported mr flag true", pm["use_metallic_roughness_texture"] == true)
+
+let mvp = []
+let model = []
+let i = 0
+while i < 16:
+    push(mvp, i + 0.0)
+    push(model, 10.0 + i)
+    i = i + 1
+let push_data = build_pbr_push_data(mvp, model, pm, false)
+check("pbr push has 48 floats", len(push_data) == 48)
+check("pbr push keeps base color alpha", approx(push_data[35], 0.9))
+check("pbr push disables receive shadows", approx(push_data[44], 0.0))
 
 print ""
 print "Results: " + str(p) + " passed, " + str(f) + " failed"

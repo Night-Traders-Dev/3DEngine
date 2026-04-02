@@ -1,7 +1,7 @@
 # test_codegen.sage - Sanity checks for code generator
 from codegen import generate_game_script
 from ecs import create_world, spawn, add_component
-from components import TransformComponent, NameComponent, MaterialComponent
+from components import TransformComponent, NameComponent, MaterialComponent, MeshRendererComponent
 from components import CameraComponent, PointLightComponent, DirectionalLightComponent
 from physics import RigidbodyComponent, SphereColliderComponent
 from gameplay import HealthComponent
@@ -23,6 +23,10 @@ let e1 = spawn(w)
 add_component(w, e1, "transform", TransformComponent(1.0, 2.0, 3.0))
 add_component(w, e1, "name", NameComponent("TestCube"))
 add_component(w, e1, "mesh_id", {"mesh": nil, "name": "cube"})
+let mr1 = MeshRendererComponent(nil, "cube")
+mr1["cast_shadows"] = false
+mr1["receive_shadows"] = false
+add_component(w, e1, "mesh_renderer", mr1)
 
 let e2 = spawn(w)
 let t2 = TransformComponent(5.0, 0.0, 0.0)
@@ -98,14 +102,14 @@ check("contains BigSphere", contains(code, "BigSphere"))
 check("contains TransformComponent", contains(code, "TransformComponent"))
 check("contains renderer setup", contains(code, "create_renderer"))
 check("contains game loop", contains(code, "while running"))
-check("contains draw", contains(code, "draw_mesh_lit"))
+check("contains draw", contains(code, "draw_mesh_lit_controlled"))
 check("contains resolution", contains(code, "800"))
 check("contains game end", contains(code, "shutdown_renderer"))
 check("contains sky", contains(code, "draw_sky"))
 check("contains full transform import", contains(code, "TransformComponentFull"))
 check("contains full transform usage", contains(code, "TransformComponentFull(vec3("))
 check("contains material ctor", contains(code, "MaterialComponent("))
-check("contains material-aware draw import", contains(code, "draw_mesh_lit_surface"))
+check("contains material-aware draw import", contains(code, "draw_mesh_lit_surface_controlled"))
 check("contains material metallic", contains(code, "[\"metallic\"] = 0.75"))
 check("contains material emission", contains(code, "[\"emission\"] = vec3(0.1, 0.2, 0.3)"))
 check("contains material-aware draw branch", contains(code, "if has_component(world, eid, \"material\")"))
@@ -121,18 +125,23 @@ check("contains authored camera fov", contains(code, "player[\"fov\"] = 80"))
 check("contains authored point light", contains(code, "point_light(2, 6, -1, 0.8, 0.7, 1, 4.2, 12)"))
 check("contains authored directional light", contains(code, "directional_light("))
 check("contains authored directional light shadow flag", contains(code, "[\"cast_shadows\"] = false"))
+check("contains mesh renderer import", contains(code, "MeshRendererComponent"))
+check("contains mesh visibility helper", contains(code, "proc _mesh_visible"))
+check("contains mesh cast helper", contains(code, "proc _mesh_casts_shadows"))
+check("contains mesh receive helper", contains(code, "proc _mesh_receives_shadows"))
+check("contains mesh renderer shadow flags", contains(code, "[\"receive_shadows\"] = false"))
 check("omits fallback point light when authored lights exist", contains(code, "point_light(5.0, 4.0, 3.0, 1.0, 0.8, 0.6, 3.0, 20.0)") == false)
 check("contains imported asset import", contains(code, "from asset_import import import_gltf"))
 check("contains imported hierarchy draw import", contains(code, "imported_asset_draws"))
-check("contains pbr draw import", contains(code, "draw_pbr"))
+check("contains pbr draw import", contains(code, "draw_pbr_controlled"))
 check("contains imported asset helper", contains(code, "_import_runtime_asset(\"assets/Box.gltf\""))
 check("contains imported render query", contains(code, "query(world, [\"transform\", \"imported_asset\"])"))
 check("contains imported animation state", contains(code, "\"animation_state\", {\"clip\": \"Spin\", \"playing\": true, \"time\": 1.25, \"speed\": 1.5, \"looping\": false}"))
 check("contains imported animation helper import", contains(code, "advance_imported_animation_state"))
 check("contains imported animation advance", contains(code, "advance_imported_animation_state(asset, anim_state, dt)"))
 check("contains animated imported draws", contains(code, "imported_asset_draws(asset, anim_state)"))
-check("contains skinned pbr draw import", contains(code, "draw_pbr_skinned"))
-check("contains skinned lit draw import", contains(code, "draw_mesh_lit_surface_skinned"))
+check("contains skinned pbr draw import", contains(code, "draw_pbr_skinned_controlled"))
+check("contains skinned lit draw import", contains(code, "draw_mesh_lit_surface_skinned_controlled"))
 check("contains shadow map import", contains(code, "from shadow_map import create_shadow_renderer"))
 check("contains shadow source setter", contains(code, "set_lit_material_shadow_source"))
 check("contains shadow renderer init", contains(code, "shadow_renderer = create_shadow_renderer(2048)"))
