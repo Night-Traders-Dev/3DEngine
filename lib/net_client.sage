@@ -10,6 +10,52 @@ from net_protocol import serialize_message, extract_messages, deserialize_messag
 from net_protocol import create_message, MSG_CONNECT, MSG_DISCONNECT, MSG_PING, MSG_PONG
 
 # ============================================================================
+# Transport helpers
+# ============================================================================
+proc _socket_fd(sock):
+    if sock == nil:
+        return -1
+    if type(sock) == "dict":
+        if dict_has(sock, "fd"):
+            return sock["fd"]
+        return -1
+    if type(sock) == "number":
+        return sock
+    return -1
+
+proc _client_recv(cl, max_len):
+    if cl["secure"] and cl["ssl_sock"] != nil:
+        import ssl
+        return ssl.recv(cl["ssl_sock"], max_len)
+    return tcp.recv(cl["socket"], max_len)
+
+proc _client_send(cl, data):
+    if cl["secure"] and cl["ssl_sock"] != nil:
+        import ssl
+        return ssl.send(cl["ssl_sock"], data) >= 0
+    return tcp.sendall(cl["socket"], data)
+
+proc _cleanup_ssl_state(cl):
+    if cl["ssl_sock"] != nil or cl["ssl_ctx"] != nil:
+        try:
+            import ssl
+            if cl["ssl_sock"] != nil:
+                ssl.shutdown(cl["ssl_sock"])
+                ssl.free(cl["ssl_sock"])
+            if cl["ssl_ctx"] != nil:
+                ssl.free_context(cl["ssl_ctx"])
+        catch e:
+            nil
+        cl["ssl_sock"] = nil
+        cl["ssl_ctx"] = nil
+
+proc _client_close_transport(cl):
+    _cleanup_ssl_state(cl)
+    if cl["socket"] != nil:
+        tcp.close(cl["socket"])
+        cl["socket"] = nil
+
+# ============================================================================
 # Game Client
 # ============================================================================
 proc create_client():
@@ -27,6 +73,9 @@ proc create_client():
     cl["last_ping_time"] = 0.0
     cl["server_host"] = ""
     cl["server_port"] = 0
+    cl["secure"] = false
+    cl["ssl_ctx"] = nil
+    cl["ssl_sock"] = nil
     return cl
 
 # ============================================================================
@@ -42,7 +91,10 @@ proc connect_to_server(cl, host, port, player_name):
     cl["player_name"] = player_name
     cl["server_host"] = host
     cl["server_port"] = port
-    socket.nonblock(sock)
+    cl["secure"] = false
+    cl["ssl_ctx"] = nil
+    cl["ssl_sock"] = nil
+    socket.nonblock(sock, true)
     # Send connect message
     let msg = create_message(MSG_CONNECT, {"name": player_name})
     send_message(cl, msg)
@@ -57,7 +109,7 @@ proc connect_to_server(cl, host, port, player_name):
 proc poll_client(cl):
     if cl["connected"] == false:
         return nil
-    let data = tcp.recv(cl["socket"], 4096)
+    let data = _client_recv(cl, 4096)
     if data == nil:
         return nil
     # Zero-length read means server closed the connection
@@ -93,8 +145,7 @@ proc send_message(cl, msg):
     let data = serialize_message(msg)
     if data == nil:
         return false
-    tcp.sendall(cl["socket"], data)
-    return true
+    return _client_send(cl, data)
 
 # ============================================================================
 # Send ping
@@ -127,24 +178,40 @@ proc disconnect(cl):
         return nil
     let msg = create_message(MSG_DISCONNECT, nil)
     send_message(cl, msg)
-    tcp.close(cl["socket"])
+    _client_close_transport(cl)
     _handle_disconnect(cl)
 
 # ============================================================================
 # Secure client (SSL/TLS)
 # ============================================================================
 proc connect_secure(host, port):
-    let client = connect_to_server(create_client(), host, port, "Player")
-    if client == nil:
+    let client = create_client()
+    let sock = tcp.connect(host, port)
+    if sock == nil or sock < 0:
         return nil
-    client["secure"] = true
+    client["socket"] = sock
+    client["connected"] = true
+    client["player_name"] = "Player"
+    client["server_host"] = host
+    client["server_port"] = port
     try:
         import ssl
-        client["ssl_ctx"] = ssl.context()
+        client["ssl_ctx"] = ssl.context("tls_client")
         client["ssl_sock"] = ssl.wrap(client["ssl_ctx"], client["socket"])
-        ssl.connect(client["ssl_sock"], host)
-        print "SSL connected to " + host + ":" + str(port)
+        if client["ssl_sock"] != nil:
+            client["secure"] = ssl.connect(client["ssl_sock"], host)
+        else:
+            client["secure"] = false
+        if client["secure"]:
+            print "SSL connected to " + host + ":" + str(port)
+        else:
+            print "SSL handshake failed, using plain TCP"
+            _cleanup_ssl_state(client)
     catch e:
         print "SSL not available, using plain TCP: " + str(e)
+        _cleanup_ssl_state(client)
         client["secure"] = false
+    socket.nonblock(sock, true)
+    let msg = create_message(MSG_CONNECT, {"name": client["player_name"]})
+    send_message(client, msg)
     return client

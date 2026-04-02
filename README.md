@@ -16,7 +16,7 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 # Run a game demo
 ./run.sh examples/demo_world.sage
 
-# Run tests (47 suites, 1,396 checks)
+# Run tests (48 suites, 1,348 checks)
 ./tests/run_all.sh
 
 # Build distributable package
@@ -116,7 +116,7 @@ forge-engine/
 │   └── ...                  # 80+ more engine modules
 ├── shaders/                 # GLSL shader pairs + SPIR-V
 ├── examples/                # 8 demo programs
-├── tests/                   # 47 suites, 1,396 checks
+├── tests/                   # 48 suites, 1,348 checks
 ├── assets/                  # Fonts, models, scenes, prefabs
 │   └── prefabs/             # Saved entity templates
 └── build/                   # Distribution output
@@ -196,7 +196,7 @@ forge-engine/
 ## Testing
 
 ```bash
-./tests/run_all.sh            # 47 suites, 1,396 individual checks
+./tests/run_all.sh            # 48 suites, 1,348 individual checks
 ./run.sh tests/test_ecs.sage  # Run individual suite
 ```
 
