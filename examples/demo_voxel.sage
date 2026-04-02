@@ -244,7 +244,7 @@ while running:
                     _set_status("Load failed: world data was invalid")
                 else:
                     voxel = loaded_world
-                    voxel_draws(voxel)
+                    draws = voxel_visible_draws(voxel, player["position"][0], player["position"][1], player["position"][2], 2)
                     if dict_has(state, "inventory"):
                         inventory = voxel_inventory_from_sage(state["inventory"])
                     if dict_has(state, "selected_block") and state["selected_block"] > 0:

@@ -120,7 +120,7 @@ The Forge Editor is a UE5-inspired visual scene editor with floating windows, a 
 
 Press **F1** at any time to see the full keyboard shortcuts overlay.
 
-Choosing the `Voxel` launcher template now seeds a starter surface-block scene in the editor using the same shared voxel generation rules as the playable sandbox demo. The playable voxel sandbox now also supports inventory-backed mining/placement, a first plank-crafting loop, chunk-aware draw filtering, plus chunked JSON save/load controls, so the template path is starting to function like a real game loop instead of a render-only scene.
+Choosing the `Voxel` launcher template now seeds a starter surface-block scene in the editor using the same shared voxel generation rules as the playable sandbox demo. The playable voxel sandbox now also supports inventory-backed mining/placement, a first plank-crafting loop, streamed chunk draws around the player, plus chunked JSON save/load controls, so the template path is starting to function like a real game loop instead of a render-only scene.
 
 ### Editor Layout
 

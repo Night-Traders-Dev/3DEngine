@@ -36,7 +36,7 @@ When you launch the editor, a **Project Browser** appears first:
 - **Preview area** — Shows selected template details and included features
 - **Keyboard** — Arrow keys to navigate, Enter to create, ESC to exit
 
-The voxel template is now backed by a real starter path: the editor seeds a surface-block voxel scene when you choose `Voxel`, and the shared sandbox gameplay loop lives in [examples/demo_voxel.sage](/home/kraken/Devel/3DEngine/examples/demo_voxel.sage) with inventory-backed mining/placement, a first crafting step for planks, chunk-aware draw filtering, and chunked sandbox save/load.
+The voxel template is now backed by a real starter path: the editor seeds a surface-block voxel scene when you choose `Voxel`, and the shared sandbox gameplay loop lives in [examples/demo_voxel.sage](/home/kraken/Devel/3DEngine/examples/demo_voxel.sage) with inventory-backed mining/placement, a first crafting step for planks, streamed chunk draws around the player, and chunked sandbox save/load.
 
 ## Editor
 
@@ -56,7 +56,7 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 - **Directional shadows** — Dedicated sun shadow prepass in the editor, with texel-snapped light matrices to reduce shimmer and imported skinned meshes participating in the same shadow depth path as static meshes
 - **Render flags** — Mesh visibility plus `cast_shadows` / `receive_shadows` now affect the live editor viewport, shadow prepass, and exported runtime, with quick toggles in the Tools/context menus
 - **Voxel template bootstrap** — The `Voxel` launcher path now seeds a starter voxel scene in the editor and shares terrain/palette rules with the playable sandbox demo
-- **Voxel sandbox loop** — The shared voxel template now supports inventory-backed mining/placement, a first crafted plank block, chunk-aware draw filtering, and chunked JSON save/load in the playable sandbox path
+- **Voxel sandbox loop** — The shared voxel template now supports inventory-backed mining/placement, a first crafted plank block, streamed chunk draws, and chunked JSON save/load in the playable sandbox path
 - **Prefab system** — Save entities as reusable .prefab.json templates
 - **Undo/Redo** — CTRL+Z / CTRL+Y with full command history (100 levels)
 - **Modal dialogs** — Quit confirmation, About dialog
@@ -169,7 +169,7 @@ forge-engine/
 `ui_core` (**centralized theme system** with 40+ named colors, spacing constants, font sizing, border/shadow helpers, hover/active/disabled/pressed widget states, focus rings) · `ui_renderer` (batched quads) · `ui_widgets` (buttons, sliders, checkboxes, dropdowns, text input fields, number fields, tree views, scroll panels, section headers, **visible scrollbars**, **per-widget quad collection**) · `ui_window` (floating windows, context menus, modal dialogs, snap-to-edge) · `font` (TrueType via stb_truetype) · `launch_screen` (project browser with templates) · `hud` (health bar with 4-stage color transition, gapped crosshair, themed minimap, score display) · `menu` (themed pause/main/game-over menus with visual hierarchy, button styles, fade animations) · `inspector` (entity property inspector with accent bars, color-coded booleans)
 
 ### World
-`terrain` (heightmap, procedural noise) · `water` (animated waves) · `foliage` (scatter rules) · `day_night` (sun cycle) · `scene` (scene graph, level streaming) · `voxel_world` (**shared voxel template terrain generation**, **exposed-face meshing**, **chunk-aware mesh builds**, **block picking/place-break**, **simple player collision helpers**, **chunked JSON world save/load**, **visible-draw filtering**, **inventory helpers**, **basic crafting recipes**)
+`terrain` (heightmap, procedural noise) · `water` (animated waves) · `foliage` (scatter rules) · `day_night` (sun cycle) · `scene` (scene graph, level streaming) · `voxel_world` (**shared voxel template terrain generation**, **exposed-face meshing**, **chunk-aware mesh builds**, **streamed chunk draw cache**, **block picking/place-break**, **simple player collision helpers**, **chunked JSON world save/load**, **inventory helpers**, **basic crafting recipes**)
 
 ### VFX & Post-Processing
 `particles` (CPU pool, emitter shapes) · `vfx_presets` (fire/smoke/sparks/rain/magic) · `particle_renderer` · `post_fx` (vignette, color grading, fade, presets) · `postprocess` (bloom extract/blur/composite, HDR tone mapping, fullscreen pass infrastructure)

@@ -5,6 +5,7 @@ gc_disable()
 # and simple player collision helpers for Minecraft-style sandbox loops.
 # -----------------------------------------
 
+import gpu
 import math
 import io
 from math3d import vec3
@@ -17,6 +18,38 @@ proc _clone_sage(value):
     let out = cJSON_ToSage(node)
     cJSON_Delete(node)
     return out
+
+proc _destroy_voxel_gpu_mesh(gpu_mesh):
+    if gpu_mesh == nil:
+        return
+    if dict_has(gpu_mesh, "vbuf") and gpu_mesh["vbuf"] != nil:
+        gpu.destroy_buffer(gpu_mesh["vbuf"])
+    if dict_has(gpu_mesh, "ibuf") and gpu_mesh["ibuf"] != nil:
+        gpu.destroy_buffer(gpu_mesh["ibuf"])
+
+proc _reset_voxel_stream_state(vw):
+    vw["stream_chunks"] = {}
+    vw["stream_draws"] = []
+    vw["stream_center_chunk"] = {"x": -9999, "y": -9999, "z": -9999}
+    vw["stream_chunk_radius"] = -1
+
+proc _clear_voxel_mesh_cache(vw):
+    let keys = dict_keys(vw["gpu_meshes"])
+    let i = 0
+    while i < len(keys):
+        _destroy_voxel_gpu_mesh(vw["gpu_meshes"][keys[i]])
+        i = i + 1
+    vw["gpu_meshes"] = {}
+    let chunk_keys = dict_keys(vw["stream_chunks"])
+    let ci = 0
+    while ci < len(chunk_keys):
+        let draws = vw["stream_chunks"][chunk_keys[ci]]
+        let di = 0
+        while di < len(draws):
+            _destroy_voxel_gpu_mesh(draws[di]["gpu_mesh"])
+            di = di + 1
+        ci = ci + 1
+    _reset_voxel_stream_state(vw)
 
 proc _palette_key(block_id):
     return str(block_id)
@@ -57,6 +90,8 @@ proc create_voxel_world(size_x, size_y, size_z):
     vw["solid_count"] = 0
     vw["template_seed"] = 0.0
     vw["chunk_size"] = 16
+    vw["dirty_chunks"] = {}
+    _reset_voxel_stream_state(vw)
     return vw
 
 proc create_voxel_inventory():
@@ -185,6 +220,7 @@ proc set_voxel(vw, gx, gy, gz, block_id):
     if prev != 0 and block_id == 0:
         vw["solid_count"] = vw["solid_count"] - 1
     vw["blocks"][idx] = block_id
+    _mark_voxel_dirty_chunks(vw, gx, gy, gz)
     vw["dirty"] = true
     return true
 
@@ -215,6 +251,32 @@ proc voxel_chunk_key(cx, cy, cz):
 proc voxel_chunk_coords(vw, gx, gy, gz):
     let cs = voxel_chunk_size(vw)
     return {"x": math.floor(gx / cs), "y": math.floor(gy / cs), "z": math.floor(gz / cs)}
+
+proc _voxel_chunk_valid(vw, cx, cy, cz):
+    if cx < 0 or cy < 0 or cz < 0:
+        return false
+    if cx >= voxel_chunk_count_x(vw) or cy >= voxel_chunk_count_y(vw) or cz >= voxel_chunk_count_z(vw):
+        return false
+    return true
+
+proc _mark_chunk_dirty(vw, cx, cy, cz):
+    if _voxel_chunk_valid(vw, cx, cy, cz) == false:
+        return
+    let key = voxel_chunk_key(cx, cy, cz)
+    vw["dirty_chunks"][key] = {"x": cx, "y": cy, "z": cz}
+
+proc _mark_voxel_dirty_chunks(vw, gx, gy, gz):
+    let center = voxel_chunk_coords(vw, gx, gy, gz)
+    let dx = -1
+    while dx <= 1:
+        let dy = -1
+        while dy <= 1:
+            let dz = -1
+            while dz <= 1:
+                _mark_chunk_dirty(vw, center["x"] + dx, center["y"] + dy, center["z"] + dz)
+                dz = dz + 1
+            dy = dy + 1
+        dx = dx + 1
 
 proc voxel_chunk_coords_world(vw, wx, wy, wz):
     let gx = math.floor(wx - vw["origin_x"])
@@ -297,11 +359,13 @@ proc voxel_is_surface_block(vw, gx, gy, gz):
     return false
 
 proc clear_voxel_world(vw):
+    _clear_voxel_mesh_cache(vw)
     let i = 0
     while i < len(vw["blocks"]):
         vw["blocks"][i] = 0
         i = i + 1
     vw["solid_count"] = 0
+    vw["dirty_chunks"] = {}
     vw["dirty"] = true
 
 proc fill_voxel_box(vw, x0, y0, z0, x1, y1, z1, block_id):
@@ -483,6 +547,8 @@ proc voxel_world_from_sage(data):
     vw["mesh_data"] = {}
     vw["gpu_meshes"] = {}
     vw["draws"] = []
+    vw["dirty_chunks"] = {}
+    _reset_voxel_stream_state(vw)
     vw["dirty"] = true
     return vw
 
@@ -762,8 +828,52 @@ proc build_voxel_chunk_meshes(vw, cx, cy, cz):
     let bounds = voxel_chunk_bounds(vw, cx, cy, cz)
     return _build_voxel_meshes_range(vw, bounds["x0"], bounds["y0"], bounds["z0"], bounds["x1"], bounds["y1"], bounds["z1"])
 
-proc rebuild_voxel_world(vw):
+proc _build_uploaded_voxel_chunk_draws(vw, cx, cy, cz):
     from mesh import upload_mesh
+    let built = build_voxel_chunk_meshes(vw, cx, cy, cz)
+    let draws = []
+    let pi = 0
+    while pi < len(vw["palette_ids"]):
+        let block_id = vw["palette_ids"][pi]
+        let key = _palette_key(block_id)
+        if dict_has(built, key):
+            let mesh_data = built[key]
+            let gpu_mesh = upload_mesh(mesh_data)
+            let draw = {}
+            draw["block_id"] = block_id
+            draw["gpu_mesh"] = gpu_mesh
+            draw["surface"] = voxel_block_surface(vw, block_id)
+            draw["name"] = voxel_block_name(vw, block_id)
+            draw["face_count"] = mesh_data["face_count"]
+            draw["chunk_x"] = cx
+            draw["chunk_y"] = cy
+            draw["chunk_z"] = cz
+            draw["chunk_key"] = voxel_chunk_key(cx, cy, cz)
+            draw["chunk_center"] = voxel_chunk_world_center(vw, cx, cy, cz)
+            push(draws, draw)
+        pi = pi + 1
+    return {"mesh_data": built, "draws": draws}
+
+proc _remove_stream_chunk(vw, chunk_key):
+    if dict_has(vw["stream_chunks"], chunk_key) == false:
+        return
+    let draws = vw["stream_chunks"][chunk_key]
+    let di = 0
+    while di < len(draws):
+        _destroy_voxel_gpu_mesh(draws[di]["gpu_mesh"])
+        di = di + 1
+    dict_delete(vw["stream_chunks"], chunk_key)
+
+proc _refresh_stream_chunk(vw, cx, cy, cz):
+    let chunk_key = voxel_chunk_key(cx, cy, cz)
+    _remove_stream_chunk(vw, chunk_key)
+    let uploaded = _build_uploaded_voxel_chunk_draws(vw, cx, cy, cz)
+    vw["stream_chunks"][chunk_key] = uploaded["draws"]
+    if dict_has(vw["dirty_chunks"], chunk_key):
+        dict_delete(vw["dirty_chunks"], chunk_key)
+
+proc rebuild_voxel_world(vw):
+    _clear_voxel_mesh_cache(vw)
     let gpu_meshes = {}
     let draws = []
     let all_mesh_data = {}
@@ -774,36 +884,24 @@ proc rebuild_voxel_world(vw):
             let cz = 0
             while cz < voxel_chunk_count_z(vw):
                 let chunk_key = voxel_chunk_key(cx, cy, cz)
-                let built = build_voxel_chunk_meshes(vw, cx, cy, cz)
-                let pi = 0
-                while pi < len(vw["palette_ids"]):
-                    let block_id = vw["palette_ids"][pi]
-                    let key = _palette_key(block_id)
-                    if dict_has(built, key):
-                        let mesh_data = built[key]
-                        let draw_key = chunk_key + ":" + key
-                        let gpu_mesh = upload_mesh(mesh_data)
-                        gpu_meshes[draw_key] = gpu_mesh
-                        all_mesh_data[draw_key] = mesh_data
-                        let draw = {}
-                        draw["block_id"] = block_id
-                        draw["gpu_mesh"] = gpu_mesh
-                        draw["surface"] = voxel_block_surface(vw, block_id)
-                        draw["name"] = voxel_block_name(vw, block_id)
-                        draw["face_count"] = mesh_data["face_count"]
-                        draw["chunk_x"] = cx
-                        draw["chunk_y"] = cy
-                        draw["chunk_z"] = cz
-                        draw["chunk_key"] = chunk_key
-                        draw["chunk_center"] = voxel_chunk_world_center(vw, cx, cy, cz)
-                        push(draws, draw)
-                    pi = pi + 1
+                let uploaded = _build_uploaded_voxel_chunk_draws(vw, cx, cy, cz)
+                let built = uploaded["mesh_data"]
+                let chunk_draws = uploaded["draws"]
+                let di = 0
+                while di < len(chunk_draws):
+                    let draw = chunk_draws[di]
+                    let draw_key = chunk_key + ":" + _palette_key(draw["block_id"])
+                    gpu_meshes[draw_key] = draw["gpu_mesh"]
+                    all_mesh_data[draw_key] = built[_palette_key(draw["block_id"])]
+                    push(draws, draw)
+                    di = di + 1
                 cz = cz + 1
             cy = cy + 1
         cx = cx + 1
     vw["gpu_meshes"] = gpu_meshes
     vw["mesh_data"] = all_mesh_data
     vw["draws"] = draws
+    vw["dirty_chunks"] = {}
     vw["dirty"] = false
     return draws
 
@@ -813,17 +911,60 @@ proc voxel_draws(vw):
     return vw["draws"]
 
 proc voxel_visible_draws(vw, wx, wy, wz, chunk_radius):
-    let draws = voxel_draws(vw)
     let center_chunk = voxel_chunk_coords_world(vw, wx, wy, wz)
+    let wanted = {}
+    let cx = center_chunk["x"] - chunk_radius
+    while cx <= center_chunk["x"] + chunk_radius:
+        let cy = center_chunk["y"] - chunk_radius
+        while cy <= center_chunk["y"] + chunk_radius:
+            let cz = center_chunk["z"] - chunk_radius
+            while cz <= center_chunk["z"] + chunk_radius:
+                if _voxel_chunk_valid(vw, cx, cy, cz):
+                    let key = voxel_chunk_key(cx, cy, cz)
+                    wanted[key] = {"x": cx, "y": cy, "z": cz}
+                cz = cz + 1
+            cy = cy + 1
+        cx = cx + 1
+
+    let loaded_keys = dict_keys(vw["stream_chunks"])
+    let li = 0
+    while li < len(loaded_keys):
+        if dict_has(wanted, loaded_keys[li]) == false:
+            _remove_stream_chunk(vw, loaded_keys[li])
+        li = li + 1
+
+    let wanted_keys = dict_keys(wanted)
+    let wi = 0
+    while wi < len(wanted_keys):
+        let key = wanted_keys[wi]
+        let chunk = wanted[key]
+        if dict_has(vw["stream_chunks"], key) == false or dict_has(vw["dirty_chunks"], key):
+            _refresh_stream_chunk(vw, chunk["x"], chunk["y"], chunk["z"])
+        wi = wi + 1
+
     let visible = []
-    let i = 0
-    while i < len(draws):
-        let draw = draws[i]
-        if math.abs(draw["chunk_x"] - center_chunk["x"]) <= chunk_radius:
-            if math.abs(draw["chunk_y"] - center_chunk["y"]) <= chunk_radius:
-                if math.abs(draw["chunk_z"] - center_chunk["z"]) <= chunk_radius:
-                    push(visible, draw)
-        i = i + 1
+    let ox = center_chunk["x"] - chunk_radius
+    while ox <= center_chunk["x"] + chunk_radius:
+        let oy = center_chunk["y"] - chunk_radius
+        while oy <= center_chunk["y"] + chunk_radius:
+            let oz = center_chunk["z"] - chunk_radius
+            while oz <= center_chunk["z"] + chunk_radius:
+                if _voxel_chunk_valid(vw, ox, oy, oz):
+                    let key = voxel_chunk_key(ox, oy, oz)
+                    if dict_has(vw["stream_chunks"], key):
+                        let draws = vw["stream_chunks"][key]
+                        let di = 0
+                        while di < len(draws):
+                            push(visible, draws[di])
+                            di = di + 1
+                oz = oz + 1
+            oy = oy + 1
+        ox = ox + 1
+
+    vw["stream_draws"] = visible
+    vw["stream_center_chunk"] = center_chunk
+    vw["stream_chunk_radius"] = chunk_radius
+    vw["dirty"] = len(dict_keys(vw["dirty_chunks"])) > 0
     return visible
 
 proc raycast_voxel_world(vw, origin, direction, max_dist):
