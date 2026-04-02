@@ -32,7 +32,7 @@ from player_controller import player_projection, player_forward
 from game_loop import create_time_state, update_time
 from font import create_font_renderer, load_font, begin_text, add_text, flush_text
 from json import cJSON_Parse, cJSON_Print, cJSON_Delete, cJSON_FromSage, cJSON_ToSage
-from voxel_world import create_voxel_world, generate_voxel_template_world, voxel_draws
+from voxel_world import create_voxel_world
 from voxel_world import voxel_block_name, voxel_block_world_center, raycast_voxel_world
 from voxel_world import set_voxel, sample_voxel_ground_radius, voxel_collides_player
 from voxel_world import resolve_player_voxel_collision
@@ -42,11 +42,14 @@ from voxel_world import voxel_world_to_sage, voxel_world_from_sage
 from voxel_world import default_voxel_recipes, try_craft_voxel_recipe
 from voxel_world import save_voxel_world_chunks, load_voxel_world_chunks, voxel_visible_draws
 from voxel_world import voxel_chunk_coords_world, voxel_chunk_size
+from voxel_world import ensure_voxel_generated_radius, voxel_generated_chunk_count
 
 print "=== Forge Engine - Voxel Template Sandbox ==="
 
 let save_state_file = "/tmp/forge_voxel_template_save.json"
 let save_world_file = "/tmp/forge_voxel_template_world.json"
+let world_seed = 7.0
+let generation_chunk_radius = 2
 
 # ============================================================================
 # Renderer
@@ -88,11 +91,11 @@ load_font(font_r, "ui", "assets/DejaVuSans.ttf", 18.0)
 # ============================================================================
 # Shared voxel world
 # ============================================================================
-let voxel = create_voxel_world(32, 18, 32)
-generate_voxel_template_world(voxel, 7.0)
+let voxel = create_voxel_world(96, 24, 96)
 let cube_gpu = upload_mesh(cube_mesh())
-let draws = voxel_visible_draws(voxel, 0.0, 0.0, 8.0, 2)
-print "Voxel world generated: " + str(voxel["solid_count"]) + " solid blocks"
+ensure_voxel_generated_radius(voxel, 0.0, 0.0, 0.0, generation_chunk_radius, world_seed)
+let draws = voxel_visible_draws(voxel, 0.0, 0.0, 0.0, generation_chunk_radius)
+print "Voxel world generated: " + str(voxel["solid_count"]) + " solid blocks across " + str(voxel_generated_chunk_count(voxel)) + " generated chunks"
 
 let inventory = create_voxel_inventory()
 voxel_inventory_add(inventory, 1, 32)
@@ -117,7 +120,7 @@ bind_action(inp, "sprint", [gpu.KEY_SHIFT])
 # Player
 # ============================================================================
 let player = create_player_controller()
-player["position"] = vec3(0.0, 0.0, 8.0)
+player["position"] = vec3(0.0, 0.0, 0.0)
 player["speed"] = 7.0
 player["sprint_speed"] = 12.0
 player["air_speed"] = 4.0
@@ -244,7 +247,7 @@ while running:
                     _set_status("Load failed: world data was invalid")
                 else:
                     voxel = loaded_world
-                    draws = voxel_visible_draws(voxel, player["position"][0], player["position"][1], player["position"][2], 2)
+                    draws = voxel_visible_draws(voxel, player["position"][0], player["position"][1], player["position"][2], generation_chunk_radius)
                     if dict_has(state, "inventory"):
                         inventory = voxel_inventory_from_sage(state["inventory"])
                     if dict_has(state, "selected_block") and state["selected_block"] > 0:
@@ -269,6 +272,7 @@ while running:
                         player["position"][1] = sample_voxel_ground_radius(voxel, player["position"][0], player["position"][2], player["radius"])
                     _set_status("Loaded sandbox from " + save_state_file)
 
+    ensure_voxel_generated_radius(voxel, player["position"][0], player["position"][1], player["position"][2], generation_chunk_radius, world_seed)
     let prev_pos = vec3(player["position"][0], player["position"][1], player["position"][2])
     player["ground_y"] = sample_voxel_ground_radius(voxel, player["position"][0], player["position"][2], player["radius"])
     update_player(player, inp, dt)
@@ -307,7 +311,7 @@ while running:
         else:
             _set_status("No " + voxel_block_name(voxel, selected_block[0]) + " left in inventory")
 
-    draws = voxel_visible_draws(voxel, player["position"][0], player["position"][1], player["position"][2], 2)
+    draws = voxel_visible_draws(voxel, player["position"][0], player["position"][1], player["position"][2], generation_chunk_radius)
     set_view_position(ls, eye)
     update_light_ubo(ls)
 
@@ -356,7 +360,7 @@ while running:
     add_text(font_r, "ui", "VOXEL TEMPLATE SANDBOX", 18.0, 18.0, 0.94, 0.96, 0.98, 1.0)
     add_text(font_r, "ui", "LMB break  RMB place  1-5 palette  Z planks  X craft  C save  V load  TAB noclip  ESC mouse", 18.0, 42.0, 0.70, 0.74, 0.80, 1.0)
     add_text(font_r, "ui", "Selected: [" + str(selected_block[0]) + "] " + voxel_block_name(voxel, selected_block[0]) + " x" + str(voxel_inventory_count(inventory, selected_block[0])) + " | Solid blocks: " + str(voxel["solid_count"]), 18.0, sh - 44.0, 0.90, 0.92, 0.95, 1.0)
-    add_text(font_r, "ui", "Chunk: " + str(player_chunk["x"]) + ", " + str(player_chunk["y"]) + ", " + str(player_chunk["z"]) + " | Chunk size: " + str(voxel_chunk_size(voxel)) + " | Visible chunk draws: " + str(len(draws)), 18.0, sh - 118.0, 0.72, 0.84, 0.92, 1.0)
+    add_text(font_r, "ui", "Chunk: " + str(player_chunk["x"]) + ", " + str(player_chunk["y"]) + ", " + str(player_chunk["z"]) + " | Chunk size: " + str(voxel_chunk_size(voxel)) + " | Generated chunks: " + str(voxel_generated_chunk_count(voxel)) + " | Visible chunk draws: " + str(len(draws)), 18.0, sh - 118.0, 0.72, 0.84, 0.92, 1.0)
     if target_hit != nil:
         add_text(font_r, "ui", "Target: " + voxel_block_name(voxel, target_hit["block_id"]) + " @ " + str(target_hit["x"]) + ", " + str(target_hit["y"]) + ", " + str(target_hit["z"]), 18.0, sh - 70.0, 0.86, 0.84, 0.72, 1.0)
     else:

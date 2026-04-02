@@ -91,6 +91,7 @@ proc create_voxel_world(size_x, size_y, size_z):
     vw["template_seed"] = 0.0
     vw["chunk_size"] = 16
     vw["dirty_chunks"] = {}
+    vw["generated_chunks"] = {}
     _reset_voxel_stream_state(vw)
     return vw
 
@@ -265,6 +266,15 @@ proc _mark_chunk_dirty(vw, cx, cy, cz):
     let key = voxel_chunk_key(cx, cy, cz)
     vw["dirty_chunks"][key] = {"x": cx, "y": cy, "z": cz}
 
+proc _mark_chunk_generated(vw, cx, cy, cz):
+    if _voxel_chunk_valid(vw, cx, cy, cz) == false:
+        return
+    let key = voxel_chunk_key(cx, cy, cz)
+    vw["generated_chunks"][key] = {"x": cx, "y": cy, "z": cz}
+
+proc voxel_generated_chunk_count(vw):
+    return len(dict_keys(vw["generated_chunks"]))
+
 proc _mark_voxel_dirty_chunks(vw, gx, gy, gz):
     let center = voxel_chunk_coords(vw, gx, gy, gz)
     let dx = -1
@@ -340,6 +350,24 @@ proc voxel_nonempty_chunks(vw):
         cx = cx + 1
     return chunks
 
+proc voxel_manifest_chunks(vw):
+    let manifest = {}
+    let existing = voxel_nonempty_chunks(vw)
+    let i = 0
+    while i < len(existing):
+        let chunk = existing[i]
+        manifest[voxel_chunk_key(chunk["x"], chunk["y"], chunk["z"])] = chunk
+        i = i + 1
+    let generated_keys = dict_keys(vw["generated_chunks"])
+    let gi = 0
+    while gi < len(generated_keys):
+        let key = generated_keys[gi]
+        if dict_has(manifest, key) == false:
+            let chunk = vw["generated_chunks"][key]
+            manifest[key] = {"x": chunk["x"], "y": chunk["y"], "z": chunk["z"], "solid_count": 0}
+        gi = gi + 1
+    return dict_values(manifest)
+
 proc voxel_is_surface_block(vw, gx, gy, gz):
     let block_id = get_voxel(vw, gx, gy, gz)
     if block_id == 0:
@@ -366,6 +394,7 @@ proc clear_voxel_world(vw):
         i = i + 1
     vw["solid_count"] = 0
     vw["dirty_chunks"] = {}
+    vw["generated_chunks"] = {}
     vw["dirty"] = true
 
 proc fill_voxel_box(vw, x0, y0, z0, x1, y1, z1, block_id):
@@ -405,6 +434,54 @@ proc _find_surface_y(vw, gx, gz):
         y = y - 1
     return -1
 
+proc _set_voxel_if_in_bounds(vw, gx, gy, gz, block_id):
+    if voxel_in_bounds(vw, gx, gy, gz):
+        set_voxel(vw, gx, gy, gz, block_id)
+
+proc _set_voxel_if_in_chunk(vw, bounds, gx, gy, gz, block_id):
+    if gx < bounds["x0"] or gx >= bounds["x1"]:
+        return
+    if gy < bounds["y0"] or gy >= bounds["y1"]:
+        return
+    if gz < bounds["z0"] or gz >= bounds["z1"]:
+        return
+    _set_voxel_if_in_bounds(vw, gx, gy, gz, block_id)
+
+proc _template_tree_metric(gx, gz, seed):
+    return math.sin((gx + seed) * 0.73) + math.cos((gz - seed) * 0.61) + math.sin((gx * 0.19) + (gz * 0.27) + seed * 0.11)
+
+proc _template_has_tree(vw, gx, gz, seed):
+    if gx < 2 or gz < 2 or gx >= vw["size_x"] - 2 or gz >= vw["size_z"] - 2:
+        return false
+    let metric = _template_tree_metric(gx, gz, seed)
+    if metric < 2.15:
+        return false
+    let surface_y = _template_height(vw, gx, gz, seed) - 1
+    return surface_y + 5 < vw["size_y"]
+
+proc _apply_template_tree_chunk(vw, bounds, gx, gz, seed):
+    if _template_has_tree(vw, gx, gz, seed) == false:
+        return false
+    let ground_y = _template_height(vw, gx, gz, seed) - 1
+    if ground_y < 0:
+        return false
+    let ty = ground_y + 1
+    let i = 0
+    while i < 3:
+        _set_voxel_if_in_chunk(vw, bounds, gx, ty + i, gz, 4)
+        i = i + 1
+    let lx = gx - 1
+    while lx <= gx + 1:
+        let lz = gz - 1
+        while lz <= gz + 1:
+            _set_voxel_if_in_chunk(vw, bounds, lx, ty + 3, lz, 5)
+            if lx == gx or lz == gz:
+                _set_voxel_if_in_chunk(vw, bounds, lx, ty + 4, lz, 5)
+            lz = lz + 1
+        lx = lx + 1
+    _set_voxel_if_in_chunk(vw, bounds, gx, ty + 5, gz, 5)
+    return true
+
 proc _add_template_tree(vw, gx, gz):
     let ground_y = _find_surface_y(vw, gx, gz)
     if ground_y < 0:
@@ -430,30 +507,73 @@ proc _add_template_tree(vw, gx, gz):
     set_voxel(vw, gx, ty + 5, gz, 5)
     return true
 
-proc generate_voxel_template_world(vw, seed):
-    clear_voxel_world(vw)
-    vw["template_seed"] = seed
-    let gx = 0
-    while gx < vw["size_x"]:
-        let gz = 0
-        while gz < vw["size_z"]:
+proc generate_voxel_template_chunk(vw, cx, cy, cz, seed):
+    if _voxel_chunk_valid(vw, cx, cy, cz) == false:
+        return false
+    let chunk_key = voxel_chunk_key(cx, cy, cz)
+    if dict_has(vw["generated_chunks"], chunk_key):
+        return false
+    let bounds = voxel_chunk_bounds(vw, cx, cy, cz)
+    let gx = bounds["x0"]
+    while gx < bounds["x1"]:
+        let gz = bounds["z0"]
+        while gz < bounds["z1"]:
             let h = _template_height(vw, gx, gz, seed)
-            let y = 0
-            while y < h:
-                let block_id = 3
-                if y == h - 1:
-                    block_id = 1
-                else:
-                    if y >= h - 3:
-                        block_id = 2
-                set_voxel(vw, gx, y, gz, block_id)
+            let y = bounds["y0"]
+            while y < bounds["y1"]:
+                let block_id = 0
+                if y < h:
+                    block_id = 3
+                    if y == h - 1:
+                        block_id = 1
+                    else:
+                        if y >= h - 3:
+                            block_id = 2
+                _set_voxel_if_in_bounds(vw, gx, y, gz, block_id)
                 y = y + 1
             gz = gz + 1
         gx = gx + 1
 
-    _add_template_tree(vw, 3, 4)
-    _add_template_tree(vw, vw["size_x"] - 4, vw["size_z"] - 5)
-    _add_template_tree(vw, vw["size_x"] / 2, vw["size_z"] / 2 + 3)
+    let tx = bounds["x0"] - 1
+    while tx <= bounds["x1"]:
+        let tz = bounds["z0"] - 1
+        while tz <= bounds["z1"]:
+            _apply_template_tree_chunk(vw, bounds, tx, tz, seed)
+            tz = tz + 1
+        tx = tx + 1
+    _mark_chunk_generated(vw, cx, cy, cz)
+    return true
+
+proc ensure_voxel_generated_radius(vw, wx, wy, wz, chunk_radius, seed):
+    vw["template_seed"] = seed
+    let center_chunk = voxel_chunk_coords_world(vw, wx, wy, wz)
+    let generated_now = 0
+    let cx = center_chunk["x"] - chunk_radius
+    while cx <= center_chunk["x"] + chunk_radius:
+        let cy = center_chunk["y"] - chunk_radius
+        while cy <= center_chunk["y"] + chunk_radius:
+            let cz = center_chunk["z"] - chunk_radius
+            while cz <= center_chunk["z"] + chunk_radius:
+                if generate_voxel_template_chunk(vw, cx, cy, cz, seed):
+                    generated_now = generated_now + 1
+                cz = cz + 1
+            cy = cy + 1
+        cx = cx + 1
+    return generated_now
+
+proc generate_voxel_template_world(vw, seed):
+    clear_voxel_world(vw)
+    vw["template_seed"] = seed
+    let cx = 0
+    while cx < voxel_chunk_count_x(vw):
+        let cy = 0
+        while cy < voxel_chunk_count_y(vw):
+            let cz = 0
+            while cz < voxel_chunk_count_z(vw):
+                generate_voxel_template_chunk(vw, cx, cy, cz, seed)
+                cz = cz + 1
+            cy = cy + 1
+        cx = cx + 1
 
 proc voxel_world_to_sage(vw):
     let data = {}
@@ -482,7 +602,7 @@ proc voxel_world_manifest_to_sage(vw):
     data["chunk_size"] = voxel_chunk_size(vw)
     data["palette"] = _clone_sage(vw["palette"])
     data["palette_ids"] = _clone_sage(vw["palette_ids"])
-    data["chunks"] = voxel_nonempty_chunks(vw)
+    data["chunks"] = voxel_manifest_chunks(vw)
     return data
 
 proc voxel_chunk_to_sage(vw, cx, cy, cz):
@@ -548,6 +668,7 @@ proc voxel_world_from_sage(data):
     vw["gpu_meshes"] = {}
     vw["draws"] = []
     vw["dirty_chunks"] = {}
+    vw["generated_chunks"] = {}
     _reset_voxel_stream_state(vw)
     vw["dirty"] = true
     return vw
@@ -642,6 +763,7 @@ proc load_voxel_world_chunks(manifest_path):
     let i = 0
     while i < len(chunks):
         let info = chunks[i]
+        _mark_chunk_generated(vw, info["x"], info["y"], info["z"])
         if dict_has(info, "path") and io.exists(info["path"]):
             let chunk_root = cJSON_Parse(io.readfile(info["path"]))
             if chunk_root != nil:

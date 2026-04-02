@@ -11,6 +11,7 @@ from scene_serial import serialize_scene, load_scene_string
 from scene_serial import vec3_to_json, json_to_vec3
 from json import cJSON_GetArraySize, cJSON_GetArrayItem, cJSON_GetNumberValue
 from math3d import vec3
+from voxel_world import create_voxel_world, set_voxel, get_voxel
 
 import math
 
@@ -66,6 +67,9 @@ add_component(w, e2, "health", HealthComponent(50.0))
 add_component(w, e2, "imported_asset", {"source": "assets/Box.gltf", "name": "Box.gltf", "gpu_meshes": [{"gpu_mesh": 1}], "materials": [{"name": "Default"}]})
 add_component(w, e2, "animation_state", {"clip": "Idle", "playing": true, "time": 2.0, "speed": 0.5, "looping": false})
 add_component(w, e2, "asset_ref", {"kind": "texture", "path": "assets/text_test.png"})
+let voxel_comp = create_voxel_world(12, 8, 12)
+set_voxel(voxel_comp, 6, 1, 6, 4)
+add_component(w, e2, "voxel_world", voxel_comp)
 add_tag(w, e2, "enemy")
 add_tag(w, e2, "shootable")
 
@@ -167,6 +171,10 @@ while i < len(all_eids):
             if has_component(w2, eid, "asset_ref"):
                 let bar = get_component(w2, eid, "asset_ref")
                 check("box asset ref path", bar["path"] == "assets/text_test.png")
+            check("box has voxel world", has_component(w2, eid, "voxel_world"))
+            if has_component(w2, eid, "voxel_world"):
+                let bvw = get_component(w2, eid, "voxel_world")
+                check("box voxel world preserves block", get_voxel(bvw, 6, 1, 6) == 4)
             # Tags
             check("box enemy tag", has_tag(w2, eid, "enemy"))
             check("box shootable tag", has_tag(w2, eid, "shootable"))

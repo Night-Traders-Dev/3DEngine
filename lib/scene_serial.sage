@@ -150,6 +150,10 @@ proc serialize_imported_asset(comp):
 proc serialize_sage_dict(comp):
     return cJSON_FromSage(comp)
 
+proc serialize_voxel_world_component(comp):
+    from voxel_world import voxel_world_to_sage
+    return cJSON_FromSage(voxel_world_to_sage(comp))
+
 let _serializers = {}
 _serializers["transform"] = serialize_transform
 _serializers["name"] = serialize_name
@@ -165,6 +169,7 @@ _serializers["material"] = serialize_material
 _serializers["imported_asset"] = serialize_imported_asset
 _serializers["asset_ref"] = serialize_sage_dict
 _serializers["animation_state"] = serialize_sage_dict
+_serializers["voxel_world"] = serialize_voxel_world_component
 
 proc register_serializer(comp_type, serialize_fn):
     _serializers[comp_type] = serialize_fn
@@ -422,6 +427,11 @@ proc deserialize_sage_dict(node):
     return cJSON_ToSage(node)
 _deserializers["asset_ref"] = deserialize_sage_dict
 _deserializers["animation_state"] = deserialize_sage_dict
+
+proc deserialize_voxel_world_component(node):
+    from voxel_world import voxel_world_from_sage
+    return voxel_world_from_sage(cJSON_ToSage(node))
+_deserializers["voxel_world"] = deserialize_voxel_world_component
 
 proc register_deserializer(comp_type, deserialize_fn):
     _deserializers[comp_type] = deserialize_fn

@@ -93,8 +93,10 @@ from asset_import import imported_animation_clip_names, imported_animation_index
 from asset_import import imported_animation_duration, create_imported_animation_state
 from asset_import import advance_imported_animation_state, cycle_imported_animation_clip, step_imported_animation_time
 from forge_version import engine_name, editor_title, editor_play_title, about_text
-from voxel_world import create_voxel_world, generate_voxel_template_world, get_voxel
+from voxel_world import create_voxel_world, generate_voxel_template_world, get_voxel, set_voxel
 from voxel_world import voxel_block_surface, voxel_block_name, voxel_is_surface_block, voxel_block_world_center
+from voxel_world import voxel_palette_ids, voxel_visible_draws, raycast_voxel_world
+from voxel_world import voxel_generated_chunk_count, voxel_chunk_size
 import io
 
 print "=== Forge Engine Editor ==="
@@ -250,32 +252,25 @@ proc _spawn_template_cube(editor_ctx, w, pos, name, material_id, surface):
         add_component(w, e, "material", mat)
     return e
 
+proc _spawn_voxel_world_entity(editor_ctx, w, pos, name, voxel_world):
+    let e = place_entity(editor_ctx, pos, name, nil)
+    add_component(w, e, "voxel_world", voxel_world)
+    let half_x = voxel_world["size_x"] / 2.0
+    let half_y = voxel_world["size_y"] / 2.0
+    let half_z = voxel_world["size_z"] / 2.0
+    add_component(w, e, "collider", BoxColliderComponent(half_x, half_y, half_z))
+    return e
+
 proc _populate_voxel_template_scene(editor_ctx, w):
     let ground = spawn(w)
     add_component(w, ground, "transform", TransformComponent(0.0, 0.0, 0.0))
     add_component(w, ground, "name", NameComponent("Ground"))
     add_tag(w, ground, "editable")
 
-    let template_world = create_voxel_world(10, 10, 10)
+    let template_world = create_voxel_world(32, 18, 32)
     generate_voxel_template_world(template_world, 5.0)
-    let spawned = 1
-
-    let gx = 0
-    while gx < template_world["size_x"]:
-        let gy = 0
-        while gy < template_world["size_y"]:
-            let gz = 0
-            while gz < template_world["size_z"]:
-                let block_id = get_voxel(template_world, gx, gy, gz)
-                if block_id != 0 and voxel_is_surface_block(template_world, gx, gy, gz):
-                    let center = voxel_block_world_center(template_world, gx, gy, gz)
-                    let surface = voxel_block_surface(template_world, block_id)
-                    let name = "Voxel_" + voxel_block_name(template_world, block_id) + "_" + str(gx) + "_" + str(gy) + "_" + str(gz)
-                    _spawn_template_cube(editor_ctx, w, center, name, "voxel_" + str(block_id), surface)
-                    spawned = spawned + 1
-                gz = gz + 1
-            gy = gy + 1
-        gx = gx + 1
+    let spawned = 2
+    _spawn_voxel_world_entity(editor_ctx, w, vec3(0.0, 0.0, 0.0), "VoxelWorld", template_world)
 
     let sun = spawn(w)
     let sun_t = TransformComponent(0.0, 8.0, 0.0)
@@ -336,6 +331,7 @@ let play_snapshot = nil
 let active_details_field = nil
 let details_edit_tf = nil
 let show_shortcuts = false
+let editor_voxel_block = [1]
 
 proc _rehydrate_mesh_refs(w):
     let mids = query(w, ["mesh_id"])
@@ -580,6 +576,68 @@ proc _update_imported_animation_states(w, dt):
             advance_imported_animation_state(asset, anim_state, dt)
         i = i + 1
 
+proc _viewport_ray_dir(vp_bounds, mx, my):
+    let cam_pos = editor_camera_position(cam)
+    let fov = radians(60.0)
+    let aspect = vp_bounds["w"] / vp_bounds["h"]
+    let norm_x = (mx - vp_bounds["x"]) / vp_bounds["w"] * 2.0 - 1.0
+    let norm_y = 1.0 - (my - vp_bounds["y"]) / vp_bounds["h"] * 2.0
+    let tan_half = math.tan(fov * 0.5)
+    let rx = norm_x * aspect * tan_half
+    let ry = norm_y * tan_half
+    let cam_fwd = v3_normalize(v3_sub(cam["target"], cam_pos))
+    let cam_right = v3_normalize(v3_cross(cam_fwd, vec3(0.0, 1.0, 0.0)))
+    let cam_up = v3_cross(cam_right, cam_fwd)
+    return v3_normalize(v3_add(v3_add(v3_scale(cam_right, rx), v3_scale(cam_up, ry)), cam_fwd))
+
+proc _selected_voxel_world_entity():
+    if editor["selected"] < 0:
+        return -1
+    if has_component(world, editor["selected"], "voxel_world") == false:
+        return -1
+    if has_component(world, editor["selected"], "transform") == false:
+        return -1
+    return editor["selected"]
+
+proc _cycle_editor_voxel_block(step):
+    let sel = _selected_voxel_world_entity()
+    if sel < 0:
+        return 0
+    let vw = get_component(world, sel, "voxel_world")
+    let palette_ids = voxel_palette_ids(vw)
+    if len(palette_ids) == 0:
+        return 0
+    let current_idx = 0
+    let i = 0
+    while i < len(palette_ids):
+        if palette_ids[i] == editor_voxel_block[0]:
+            current_idx = i
+        i = i + 1
+    current_idx = current_idx + step
+    if current_idx < 0:
+        current_idx = len(palette_ids) - 1
+    if current_idx >= len(palette_ids):
+        current_idx = 0
+    editor_voxel_block[0] = palette_ids[current_idx]
+    print "Voxel brush: " + voxel_block_name(vw, editor_voxel_block[0])
+    return editor_voxel_block[0]
+
+proc _selected_voxel_world_hit(vp_bounds, mx, my):
+    let sel = _selected_voxel_world_entity()
+    if sel < 0:
+        return nil
+    let t = get_component(world, sel, "transform")
+    if t == nil:
+        return nil
+    let cam_pos = editor_camera_position(cam)
+    let ray_dir = _viewport_ray_dir(vp_bounds, mx, my)
+    let local_origin = v3_sub(cam_pos, t["position"])
+    let vw = get_component(world, sel, "voxel_world")
+    let hit = raycast_voxel_world(vw, local_origin, ray_dir, 256.0)
+    if hit == nil:
+        return nil
+    return {"entity": sel, "transform": t, "voxel_world": vw, "hit": hit}
+
 proc _render_shadow_world(sr, w, light_scene, focus_point, radius):
     if sr == nil:
         return false
@@ -612,6 +670,20 @@ proc _render_shadow_world(sr, w, light_scene, focus_point, radius):
                 if mi != nil and dict_has(mi, "mesh") and mi["mesh"] != nil:
                     shadow_draw_mesh(sr, cmd, mi["mesh"], model)
         i = i + 1
+    let voxel_renderers = query(w, ["transform", "voxel_world"])
+    let vi = 0
+    while vi < len(voxel_renderers):
+        let eid = voxel_renderers[vi]
+        let t = get_component(w, eid, "transform")
+        if t != nil:
+            let model = transform_to_matrix(t)
+            let vw = get_component(w, eid, "voxel_world")
+            let draws = voxel_visible_draws(vw, focus_point[0] - t["position"][0], focus_point[1] - t["position"][1], focus_point[2] - t["position"][2], 2)
+            let di = 0
+            while di < len(draws):
+                shadow_draw_mesh(sr, cmd, draws[di]["gpu_mesh"], model)
+                di = di + 1
+        vi = vi + 1
     end_shadow_frame(sr, cmd)
     return true
 
@@ -905,6 +977,7 @@ while running:
     let mp_temp = mouse_position(inp)
     let vp_b = get_viewport_bounds(layout)
     let mouse_in_viewport = mp_temp[0] > vp_b["x"] and mp_temp[0] < vp_b["x"] + vp_b["w"] and mp_temp[1] > vp_b["y"] and mp_temp[1] < vp_b["y"] + vp_b["h"]
+    let voxel_brush_edit = play_mode == false and _selected_voxel_world_entity() >= 0 and gpu.key_pressed(gpu.KEY_SHIFT)
 
     # Scroll in floating windows (intercept before viewport)
     let scroll_consumed = false
@@ -920,7 +993,7 @@ while running:
             scroll_consumed = true
 
     if mouse_in_viewport and scroll_consumed == false:
-        if gpu.mouse_button(gpu.MOUSE_RIGHT):
+        if gpu.mouse_button(gpu.MOUSE_RIGHT) and voxel_brush_edit == false:
             cam["yaw"] = cam["yaw"] + md[0] * 0.005
             cam["pitch"] = cam["pitch"] + md[1] * 0.005
             if cam["pitch"] < -1.5:
@@ -950,6 +1023,11 @@ while running:
         set_gizmo_mode(editor["gizmo"], GIZMO_ROTATE)
     if text_editing == false and action_just_pressed(inp, "mode_scale"):
         set_gizmo_mode(editor["gizmo"], GIZMO_SCALE)
+    if text_editing == false and voxel_brush_edit:
+        if gpu.key_just_pressed(gpu.KEY_Z):
+            _cycle_editor_voxel_block(-1)
+        if gpu.key_just_pressed(gpu.KEY_X):
+            _cycle_editor_voxel_block(1)
 
     # --- Mouse picking and gizmo interaction ---
     let mp = mouse_position(inp)
@@ -998,7 +1076,7 @@ while running:
                 if clicked_menu == 2:
                     menu_items_list = ["Outliner", "Details", "Content Browser", "---", "Reset Layout"]
                 if clicked_menu == 3:
-                    menu_items_list = ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Light", "Add Directional Light", "---", "Apply Metal", "Apply Wood", "Apply Glass", "Apply Gold", "---", "Toggle Visibility", "Toggle Cast Shadows", "Toggle Receive Shadows", "Toggle Physics", "Save as Prefab", "---", "Generate Code"]
+                    menu_items_list = ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Voxel World", "Add Light", "Add Directional Light", "---", "Apply Metal", "Apply Wood", "Apply Glass", "Apply Gold", "---", "Toggle Visibility", "Toggle Cast Shadows", "Toggle Receive Shadows", "Toggle Physics", "Save as Prefab", "---", "Generate Code"]
                 if clicked_menu == 4:
                     menu_items_list = ["Controls", "---", "About Forge Engine"]
                 open_menu(menu_x_positions[clicked_menu] - 4.0, layout["menubar_h"], menu_items_list)
@@ -1041,11 +1119,11 @@ while running:
             window_consumed = true
 
     # Handle right-click context menu
-    if gpu.mouse_just_pressed(gpu.MOUSE_RIGHT) and mouse_in_viewport:
+    if gpu.mouse_just_pressed(gpu.MOUSE_RIGHT) and mouse_in_viewport and (gpu.key_pressed(gpu.KEY_SHIFT) == false or _selected_voxel_world_entity() < 0):
         if is_menu_open():
             close_menu()
         else:
-            open_menu(mx, my, ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Light", "Add Directional Light", "---", "Place Selected Asset", "Browse Assets", "Browse Textures", "Browse Sprites", "Browse Animations", "---", "Toggle Visibility", "Toggle Cast Shadows", "Toggle Receive Shadows", "---", "Select All", "Delete Selected"])
+            open_menu(mx, my, ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Voxel World", "Add Light", "Add Directional Light", "---", "Place Selected Asset", "Browse Assets", "Browse Textures", "Browse Sprites", "Browse Animations", "---", "Toggle Visibility", "Toggle Cast Shadows", "Toggle Receive Shadows", "---", "Select All", "Delete Selected"])
 
     # Menu click (handles both context menu and menu bar dropdowns)
     if left_pressed and is_menu_open():
@@ -1053,7 +1131,7 @@ while running:
         if menu_idx >= 0:
             let items = get_menu_items()
             let item = items[menu_idx]
-            if play_mode and (item == "Add Cube" or item == "Add Sphere" or item == "Add Physics Cube" or item == "Add Light" or item == "Add Directional Light" or item == "Place Selected Asset" or item == "Delete" or item == "Delete Selected" or item == "Duplicate" or item == "Toggle Visibility" or item == "Toggle Cast Shadows" or item == "Toggle Receive Shadows" or item == "Toggle Physics" or item == "New Scene" or item == "Open Scene..."):
+            if play_mode and (item == "Add Cube" or item == "Add Sphere" or item == "Add Physics Cube" or item == "Add Voxel World" or item == "Add Light" or item == "Add Directional Light" or item == "Place Selected Asset" or item == "Delete" or item == "Delete Selected" or item == "Duplicate" or item == "Toggle Visibility" or item == "Toggle Cast Shadows" or item == "Toggle Receive Shadows" or item == "Toggle Physics" or item == "New Scene" or item == "Open Scene..."):
                 print "Stop Play mode before editing the scene"
                 close_menu()
                 menubar_active = -1
@@ -1081,6 +1159,13 @@ while running:
                 add_component(world, eid, "rigidbody", RigidbodyComponent(1.0))
                 add_component(world, eid, "collider", BoxColliderComponent(0.5, 0.5, 0.5))
                 add_component(world, eid, "health", HealthComponent(50.0))
+            if item == "Add Voxel World":
+                entity_counter = entity_counter + 1
+                let pos = vec3(cam["target"][0], 0.0, cam["target"][2])
+                let voxel_template = create_voxel_world(32, 18, 32)
+                generate_voxel_template_world(voxel_template, 5.0)
+                _spawn_voxel_world_entity(editor, world, pos, "VoxelWorld_" + str(entity_counter), voxel_template)
+                print "Placed voxel world actor #" + str(entity_counter)
             if item == "Add Light":
                 entity_counter = entity_counter + 1
                 let pos = vec3(cam["target"][0], 2.5, cam["target"][2])
@@ -1441,6 +1526,21 @@ while running:
         if in_details == false and in_outliner == false:
             active_details_field = nil
 
+    if play_mode == false and window_consumed == false and mouse_in_viewport and _selected_voxel_world_entity() >= 0 and gpu.key_pressed(gpu.KEY_SHIFT):
+        let voxel_pick = _selected_voxel_world_hit(vp_b, mx, my)
+        if left_pressed and voxel_pick != nil:
+            let hit = voxel_pick["hit"]
+            let vw = voxel_pick["voxel_world"]
+            if hit["block_id"] != 0 and set_voxel(vw, hit["x"], hit["y"], hit["z"], 0):
+                print "Removed voxel: " + voxel_block_name(vw, hit["block_id"])
+            window_consumed = true
+        if gpu.mouse_just_pressed(gpu.MOUSE_RIGHT) and voxel_pick != nil and dict_has(voxel_pick["hit"], "place_x"):
+            let hit = voxel_pick["hit"]
+            let vw = voxel_pick["voxel_world"]
+            if set_voxel(vw, hit["place_x"], hit["place_y"], hit["place_z"], editor_voxel_block[0]):
+                print "Placed voxel: " + voxel_block_name(vw, editor_voxel_block[0])
+            window_consumed = true
+
     # --- Viewport click handler ---
     if left_pressed and window_consumed == false:
         let vp_bounds = get_viewport_bounds(layout)
@@ -1750,6 +1850,25 @@ while running:
                         draw_mesh_lit_controlled(cmd, lit_mat, mi["mesh"], mvp, model, ls["desc_set"], receive_shadows)
                     draw_count = draw_count + 1
         ri = ri + 1
+    let voxel_renderers = query(world, ["transform", "voxel_world"])
+    let vri = 0
+    while vri < len(voxel_renderers):
+        let eid = voxel_renderers[vri]
+        let t = get_component(world, eid, "transform")
+        let vw = get_component(world, eid, "voxel_world")
+        let voxel_center = vec3(t["position"][0], t["position"][1] + vw["size_y"] / 2.0, t["position"][2])
+        let voxel_half = vec3(vw["size_x"] / 2.0, vw["size_y"] / 2.0, vw["size_z"] / 2.0)
+        if aabb_in_frustum(frustum_planes, voxel_center, voxel_half):
+            let model = transform_to_matrix(t)
+            let draws = voxel_visible_draws(vw, cam_pos[0] - t["position"][0], cam_pos[1] - t["position"][1], cam_pos[2] - t["position"][2], 2)
+            let di = 0
+            while di < len(draws):
+                let draw = draws[di]
+                let voxel_mvp = mat4_mul(vp, model)
+                draw_mesh_lit_surface_controlled(cmd, lit_mat, draw["gpu_mesh"], voxel_mvp, model, ls["desc_set"], draw["surface"], true)
+                draw_count = draw_count + 1
+                di = di + 1
+        vri = vri + 1
 
     # Gizmo visualization (draw handles as colored boxes)
     if editor["selected"] >= 0:
@@ -2123,6 +2242,21 @@ while running:
                     add_text(font_r, "ui", light_shadow_text + "  (click to toggle)", dx + 8.0, iy, light_shadow_color[0], light_shadow_color[1], light_shadow_color[2], light_shadow_color[3])
                     iy = iy + 18.0
                 add_text(font_r, "ui", "Direction follows transform rotation", dx + 8.0, iy, 0.357, 0.627, 0.914, 1.0)
+                iy = iy + 16.0
+            if has_component(world, cur_sel, "voxel_world"):
+                let vw = get_component(world, cur_sel, "voxel_world")
+                iy = iy + 22.0
+                add_text(font_r, "ui", "Voxel World", dx + 6.0, iy + 2.0, 0.784, 0.784, 0.784, 1.0)
+                iy = iy + 24.0
+                add_text(font_r, "ui", "Size: " + str(vw["size_x"]) + " x " + str(vw["size_y"]) + " x " + str(vw["size_z"]) + "  Chunk: " + str(voxel_chunk_size(vw)), dx + 8.0, iy, 0.65, 0.65, 0.65, 1.0)
+                iy = iy + 18.0
+                add_text(font_r, "ui", "Solid blocks: " + str(vw["solid_count"]) + "  Generated chunks: " + str(voxel_generated_chunk_count(vw)), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                iy = iy + 16.0
+                add_text(font_r, "ui", "Brush: [" + str(editor_voxel_block[0]) + "] " + voxel_block_name(vw, editor_voxel_block[0]) + "  SHIFT+Z/X", dx + 8.0, iy, 0.78, 0.78, 0.78, 1.0)
+                iy = iy + 16.0
+                add_text(font_r, "ui", "SHIFT+LMB break  SHIFT+RMB place", dx + 8.0, iy, 0.357, 0.627, 0.914, 1.0)
+                iy = iy + 16.0
+                add_text(font_r, "ui", "Voxel edits save with the scene", dx + 8.0, iy, 0.357, 0.627, 0.914, 1.0)
                 iy = iy + 16.0
             # Material section
             if has_component(world, cur_sel, "imported_asset"):

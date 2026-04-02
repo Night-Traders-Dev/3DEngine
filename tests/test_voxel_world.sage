@@ -13,6 +13,7 @@ from voxel_world import default_voxel_recipes, try_craft_voxel_recipe
 from voxel_world import voxel_chunk_count_x, voxel_chunk_count_y, voxel_chunk_count_z
 from voxel_world import voxel_chunk_bounds, build_voxel_chunk_meshes, voxel_visible_draws
 from voxel_world import save_voxel_world_chunks, load_voxel_world_chunks
+from voxel_world import ensure_voxel_generated_radius, voxel_generated_chunk_count
 from math3d import vec3
 
 import math
@@ -77,6 +78,16 @@ generate_voxel_template_world(generated, 5.0)
 check("generated world has blocks", generated["solid_count"] > 0)
 check("generated terrain exposes surfaces", voxel_is_surface_block(generated, 8, voxel_top_solid_y(generated, 8, 8), 8) == true)
 
+let lazy_generated = create_voxel_world(48, 18, 48)
+check("lazy world starts with no generated chunks", voxel_generated_chunk_count(lazy_generated) == 0)
+let lazy_added = ensure_voxel_generated_radius(lazy_generated, 0.0, 0.0, 0.0, 0, 7.0)
+check("lazy generation adds initial chunk", lazy_added == 1 and voxel_generated_chunk_count(lazy_generated) == 1)
+let lazy_repeat = ensure_voxel_generated_radius(lazy_generated, 0.0, 0.0, 0.0, 0, 7.0)
+check("lazy generation does not regenerate existing chunk", lazy_repeat == 0 and voxel_generated_chunk_count(lazy_generated) == 1)
+check("lazy generation fills terrain blocks", lazy_generated["solid_count"] > 0)
+let lazy_more = ensure_voxel_generated_radius(lazy_generated, 20.0, 0.0, 20.0, 0, 7.0)
+check("lazy generation expands to newly visited chunk", lazy_more > 0 and voxel_generated_chunk_count(lazy_generated) > 1)
+
 let save_world = create_voxel_world(6, 6, 6)
 set_voxel(save_world, 2, 1, 2, 4)
 set_voxel(save_world, 2, 2, 2, 5)
@@ -112,6 +123,11 @@ check("chunk manifest saved", io.exists(chunk_manifest_path))
 check("chunk payload saved", io.exists(chunk_manifest_path + ".chunk_0_0_0.json") and io.exists(chunk_manifest_path + ".chunk_1_0_0.json"))
 let chunk_loaded = load_voxel_world_chunks(chunk_manifest_path)
 check("chunk manifest load preserves data", chunk_loaded != nil and get_voxel(chunk_loaded, 15, 1, 1) == 3 and get_voxel(chunk_loaded, 16, 1, 1) == 3)
+
+let lazy_manifest_path = "/tmp/forge_test_voxel_lazy_chunks.json"
+save_voxel_world_chunks(lazy_generated, lazy_manifest_path)
+let lazy_loaded = load_voxel_world_chunks(lazy_manifest_path)
+check("lazy chunk manifest load preserves generated chunk count", lazy_loaded != nil and voxel_generated_chunk_count(lazy_loaded) == voxel_generated_chunk_count(lazy_generated))
 
 let inventory = create_voxel_inventory()
 check("inventory starts empty", voxel_inventory_count(inventory, 3) == 0)

@@ -10,6 +10,7 @@ from components import TransformComponent, NameComponent, CameraComponent, Mater
 from collision import ray_vs_aabb
 from math3d import vec3
 from gizmo import GIZMO_TRANSLATE, GIZMO_ROTATE, GIZMO_SCALE
+from voxel_world import create_voxel_world, set_voxel, get_voxel
 
 import math
 
@@ -62,6 +63,9 @@ mr["visible"] = true
 mr["cast_shadows"] = false
 mr["receive_shadows"] = false
 add_component(w, eid, "mesh_renderer", mr)
+let voxel_comp = create_voxel_world(12, 8, 12)
+set_voxel(voxel_comp, 6, 1, 6, 3)
+add_component(w, eid, "voxel_world", voxel_comp)
 
 # --- Select/deselect ---
 deselect(ed)
@@ -111,6 +115,7 @@ check("duplicate has material", has_component(w, eid2, "material"))
 check("duplicate has imported asset", has_component(w, eid2, "imported_asset"))
 check("duplicate has animation state", has_component(w, eid2, "animation_state"))
 check("duplicate has mesh renderer", has_component(w, eid2, "mesh_renderer"))
+check("duplicate has voxel world", has_component(w, eid2, "voxel_world"))
 let t6 = get_component(w, eid2, "transform")
 let t_orig = get_component(w, eid, "transform")
 check("duplicate offset x", t6["position"][0] > t_orig["position"][0])
@@ -126,6 +131,8 @@ check("duplicate animation time", approx(dup_anim["time"], 0.75))
 let dup_mr = get_component(w, eid2, "mesh_renderer")
 check("duplicate mesh renderer cast shadows", dup_mr["cast_shadows"] == false)
 check("duplicate mesh renderer receive shadows", dup_mr["receive_shadows"] == false)
+let dup_voxel = get_component(w, eid2, "voxel_world")
+check("duplicate voxel world preserves block", get_voxel(dup_voxel, 6, 1, 6) == 3)
 
 # --- Delete ---
 let before_count = entity_count(w)

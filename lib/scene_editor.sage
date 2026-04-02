@@ -25,6 +25,10 @@ proc _clone_sage(value):
     cJSON_Delete(node)
     return out
 
+proc _clone_voxel_world_component(value):
+    from voxel_world import voxel_world_to_sage, voxel_world_from_sage
+    return voxel_world_from_sage(voxel_world_to_sage(value))
+
 # ============================================================================
 # Editor State
 # ============================================================================
@@ -254,6 +258,9 @@ proc duplicate_selected(ed):
         if has_component(w, src, "asset_ref"):
             let asset_ref = get_component(w, src, "asset_ref")
             add_component(w, eid, "asset_ref", _clone_sage(asset_ref))
+        if has_component(w, src, "voxel_world"):
+            let voxel_comp = get_component(w, src, "voxel_world")
+            add_component(w, eid, "voxel_world", _clone_voxel_world_component(voxel_comp))
         add_tag(w, eid, "editable")
         push(new_ids, eid)
         si = si + 1
