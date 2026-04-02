@@ -16,7 +16,7 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 # Run a game demo
 ./run.sh examples/demo_world.sage
 
-# Run tests (52 suites, 1,526 checks)
+# Run tests (53 suites, 1,547 checks)
 ./tests/run_all.sh
 
 # Build distributable package
@@ -50,6 +50,7 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 - **Scrollable panels** — Mouse wheel scrolls all floating window content with visible scrollbars
 - **Material presets** — Apply Metal, Wood, Glass, Gold materials from Tools menu
 - **Imported animation controls** — Preview imported glTF clips in the editor, switch clips, scrub time, toggle looping, tune playback speed on the selected entity, inspect imported skin/joint counts, and drive first-pass skinned mesh playback
+- **Directional shadows** — Dedicated sun shadow prepass in the editor, with imported skinned meshes participating in the same shadow depth path as static meshes
 - **Prefab system** — Save entities as reusable .prefab.json templates
 - **Undo/Redo** — CTRL+Z / CTRL+Y with full command history (100 levels)
 - **Modal dialogs** — Quit confirmation, About dialog
@@ -94,7 +95,7 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 
 ### Code Generation
 
-Press **ENTER** or use File > Export Game to generate `assets/generated_game.sage` — a complete, runnable game with renderer, physics, HUD, FPS controls, and game loop. Export now preserves authored scene lights, uses the primary scene camera to seed the generated runtime player transform, yaw/pitch, and FOV, and re-imports authored glTF assets at runtime with node hierarchy transforms, transform-animation clip playback, and first-pass GPU skinned mesh deformation, including clip selection, current time, speed, and looping state. The current skinning path uses a shared 128-joint-per-draw budget and is still missing broader character tooling beyond playback.
+Press **ENTER** or use File > Export Game to generate `assets/generated_game.sage` — a complete, runnable game with renderer, physics, HUD, FPS controls, and game loop. Export now preserves authored scene lights, uses the primary scene camera to seed the generated runtime player transform, yaw/pitch, and FOV, runs a directional shadow prepass, and re-imports authored glTF assets at runtime with node hierarchy transforms, transform-animation clip playback, and first-pass GPU skinned mesh deformation, including clip selection, current time, speed, and looping state. The current skinning path uses a shared 128-joint-per-draw budget and is still missing broader character tooling beyond playback.
 
 ```bash
 ./run.sh assets/generated_game.sage
@@ -126,7 +127,7 @@ forge-engine/
 │   └── ...                  # 80+ more engine modules
 ├── shaders/                 # GLSL shader pairs + SPIR-V
 ├── examples/                # 8 demo programs
-├── tests/                   # 52 suites, 1,526 checks
+├── tests/                   # 53 suites, 1,547 checks
 ├── assets/                  # Fonts, models, scenes, prefabs
 │   └── prefabs/             # Saved entity templates
 └── build/                   # Distribution output
@@ -143,7 +144,7 @@ forge-engine/
 `math3d` — vec2/3/4, mat4 (multiply, translate, scale, rotate, perspective, look_at, ortho, inverse), quaternions (mul, slerp, from_euler, to_matrix, rotate_vec3)
 
 ### Rendering
-`renderer` (Vulkan swapchain, frame sync, **pipeline cache**, **secondary command buffers**) · `render_system` (**indirect draw**, **compute dispatch**, **anisotropic samplers**, **pipeline barriers**) · `lighting` (16 lights, fog, UBO) · `sky` (procedural presets, **cubemap skybox**) · `pbr_material` (Cook-Torrance BRDF) · `textures` · `shadow_map` (depth pass, PCF) · `deferred` (G-buffer MRT) · `frustum` (culling) · `lod` (5 distance levels) · `taa` (temporal anti-aliasing) · `frame_graph` (pass dependencies, **GPU barrier integration**) · `editor_grid` · `post_fx` (vignette, color grading, fade) · `postprocess` (bloom, tone mapping, fullscreen passes, **offscreen targets**)
+`renderer` (Vulkan swapchain, frame sync, **pipeline cache**, **secondary command buffers**) · `render_system` (**indirect draw**, **compute dispatch**, **anisotropic samplers**, **pipeline barriers**, **directional shadow binding**) · `lighting` (16 lights, fog, UBO) · `sky` (procedural presets, **cubemap skybox**) · `pbr_material` (Cook-Torrance BRDF, **shadowed forward PBR**) · `textures` · `shadow_map` (depth pass, PCF, **dedicated prepass submission**, **skinned shadow depth**) · `deferred` (G-buffer MRT) · `frustum` (culling) · `lod` (5 distance levels) · `taa` (temporal anti-aliasing) · `frame_graph` (pass dependencies, **GPU barrier integration**) · `editor_grid` · `post_fx` (vignette, color grading, fade) · `postprocess` (bloom, tone mapping, fullscreen passes, **offscreen targets**)
 
 ### Physics
 `collision` (AABB/sphere/ray/capsule, collision callbacks/events) · `physics` (rigidbody, gravity, restitution, fixed/distance/hinge constraints, constraint solver) · `spatial_grid` (broadphase, **octree** for large scenes)
@@ -152,7 +153,7 @@ forge-engine/
 `player_controller` (FPS, ground check, step climbing, slope limits) · `gameplay` (health, damage/heal, timers, state machines, spawners, scoring with combos)
 
 ### Content
-`asset_manager` (caching) · `asset_cache` · `scene_serial` (JSON save/load, prefab save/load, **imported asset references**) · `asset_import` (glTF 2.0, **async loading queue**, **HTTP download**, imported material metadata + textures, **node hierarchy draws**, **transform-animation clip sampling**, **skinned vertex decode**, **skin/joint palette generation**, **clip/state helpers**) · `asset_browser` (search, filter, categories) · `audio` (OpenAL FFI) · `hot_reload` (directory watching) · `codegen` (game script generation, **scene light/camera export**, **runtime glTF re-import**, **hierarchical imported draws**, **imported transform-animation playback**, **imported GPU skinning parity**, **animation state export parity**, **LLVM native compilation**) · `material` (8 PBR presets) · `mesh` (**device-local uploads**, **skinnable vertex expansion**, **struct vertex packing**)
+`asset_manager` (caching) · `asset_cache` · `scene_serial` (JSON save/load, prefab save/load, **imported asset references**) · `asset_import` (glTF 2.0, **async loading queue**, **HTTP download**, imported material metadata + textures, **node hierarchy draws**, **transform-animation clip sampling**, **skinned vertex decode**, **skin/joint palette generation**, **clip/state helpers**) · `asset_browser` (search, filter, categories) · `audio` (OpenAL FFI) · `hot_reload` (directory watching) · `codegen` (game script generation, **scene light/camera export**, **runtime glTF re-import**, **hierarchical imported draws**, **imported transform-animation playback**, **imported GPU skinning parity**, **runtime shadow prepass parity**, **animation state export parity**, **LLVM native compilation**) · `material` (8 PBR presets) · `mesh` (**device-local uploads**, **skinnable vertex expansion**, **struct vertex packing**)
 
 ### Animation & AI
 `tween` (18 easings) · `animation` (skeletal, keyframes, blend trees, state machine, two-bone IK solver, animation events) · `navigation` (A* pathfinding, steering: seek/flee/arrive/wander/avoid) · `behavior_tree` (action/condition/sequence/selector/inverter/repeater/wait)
@@ -176,11 +177,11 @@ forge-engine/
 
 | Shader | Purpose |
 |--------|---------|
-| engine_lit | Blinn-Phong forward lighting (16 lights, spot/point/directional, fog) |
-| engine_pbr | Cook-Torrance PBR (metallic-roughness, normal mapping, GGX/Smith/Fresnel) |
+| engine_lit | Blinn-Phong forward lighting (16 lights, spot/point/directional, fog, single-sun shadow factor) |
+| engine_pbr | Cook-Torrance PBR (metallic-roughness, normal mapping, GGX/Smith/Fresnel, single-sun shadow factor) |
 | engine_sky | Procedural sky dome with sun disc and glow |
 | engine_grid | Infinite editor grid with red X-axis and blue Z-axis |
-| engine_shadow_depth | Depth-only shadow map pass |
+| engine_shadow_depth | Depth-only shadow map pass with skinned vertex deformation |
 | engine_bloom_extract | Bright pixel extraction with soft knee threshold |
 | engine_bloom_blur | 9-tap separable Gaussian blur |
 | engine_tonemap | HDR tone mapping (Reinhard/ACES/Uncharted2) + bloom composite + gamma |
@@ -206,11 +207,11 @@ forge-engine/
 ## Testing
 
 ```bash
-./tests/run_all.sh            # 52 suites, 1,526 individual checks
+./tests/run_all.sh            # 53 suites, 1,547 individual checks
 ./run.sh tests/test_ecs.sage  # Run individual suite
 ```
 
-The suite now includes dedicated renderer sanity checks for startup helpers such as pipeline cache state, plus a runtime startup smoke suite that boots the editor and asset demo under timeout and fails on startup regressions.
+The suite now includes dedicated renderer sanity checks for startup helpers such as pipeline cache state, a focused shadow-map helper suite, plus a runtime startup smoke suite that boots the editor and asset demo under timeout and fails on startup regressions.
 
 ## Building for Distribution
 

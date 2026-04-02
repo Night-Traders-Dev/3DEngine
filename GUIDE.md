@@ -70,14 +70,14 @@ forge-engine/
 ├── shaders/             # GLSL + SPIR-V shaders
 ├── assets/              # Fonts, textures, saved scenes
 ├── examples/            # 8 demo programs
-├── tests/               # 52 test suites, 1,526 checks
+├── tests/               # 53 test suites, 1,547 checks
 └── build/               # Distribution output
     └── dist/            # Self-contained distributable
 ```
 
 Runtime/editor version strings and distribution packaging are sourced from the repo-root `VERSION` file through `lib/forge_version.sage`.
 Forge uses `x.y.z` semantic versioning and intentionally remains on `0.y.z` until the engine is functionally complete enough to justify `1.0.0`. See [VERSIONING.md](VERSIONING.md) for the repo policy.
-The automated suite now includes a dedicated renderer sanity check for startup helpers like pipeline cache state, plus a runtime startup smoke suite that boots the editor and asset demo under timeout alongside the broader import/export coverage.
+The automated suite now includes a dedicated renderer sanity check for startup helpers like pipeline cache state, a focused shadow-map helper suite, plus a runtime startup smoke suite that boots the editor and asset demo under timeout alongside the broader import/export coverage.
 
 ---
 
@@ -784,9 +784,9 @@ let model = import_gltf("assets/character.gltf")
 # model["gpu_meshes"], model["materials"], model["animations"]
 ```
 
-Imported glTF assets keep their per-material albedo, metallic, roughness, and texture references. In the editor, imported meshes now prefer the PBR render path when material data is available, with a lit-material fallback for meshes that only provide partial surface data. Imported node transforms are also preserved, so multi-node glTF assets render with their authored hierarchy instead of flattening every mesh to the parent entity transform. When a glTF includes transform animation clips, the importer also keeps the clip channels so authored node translation/rotation/scale animation can play back in the editor and in generated games. glTF skin metadata is now parsed as well, with joints, inverse bind matrices, per-node skin assignments, and skinned vertex attributes exposed through imported assets and shared draw generation. Selected imported assets expose clip switching, scrubbing, speed adjustment, looping controls, and imported skin/joint counts directly in the editor.
+Imported glTF assets keep their per-material albedo, metallic, roughness, and texture references. In the editor, imported meshes now prefer the PBR render path when material data is available, with a lit-material fallback for meshes that only provide partial surface data. Imported node transforms are also preserved, so multi-node glTF assets render with their authored hierarchy instead of flattening every mesh to the parent entity transform. When a glTF includes transform animation clips, the importer also keeps the clip channels so authored node translation/rotation/scale animation can play back in the editor and in generated games. glTF skin metadata is now parsed as well, with joints, inverse bind matrices, per-node skin assignments, and skinned vertex attributes exposed through imported assets and shared draw generation. Selected imported assets expose clip switching, scrubbing, speed adjustment, looping controls, imported skin/joint counts, and live directional-shadow participation directly in the editor.
 
-Imported skin support now reaches the actual render path: joints/weights are expanded into the shared mesh vertex format, joint palettes are uploaded through a shared skin UBO, and imported skinned meshes deform in both the editor and generated runtime. The current implementation is a first pass with a shared 128-joint-per-draw budget and no higher-level character tooling beyond playback.
+Imported skin support now reaches the actual render path: joints/weights are expanded into the shared mesh vertex format, joint palettes are uploaded through a shared skin UBO, and imported skinned meshes deform in both the editor and generated runtime. That same shared draw data now feeds the directional shadow depth pass, so imported skinned meshes cast the same first-pass sun shadows as static meshes. The current implementation is a first pass with a shared 128-joint-per-draw budget and no higher-level character tooling beyond playback.
 
 Scene save/load and Play-In-Editor snapshots preserve imported asset references by storing the stable source path and rehydrating the full GPU-ready asset on load. That keeps imported content alive across open/save/play cycles instead of limiting it to the original live editor session.
 
@@ -862,7 +862,8 @@ Generated scripts now carry more of the authored scene intent across the editor/
 
 - Authored point and directional light entities are emitted into the generated lighting setup.
 - The primary scene camera seeds the runtime player controller position, yaw, pitch, FOV, near plane, and far plane.
-- Imported glTF entities are re-imported on startup, rendered through the generated PBR path when material data is available, keep their authored node hierarchy transforms, preserve transform-animation clip playback through `animation_state`, including clip, time, speed, and looping state, and deform imported skinned meshes through the same shared 128-joint skinning path used by the editor.
+- Generated games now run the same first-pass directional shadow prepass used by the editor, with a single primary directional light feeding the forward lit/PBR path.
+- Imported glTF entities are re-imported on startup, rendered through the generated PBR path when material data is available, keep their authored node hierarchy transforms, preserve transform-animation clip playback through `animation_state`, including clip, time, speed, and looping state, and deform imported skinned meshes through the same shared 128-joint skinning path and shadow depth path used by the editor.
 - Material-bearing entities continue to use the material-aware lit draw path after export.
 
 ### GPU-Driven Rendering
