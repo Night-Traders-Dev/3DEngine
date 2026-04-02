@@ -16,7 +16,7 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 # Run a game demo
 ./run.sh examples/demo_world.sage
 
-# Run tests (53 suites, 1,547 checks)
+# Run tests (53 suites, 1,567 checks)
 ./tests/run_all.sh
 
 # Build distributable package
@@ -51,6 +51,7 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 - **Material presets** — Apply Metal, Wood, Glass, Gold materials from Tools menu
 - **Imported animation controls** — Preview imported glTF clips in the editor, switch clips, scrub time, toggle looping, tune playback speed on the selected entity, inspect imported skin/joint counts, and drive first-pass skinned mesh playback
 - **Directional shadows** — Dedicated sun shadow prepass in the editor, with imported skinned meshes participating in the same shadow depth path as static meshes
+- **Render flags** — Mesh visibility plus `cast_shadows` / `receive_shadows` now affect the live editor viewport, shadow prepass, and exported runtime, with quick toggles in the Tools/context menus
 - **Prefab system** — Save entities as reusable .prefab.json templates
 - **Undo/Redo** — CTRL+Z / CTRL+Y with full command history (100 levels)
 - **Modal dialogs** — Quit confirmation, About dialog
@@ -90,12 +91,12 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 | **File** | New Scene, Open Scene, Save Scene, Save Screenshot, Export Game, Compile Native, Quit |
 | **Edit** | Undo, Redo, Delete, Duplicate, Select All |
 | **Window** | Show/hide Outliner, Details, Content Browser, Reset Layout |
-| **Tools** | Add Cube/Sphere/Physics/Light, Apply Materials (Metal/Wood/Glass/Gold), Save as Prefab, Toggle Physics, Generate Code |
+| **Tools** | Add Cube/Sphere/Physics/Light, Apply Materials (Metal/Wood/Glass/Gold), Toggle Visibility, Toggle Cast/Receive Shadows, Save as Prefab, Toggle Physics, Generate Code |
 | **Help** | Controls (F1), About |
 
 ### Code Generation
 
-Press **ENTER** or use File > Export Game to generate `assets/generated_game.sage` — a complete, runnable game with renderer, physics, HUD, FPS controls, and game loop. Export now preserves authored scene lights, uses the primary scene camera to seed the generated runtime player transform, yaw/pitch, and FOV, runs a directional shadow prepass, and re-imports authored glTF assets at runtime with node hierarchy transforms, transform-animation clip playback, and first-pass GPU skinned mesh deformation, including clip selection, current time, speed, and looping state. The current skinning path uses a shared 128-joint-per-draw budget and is still missing broader character tooling beyond playback.
+Press **ENTER** or use File > Export Game to generate `assets/generated_game.sage` — a complete, runnable game with renderer, physics, HUD, FPS controls, and game loop. Export now preserves authored scene lights, uses the primary scene camera to seed the generated runtime player transform, yaw/pitch, and FOV, runs a directional shadow prepass, carries mesh visibility plus `cast_shadows` / `receive_shadows` into the generated runtime, and re-imports authored glTF assets at runtime with node hierarchy transforms, transform-animation clip playback, and first-pass GPU skinned mesh deformation, including clip selection, current time, speed, and looping state. The current skinning path uses a shared 128-joint-per-draw budget and is still missing broader character tooling beyond playback.
 
 ```bash
 ./run.sh assets/generated_game.sage
@@ -127,7 +128,7 @@ forge-engine/
 │   └── ...                  # 80+ more engine modules
 ├── shaders/                 # GLSL shader pairs + SPIR-V
 ├── examples/                # 8 demo programs
-├── tests/                   # 53 suites, 1,547 checks
+├── tests/                   # 53 suites, 1,567 checks
 ├── assets/                  # Fonts, models, scenes, prefabs
 │   └── prefabs/             # Saved entity templates
 └── build/                   # Distribution output
@@ -207,7 +208,7 @@ forge-engine/
 ## Testing
 
 ```bash
-./tests/run_all.sh            # 53 suites, 1,547 individual checks
+./tests/run_all.sh            # 53 suites, 1,567 individual checks
 ./run.sh tests/test_ecs.sage  # Run individual suite
 ```
 
