@@ -70,7 +70,7 @@ forge-engine/
 ├── shaders/             # GLSL + SPIR-V shaders
 ├── assets/              # Fonts, textures, saved scenes
 ├── examples/            # 9 demo programs
-├── tests/               # 54 test suites, 1,618 checks
+├── tests/               # 54 test suites, 1,640 checks
 └── build/               # Distribution output
     └── dist/            # Self-contained distributable
 ```
@@ -98,7 +98,7 @@ When you launch the editor, a **Project Browser** screen appears before the edit
 | **FPS** | First Person Shooter | Player controller, weapons, health/damage HUD, AI enemies |
 | **RPG** | Role-Playing Game | Third-person camera, inventory, quests, stats/leveling |
 | **Top-Down** | Top-Down Action | Overhead camera, twin-stick controls, projectiles, spawner |
-| **Voxel** | Voxel World | Shared voxel sandbox module, starter editor scene, place/break tools, block palette, inventory/crafting/chunk-save loop |
+| **Voxel** | Voxel World | Shared voxel sandbox module, first-class editor voxel world actor, place/break tools, block palette, inventory/crafting/chunk-save loop |
 | **Racing** | Racing Game | Vehicle physics, chase camera, lap timer, speed HUD |
 | **Survival** | Survival | Crafting, hunger/thirst, day-night cycle, buildable shelters |
 | **Sandbox** | Sandbox / Empty | Empty scene with grid, basic lighting, full creative freedom |
@@ -120,7 +120,7 @@ The Forge Editor is a UE5-inspired visual scene editor with floating windows, a 
 
 Press **F1** at any time to see the full keyboard shortcuts overlay.
 
-Choosing the `Voxel` launcher template now seeds a starter surface-block scene in the editor using the same shared voxel generation rules as the playable sandbox demo. The playable voxel sandbox now also supports inventory-backed mining/placement, a first plank-crafting loop, streamed chunk draws around the player, plus chunked JSON save/load controls, so the template path is starting to function like a real game loop instead of a render-only scene.
+Choosing the `Voxel` launcher template now seeds a first-class voxel world actor in the editor using the same shared voxel generation rules as the playable sandbox demo. Selected voxel worlds support `SHIFT+LMB/RMB` block editing plus `SHIFT+Z/X` brush cycling in the editor, and the playable voxel sandbox now supports inventory-backed mining/placement, a first plank-crafting loop, lazy chunk generation, incremental streamed chunk uploads, plus chunked JSON save/load controls.
 
 ### Editor Layout
 
@@ -143,6 +143,8 @@ Choosing the `Voxel` launcher template now seeds a starter surface-block scene i
 | Left Click (viewport) | Select entity by raycast |
 | Left Click (outliner) | Select entity from list |
 | Left Click (details value) | Edit transform/light numbers or toggle render/shadow flags inline |
+| Shift+Left Click / Shift+Right Click | Break / place voxel in selected voxel world |
+| Shift+Z / Shift+X | Previous / next voxel brush on selected voxel world |
 | Right Click (viewport) | Context menu (Add Cube/Sphere/Physics, Delete) |
 | 1 / 2 / 3 | Translate / Rotate / Scale gizmo mode |
 | R / F / E | Place Cube / Sphere / Model |
@@ -181,7 +183,7 @@ Render and shadow booleans such as mesh visibility, mesh `cast_shadows` / `recei
 | File | New Scene, Open Scene, Save Scene, Save Screenshot, Export Game, Compile Native, Quit |
 | Edit | Undo, Redo, Delete, Duplicate, Select All |
 | Window | Show/hide Outliner, Details, Content Browser, Reset Layout |
-| Tools | Add Cube/Sphere/Physics Cube/Light, Apply Materials, Toggle Visibility, Toggle Cast Shadows, Toggle Receive Shadows, Save as Prefab, Toggle Physics, Generate Code |
+| Tools | Add Cube/Sphere/Physics Cube/Voxel World/Light, Apply Materials, Toggle Visibility, Toggle Cast Shadows, Toggle Receive Shadows, Save as Prefab, Toggle Physics, Generate Code |
 | Help | Controls (F1 overlay), About |
 
 ### Modal Dialogs
@@ -869,6 +871,7 @@ Generated scripts now carry more of the authored scene intent across the editor/
 - The primary scene camera seeds the runtime player controller position, yaw, pitch, FOV, near plane, and far plane.
 - Generated games now run the same first-pass directional shadow prepass used by the editor, with a single primary directional light feeding the forward lit/PBR path and the light-space projection snapped to the shadow texel grid for better stability.
 - Mesh-backed entities now preserve `mesh_renderer` visibility plus `cast_shadows` / `receive_shadows` flags through export, so the generated runtime respects the same authored render/shadow controls as the editor viewport.
+- Voxel world actors are restored from serialized block data and rendered through the shared voxel streaming helpers in generated games, so authored voxel scenes are no longer editor-only.
 - Imported glTF entities are re-imported on startup, rendered through the generated PBR path when material data is available, keep their authored node hierarchy transforms, preserve transform-animation clip playback through `animation_state`, including clip, time, speed, and looping state, and deform imported skinned meshes through the same shared 128-joint skinning path and shadow depth path used by the editor.
 - Material-bearing entities continue to use the material-aware lit draw path after export.
 

@@ -16,7 +16,7 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 # Run the voxel sandbox demo
 ./run.sh examples/demo_voxel.sage
 
-# Run tests (54 suites, 1,618 checks)
+# Run tests (54 suites, 1,640 checks)
 ./tests/run_all.sh
 
 # Build distributable package
@@ -36,7 +36,7 @@ When you launch the editor, a **Project Browser** appears first:
 - **Preview area** — Shows selected template details and included features
 - **Keyboard** — Arrow keys to navigate, Enter to create, ESC to exit
 
-The voxel template is now backed by a real starter path: the editor seeds a surface-block voxel scene when you choose `Voxel`, and the shared sandbox gameplay loop lives in [examples/demo_voxel.sage](/home/kraken/Devel/3DEngine/examples/demo_voxel.sage) with inventory-backed mining/placement, a first crafting step for planks, streamed chunk draws around the player, and chunked sandbox save/load.
+The voxel template is now backed by a real starter path: the editor seeds a first-class voxel world actor when you choose `Voxel`, and the shared sandbox gameplay loop lives in [examples/demo_voxel.sage](/home/kraken/Devel/3DEngine/examples/demo_voxel.sage) with inventory-backed mining/placement, a first crafting step for planks, streamed chunk draws around the player, and chunked sandbox save/load.
 
 ## Editor
 
@@ -55,8 +55,8 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 - **Imported animation controls** — Preview imported glTF clips in the editor, switch clips, scrub time, toggle looping, tune playback speed on the selected entity, inspect imported skin/joint counts, and drive first-pass skinned mesh playback
 - **Directional shadows** — Dedicated sun shadow prepass in the editor, with texel-snapped light matrices to reduce shimmer and imported skinned meshes participating in the same shadow depth path as static meshes
 - **Render flags** — Mesh visibility plus `cast_shadows` / `receive_shadows` now affect the live editor viewport, shadow prepass, and exported runtime, with quick toggles in the Tools/context menus
-- **Voxel template bootstrap** — The `Voxel` launcher path now seeds a starter voxel scene in the editor and shares terrain/palette rules with the playable sandbox demo
-- **Voxel sandbox loop** — The shared voxel template now supports inventory-backed mining/placement, a first crafted plank block, streamed chunk draws, and chunked JSON save/load in the playable sandbox path
+- **Voxel world actor** — The `Voxel` launcher path now seeds a first-class voxel world entity in the editor, and selected voxel worlds support inline brush inspection plus `SHIFT+LMB/RMB` block edits with `SHIFT+Z/X` brush cycling
+- **Voxel sandbox loop** — The shared voxel template now supports inventory-backed mining/placement, a first crafted plank block, lazy chunk generation, incremental streamed chunk uploads, and chunked JSON save/load in the playable sandbox path
 - **Prefab system** — Save entities as reusable .prefab.json templates
 - **Undo/Redo** — CTRL+Z / CTRL+Y with full command history (100 levels)
 - **Modal dialogs** — Quit confirmation, About dialog
@@ -74,6 +74,8 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 | Scroll Wheel | Zoom / scroll panels |
 | Left Click | Select entity (viewport raycast or outliner) |
 | Left Click (details value) | Edit transform/light numbers or toggle render/light flags inline |
+| SHIFT+LMB / SHIFT+RMB | Break / place voxel in selected voxel world |
+| SHIFT+Z / SHIFT+X | Previous / next voxel brush on selected voxel world |
 | Right Click (viewport) | Context menu (Add Cube/Sphere/Light, Delete) |
 | 1 / 2 / 3 | Translate / Rotate / Scale gizmo |
 | R / F / E | Place Cube / Sphere / Model |
@@ -97,12 +99,12 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 | **File** | New Scene, Open Scene, Save Scene, Save Screenshot, Export Game, Compile Native, Quit |
 | **Edit** | Undo, Redo, Delete, Duplicate, Select All |
 | **Window** | Show/hide Outliner, Details, Content Browser, Reset Layout |
-| **Tools** | Add Cube/Sphere/Physics/Light, Apply Materials (Metal/Wood/Glass/Gold), Toggle Visibility, Toggle Cast/Receive Shadows, Save as Prefab, Toggle Physics, Generate Code |
+| **Tools** | Add Cube/Sphere/Physics/Voxel World/Light, Apply Materials (Metal/Wood/Glass/Gold), Toggle Visibility, Toggle Cast/Receive Shadows, Save as Prefab, Toggle Physics, Generate Code |
 | **Help** | Controls (F1), About |
 
 ### Code Generation
 
-Press **ENTER** or use File > Export Game to generate `assets/generated_game.sage` — a complete, runnable game with renderer, physics, HUD, FPS controls, and game loop. Export now preserves authored scene lights, uses the primary scene camera to seed the generated runtime player transform, yaw/pitch, and FOV, runs a directional shadow prepass with the same texel-snapped light matrix logic used by the editor, carries mesh visibility plus `cast_shadows` / `receive_shadows` into the generated runtime, and re-imports authored glTF assets at runtime with node hierarchy transforms, transform-animation clip playback, and first-pass GPU skinned mesh deformation, including clip selection, current time, speed, and looping state. The current skinning path uses a shared 128-joint-per-draw budget and is still missing broader character tooling beyond playback.
+Press **ENTER** or use File > Export Game to generate `assets/generated_game.sage` — a complete, runnable game with renderer, physics, HUD, FPS controls, and game loop. Export now preserves authored scene lights, uses the primary scene camera to seed the generated runtime player transform, yaw/pitch, and FOV, runs a directional shadow prepass with the same texel-snapped light matrix logic used by the editor, carries mesh visibility plus `cast_shadows` / `receive_shadows` into the generated runtime, restores authored voxel world actors from serialized block data, and re-imports authored glTF assets at runtime with node hierarchy transforms, transform-animation clip playback, and first-pass GPU skinned mesh deformation, including clip selection, current time, speed, and looping state. The current skinning path uses a shared 128-joint-per-draw budget and is still missing broader character tooling beyond playback.
 
 ```bash
 ./run.sh assets/generated_game.sage
@@ -134,7 +136,7 @@ forge-engine/
 │   └── ...                  # 80+ more engine modules
 ├── shaders/                 # GLSL shader pairs + SPIR-V
 ├── examples/                # 9 demo programs
-├── tests/                   # 54 suites, 1,618 checks
+├── tests/                   # 54 suites, 1,640 checks
 ├── assets/                  # Fonts, models, scenes, prefabs
 │   └── prefabs/             # Saved entity templates
 └── build/                   # Distribution output
@@ -169,7 +171,7 @@ forge-engine/
 `ui_core` (**centralized theme system** with 40+ named colors, spacing constants, font sizing, border/shadow helpers, hover/active/disabled/pressed widget states, focus rings) · `ui_renderer` (batched quads) · `ui_widgets` (buttons, sliders, checkboxes, dropdowns, text input fields, number fields, tree views, scroll panels, section headers, **visible scrollbars**, **per-widget quad collection**) · `ui_window` (floating windows, context menus, modal dialogs, snap-to-edge) · `font` (TrueType via stb_truetype) · `launch_screen` (project browser with templates) · `hud` (health bar with 4-stage color transition, gapped crosshair, themed minimap, score display) · `menu` (themed pause/main/game-over menus with visual hierarchy, button styles, fade animations) · `inspector` (entity property inspector with accent bars, color-coded booleans)
 
 ### World
-`terrain` (heightmap, procedural noise) · `water` (animated waves) · `foliage` (scatter rules) · `day_night` (sun cycle) · `scene` (scene graph, level streaming) · `voxel_world` (**shared voxel template terrain generation**, **exposed-face meshing**, **chunk-aware mesh builds**, **streamed chunk draw cache**, **block picking/place-break**, **simple player collision helpers**, **chunked JSON world save/load**, **inventory helpers**, **basic crafting recipes**)
+`terrain` (heightmap, procedural noise) · `water` (animated waves) · `foliage` (scatter rules) · `day_night` (sun cycle) · `scene` (scene graph, level streaming) · `voxel_world` (**shared voxel template terrain generation**, **exposed-face meshing**, **chunk-aware mesh builds**, **incremental streamed chunk draw cache**, **zero-face bucket culling**, **block picking/place-break**, **simple player collision helpers**, **chunked JSON world save/load**, **inventory helpers**, **basic crafting recipes**)
 
 ### VFX & Post-Processing
 `particles` (CPU pool, emitter shapes) · `vfx_presets` (fire/smoke/sparks/rain/magic) · `particle_renderer` · `post_fx` (vignette, color grading, fade, presets) · `postprocess` (bloom extract/blur/composite, HDR tone mapping, fullscreen pass infrastructure)
@@ -208,14 +210,14 @@ forge-engine/
 ./run.sh examples/demo_ai.sage           # AI pathfinding + behavior trees
 ./run.sh examples/demo_ui.sage           # HUD + menus
 ./run.sh examples/demo_world.sage        # Terrain + water + day/night
-./run.sh examples/demo_voxel.sage        # Minecraft-style voxel sandbox slice with inventory + crafting + chunked save/load
+./run.sh examples/demo_voxel.sage        # Minecraft-style voxel sandbox slice with inventory + crafting + streamed chunk bootstrap + chunked save/load
 ./run.sh examples/demo_particles.sage    # Particles + VFX
 ```
 
 ## Testing
 
 ```bash
-./tests/run_all.sh            # 54 suites, 1,618 individual checks
+./tests/run_all.sh            # 54 suites, 1,640 individual checks
 ./run.sh tests/test_ecs.sage  # Run individual suite
 ```
 

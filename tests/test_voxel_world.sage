@@ -2,7 +2,7 @@
 
 from voxel_world import create_voxel_world, voxel_palette_ids, voxel_palette_entry
 from voxel_world import voxel_block_name, voxel_block_surface, voxel_is_surface_block
-from voxel_world import get_voxel, set_voxel, build_voxel_meshes, generate_voxel_template_world
+from voxel_world import get_voxel, set_voxel, fill_voxel_box, build_voxel_meshes, generate_voxel_template_world
 from voxel_world import voxel_top_solid_y, sample_voxel_ground, sample_voxel_ground_radius
 from voxel_world import raycast_voxel_world, voxel_collides_player, resolve_player_voxel_collision
 from voxel_world import create_voxel_inventory, voxel_inventory_add, voxel_inventory_remove
@@ -56,6 +56,12 @@ let adjacent_meshes = build_voxel_meshes(adjacent)
 check("adjacent cubes share one material bucket", dict_has(adjacent_meshes, "3"))
 check("internal face culled", adjacent_meshes["3"]["face_count"] == 10)
 check("culled mesh index count", adjacent_meshes["3"]["index_count"] == 60)
+
+let enclosed = create_voxel_world(4, 4, 4)
+fill_voxel_box(enclosed, 0, 0, 0, 4, 4, 4, 3)
+set_voxel(enclosed, 1, 1, 1, 2)
+let enclosed_meshes = build_voxel_meshes(enclosed)
+check("zero-face material buckets are omitted", dict_has(enclosed_meshes, "2") == false)
 
 let ray_world = create_voxel_world(8, 8, 8)
 set_voxel(ray_world, 4, 1, 4, 2)

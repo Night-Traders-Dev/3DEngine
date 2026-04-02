@@ -929,16 +929,17 @@ proc _build_voxel_meshes_range(vw, x0, y0, z0, x1, y1, z1):
         let key = _palette_key(block_id)
         if dict_has(meshes, key):
             let bucket = meshes[key]
-            let mesh_data = {}
-            mesh_data["block_id"] = block_id
-            mesh_data["vertices"] = bucket["vertices"]
-            mesh_data["indices"] = bucket["indices"]
-            mesh_data["vertex_count"] = len(bucket["vertices"]) / 8
-            mesh_data["index_count"] = len(bucket["indices"])
-            mesh_data["has_normals"] = true
-            mesh_data["has_uvs"] = true
-            mesh_data["face_count"] = bucket["face_count"]
-            built[key] = mesh_data
+            if bucket["face_count"] > 0 and len(bucket["vertices"]) > 0 and len(bucket["indices"]) > 0:
+                let mesh_data = {}
+                mesh_data["block_id"] = block_id
+                mesh_data["vertices"] = bucket["vertices"]
+                mesh_data["indices"] = bucket["indices"]
+                mesh_data["vertex_count"] = len(bucket["vertices"]) / 8
+                mesh_data["index_count"] = len(bucket["indices"])
+                mesh_data["has_normals"] = true
+                mesh_data["has_uvs"] = true
+                mesh_data["face_count"] = bucket["face_count"]
+                built[key] = mesh_data
         pi = pi + 1
     return built
 
