@@ -621,11 +621,102 @@ bind_action(inp, "play", [gpu.KEY_ENTER])
 proc _quit_callback():
     running = false
 
-proc _commit_field(val):
-    let n = ui_widgets.parse_number(val)
-    let t = get_component(world, editor["selected"], "transform")
-    let cmd = cmd_set_vec3(t, active_details_field["key"], active_details_field["axis"], n)
+proc _details_get_component(eid, comp_name):
+    if eid < 0:
+        return nil
+    if has_component(world, eid, comp_name) == false:
+        return nil
+    return get_component(world, eid, comp_name)
+
+proc _begin_details_vec3_edit(comp_name, key, axis, current_value):
+    active_details_field = {"component": comp_name, "key": key, "axis": axis, "kind": "vec3"}
+    details_edit_tf = ui_widgets.create_text_field(0.0, 0.0, 96.0, str(math.floor(current_value * 1000.0 + 0.5) / 1000.0))
+    details_edit_tf["on_commit"] = _commit_field
+    ui_widgets.focus_text_field(details_edit_tf)
+
+proc _begin_details_number_edit(comp_name, key, current_value):
+    active_details_field = {"component": comp_name, "key": key, "axis": -1, "kind": "number"}
+    details_edit_tf = ui_widgets.create_text_field(0.0, 0.0, 96.0, str(math.floor(current_value * 1000.0 + 0.5) / 1000.0))
+    details_edit_tf["on_commit"] = _commit_field
+    ui_widgets.focus_text_field(details_edit_tf)
+
+proc _details_field_value(eid, field):
+    let target = _details_get_component(eid, field["component"])
+    if target == nil:
+        return 0.0
+    if field["kind"] == "vec3":
+        return target[field["key"]][field["axis"]]
+    return target[field["key"]]
+
+proc _details_clamp_number(field, value):
+    let v = value
+    if field["component"] == "transform" and field["key"] == "scale" and v < 0.01:
+        v = 0.01
+    if field["component"] == "light":
+        if field["key"] == "intensity" and v < 0.0:
+            v = 0.0
+        if field["key"] == "radius" and v < 0.1:
+            v = 0.1
+    return v
+
+proc _details_apply_number(eid, field, value):
+    let target = _details_get_component(eid, field["component"])
+    if target == nil:
+        return false
+    let new_value = _details_clamp_number(field, value)
+    if field["kind"] == "vec3":
+        let cmd = cmd_set_vec3(target, field["key"], field["axis"], new_value)
+        execute_command(editor["history"], cmd)
+        if field["component"] == "transform":
+            target["dirty"] = true
+        return true
+    let cmd = cmd_set_property(target, field["key"], new_value)
     execute_command(editor["history"], cmd)
+    return true
+
+proc _details_number_step(field, fine):
+    if field["component"] == "transform":
+        if field["key"] == "scale":
+            if fine:
+                return 0.1
+            return 0.05
+        if fine:
+            return 1.0
+        return 0.1
+    if field["component"] == "light":
+        if field["key"] == "radius":
+            if fine:
+                return 2.0
+            return 0.5
+        if fine:
+            return 0.5
+        return 0.1
+    if fine:
+        return 0.5
+    return 0.1
+
+proc _toggle_details_bool(eid, comp_name, key):
+    let target = _details_get_component(eid, comp_name)
+    if target == nil or dict_has(target, key) == false:
+        return false
+    let new_value = target[key] == false
+    execute_command(editor["history"], cmd_set_property(target, key, new_value))
+    return new_value
+
+proc _details_axis_label(axis):
+    if axis == 1:
+        return "Y"
+    if axis == 2:
+        return "Z"
+    return "X"
+
+proc _commit_field(val):
+    if active_details_field == nil or editor["selected"] < 0:
+        active_details_field = nil
+        details_edit_tf = nil
+        return nil
+    let n = ui_widgets.parse_number(val)
+    _details_apply_number(editor["selected"], active_details_field, n)
     active_details_field = nil
     details_edit_tf = nil
 
@@ -1184,11 +1275,12 @@ while running:
         let dca_click = window_content_area(win_details)
         let in_details = win_details["visible"] and win_details["collapsed"] == false and mx >= dca_click["x"] and mx < dca_click["x"] + dca_click["w"] and my >= dca_click["y"] and my < dca_click["y"] + dca_click["h"]
         if in_details and editor["selected"] >= 0 and has_component(world, editor["selected"], "transform"):
+            let had_active_details = active_details_field != nil
             active_details_field = nil
             let dx = dca_click["x"]
             let dw = dca_click["w"]
             let fw3 = (dw - 16.0) / 3.0
-            let iy = dca_click["y"]
+            let iy = dca_click["y"] - win_details["scroll_y"]
             if has_component(world, editor["selected"], "name"):
                 iy = iy + 28.0
             iy = iy + 26.0
@@ -1201,27 +1293,80 @@ while running:
             if mx >= dx + fw3 * 2.0 + 10.0 and mx < dx + fw3 * 2.0 + 10.0 + fw3:
                 col = 2
             if col >= 0 and my >= iy and my < iy + 20.0:
-                active_details_field = {"key": "position", "axis": col}
                 let cur_val = get_component(world, editor["selected"], "transform")["position"][col]
-                details_edit_tf = ui_widgets.create_text_field(0.0, 0.0, 80.0, str(math.floor(cur_val * 1000.0 + 0.5) / 1000.0))
-                details_edit_tf["on_commit"] = _commit_field
-                ui_widgets.focus_text_field(details_edit_tf)
+                _begin_details_vec3_edit("transform", "position", col, cur_val)
             iy = iy + 26.0
             iy = iy + 22.0
             if col >= 0 and my >= iy and my < iy + 20.0:
-                active_details_field = {"key": "rotation", "axis": col}
                 let cur_val = get_component(world, editor["selected"], "transform")["rotation"][col]
-                details_edit_tf = ui_widgets.create_text_field(0.0, 0.0, 80.0, str(math.floor(cur_val * 1000.0 + 0.5) / 1000.0))
-                details_edit_tf["on_commit"] = _commit_field
-                ui_widgets.focus_text_field(details_edit_tf)
+                _begin_details_vec3_edit("transform", "rotation", col, cur_val)
             iy = iy + 26.0
             iy = iy + 22.0
             if col >= 0 and my >= iy and my < iy + 20.0:
-                active_details_field = {"key": "scale", "axis": col}
                 let cur_val = get_component(world, editor["selected"], "transform")["scale"][col]
-                details_edit_tf = ui_widgets.create_text_field(0.0, 0.0, 80.0, str(math.floor(cur_val * 1000.0 + 0.5) / 1000.0))
-                details_edit_tf["on_commit"] = _commit_field
-                ui_widgets.focus_text_field(details_edit_tf)
+                _begin_details_vec3_edit("transform", "scale", col, cur_val)
+            iy = iy + 28.0
+            if had_active_details:
+                iy = iy + 22.0
+            if has_component(world, editor["selected"], "rigidbody"):
+                iy = iy + 24.0
+                iy = iy + 20.0
+            if has_component(world, editor["selected"], "health"):
+                iy = iy + 22.0
+            if has_component(world, editor["selected"], "light"):
+                let light = get_component(world, editor["selected"], "light")
+                iy = iy + 22.0
+                iy = iy + 24.0
+                iy = iy + 18.0
+                if my >= iy and my < iy + 18.0:
+                    _begin_details_number_edit("light", "intensity", light["intensity"])
+                iy = iy + 18.0
+                if dict_has(light, "radius"):
+                    if my >= iy and my < iy + 18.0:
+                        _begin_details_number_edit("light", "radius", light["radius"])
+                    iy = iy + 18.0
+                if dict_has(light, "cast_shadows"):
+                    if my >= iy and my < iy + 18.0:
+                        _toggle_details_bool(editor["selected"], "light", "cast_shadows")
+                    iy = iy + 18.0
+                iy = iy + 16.0
+            if has_component(world, editor["selected"], "imported_asset"):
+                let ia = get_component(world, editor["selected"], "imported_asset")
+                iy = iy + 24.0
+                iy = iy + 18.0
+                if dict_has(ia, "skin_count") and ia["skin_count"] > 0:
+                    iy = iy + 18.0
+                if len(ia["materials"]) > 0:
+                    iy = iy + 18.0
+                    iy = iy + 16.0
+                    iy = iy + 16.0
+                let clip_names = imported_animation_clip_names(ia)
+                if len(clip_names) > 0:
+                    iy = iy + 18.0
+                    iy = iy + 16.0
+                    iy = iy + 16.0
+                    iy = iy + 16.0
+                    iy = iy + 16.0
+                    iy = iy + 16.0
+            if has_component(world, editor["selected"], "material"):
+                let mc = get_component(world, editor["selected"], "material")
+                iy = iy + 22.0
+                iy = iy + 24.0
+                iy = iy + 18.0
+                iy = iy + 16.0
+                if mc["emission_strength"] > 0.0:
+                    iy = iy + 16.0
+            if has_component(world, editor["selected"], "mesh_renderer"):
+                iy = iy + 22.0
+                iy = iy + 24.0
+                if my >= iy and my < iy + 16.0:
+                    _toggle_details_bool(editor["selected"], "mesh_renderer", "visible")
+                iy = iy + 16.0
+                if my >= iy and my < iy + 16.0:
+                    _toggle_details_bool(editor["selected"], "mesh_renderer", "cast_shadows")
+                iy = iy + 16.0
+                if my >= iy and my < iy + 16.0:
+                    _toggle_details_bool(editor["selected"], "mesh_renderer", "receive_shadows")
             window_consumed = true
         let cca_click = window_content_area(win_content)
         let in_content = win_content["visible"] and win_content["collapsed"] == false and mx >= cca_click["x"] and mx < cca_click["x"] + cca_click["w"] and my >= cca_click["y"] and my < cca_click["y"] + cca_click["h"]
@@ -1255,22 +1400,12 @@ while running:
             let ray_dir = v3_normalize(v3_add(v3_add(v3_scale(cam_right, rx), v3_scale(cam_up, ry)), cam_fwd))
             select_by_ray_mode(editor, cam_pos, ray_dir, gpu.key_pressed(gpu.KEY_CTRL))
 
-    # Inspector quick-edit: scroll wheel over active transform field
-    if play_mode == false and active_details_field != nil and editor["selected"] >= 0 and has_component(world, editor["selected"], "transform"):
+    # Inspector quick-edit: scroll wheel over active numeric field
+    if play_mode == false and active_details_field != nil and editor["selected"] >= 0:
         if sv[1] != 0.0:
-            let t_edit = get_component(world, editor["selected"], "transform")
-            let key = active_details_field["key"]
-            let axis = active_details_field["axis"]
-            let step = 0.1
-            if gpu.key_pressed(gpu.KEY_SHIFT):
-                step = 1.0
-            if key == "scale":
-                step = 0.05
-            let nv = t_edit[key][axis] + sv[1] * step
-            if key == "scale" and nv < 0.01:
-                nv = 0.01
-            execute_command(editor["history"], cmd_set_vec3(t_edit, key, axis, nv))
-            t_edit["dirty"] = true
+            let step = _details_number_step(active_details_field, gpu.key_pressed(gpu.KEY_SHIFT))
+            let cur_val = _details_field_value(editor["selected"], active_details_field)
+            _details_apply_number(editor["selected"], active_details_field, cur_val + sv[1] * step)
 
     # --- Entity operations ---
     if action_just_pressed(inp, "select"):
@@ -1872,12 +2007,10 @@ while running:
                 sxi = sxi + 1
             iy = iy + 28.0
             if active_details_field != nil:
-                let axis_lbl = "X"
-                if active_details_field["axis"] == 1:
-                    axis_lbl = "Y"
-                if active_details_field["axis"] == 2:
-                    axis_lbl = "Z"
-                add_text(font_r, "ui", "Edit: " + active_details_field["key"] + "." + axis_lbl + " (Wheel, SHIFT=fine)", dx + 8.0, iy, 0.357, 0.627, 0.914, 1.0)
+                let edit_label = active_details_field["component"] + "." + active_details_field["key"]
+                if active_details_field["kind"] == "vec3":
+                    edit_label = edit_label + "." + _details_axis_label(active_details_field["axis"])
+                add_text(font_r, "ui", "Edit: " + edit_label + " (Wheel, SHIFT=fine)", dx + 8.0, iy, 0.357, 0.627, 0.914, 1.0)
                 iy = iy + 22.0
             # Physics section
             if has_component(world, cur_sel, "rigidbody"):
@@ -1893,6 +2026,44 @@ while running:
                 let hp = get_component(world, cur_sel, "health")
                 add_text(font_r, "ui", "Health: " + _fmt_num(hp["current"]) + " / " + _fmt_num(hp["max"]), dx + 8.0, iy, 0.3, 0.85, 0.3, 1.0)
                 iy = iy + 22.0
+            if has_component(world, cur_sel, "light"):
+                let lc = get_component(world, cur_sel, "light")
+                iy = iy + 22.0
+                add_text(font_r, "ui", "Light", dx + 6.0, iy + 2.0, 0.784, 0.784, 0.784, 1.0)
+                iy = iy + 24.0
+                let light_type = lc["type"]
+                if light_type == "directional":
+                    light_type = "Directional"
+                else:
+                    if light_type == "point":
+                        light_type = "Point"
+                add_text(font_r, "ui", "Type: " + light_type, dx + 8.0, iy, 0.65, 0.65, 0.65, 1.0)
+                iy = iy + 18.0
+                let intensity_text = "Intensity: " + _fmt_num(lc["intensity"]) + "  (click to edit)"
+                if active_details_field != nil and active_details_field["component"] == "light" and active_details_field["key"] == "intensity" and details_edit_tf != nil:
+                    intensity_text = "Intensity: " + details_edit_tf["text_value"]
+                    if math.floor(details_edit_tf["blink_timer"] * 2.0) % 2 == 0:
+                        intensity_text = intensity_text + "|"
+                add_text(font_r, "ui", intensity_text, dx + 8.0, iy, 0.78, 0.78, 0.78, 1.0)
+                iy = iy + 18.0
+                if dict_has(lc, "radius"):
+                    let radius_text = "Radius: " + _fmt_num(lc["radius"]) + "  (click to edit)"
+                    if active_details_field != nil and active_details_field["component"] == "light" and active_details_field["key"] == "radius" and details_edit_tf != nil:
+                        radius_text = "Radius: " + details_edit_tf["text_value"]
+                        if math.floor(details_edit_tf["blink_timer"] * 2.0) % 2 == 0:
+                            radius_text = radius_text + "|"
+                    add_text(font_r, "ui", radius_text, dx + 8.0, iy, 0.78, 0.78, 0.78, 1.0)
+                    iy = iy + 18.0
+                if dict_has(lc, "cast_shadows"):
+                    let light_shadow_text = "Cast Shadows: On"
+                    let light_shadow_color = [0.3, 0.85, 0.3, 1.0]
+                    if lc["cast_shadows"] == false:
+                        light_shadow_text = "Cast Shadows: Off"
+                        light_shadow_color = [0.85, 0.4, 0.4, 1.0]
+                    add_text(font_r, "ui", light_shadow_text + "  (click to toggle)", dx + 8.0, iy, light_shadow_color[0], light_shadow_color[1], light_shadow_color[2], light_shadow_color[3])
+                    iy = iy + 18.0
+                add_text(font_r, "ui", "Direction follows transform rotation", dx + 8.0, iy, 0.357, 0.627, 0.914, 1.0)
+                iy = iy + 16.0
             # Material section
             if has_component(world, cur_sel, "imported_asset"):
                 let ia = get_component(world, cur_sel, "imported_asset")
@@ -1975,21 +2146,27 @@ while running:
                 add_text(font_r, "ui", "Render", dx + 6.0, iy + 2.0, 0.784, 0.784, 0.784, 1.0)
                 iy = iy + 24.0
                 let visible_text = "On"
+                let visible_color = [0.3, 0.85, 0.3, 1.0]
                 if dict_has(mr, "visible") and mr["visible"] == false:
                     visible_text = "Off"
-                add_text(font_r, "ui", "Visible: " + visible_text, dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                    visible_color = [0.85, 0.4, 0.4, 1.0]
+                add_text(font_r, "ui", "Visible: " + visible_text + "  (click to toggle)", dx + 8.0, iy, visible_color[0], visible_color[1], visible_color[2], visible_color[3])
                 iy = iy + 16.0
                 let cast_text = "On"
+                let cast_color = [0.3, 0.85, 0.3, 1.0]
                 if dict_has(mr, "cast_shadows") and mr["cast_shadows"] == false:
                     cast_text = "Off"
-                add_text(font_r, "ui", "Cast Shadows: " + cast_text, dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                    cast_color = [0.85, 0.4, 0.4, 1.0]
+                add_text(font_r, "ui", "Cast Shadows: " + cast_text + "  (click to toggle)", dx + 8.0, iy, cast_color[0], cast_color[1], cast_color[2], cast_color[3])
                 iy = iy + 16.0
                 let receive_text = "On"
+                let receive_color = [0.3, 0.85, 0.3, 1.0]
                 if dict_has(mr, "receive_shadows") and mr["receive_shadows"] == false:
                     receive_text = "Off"
-                add_text(font_r, "ui", "Receive Shadows: " + receive_text, dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                    receive_color = [0.85, 0.4, 0.4, 1.0]
+                add_text(font_r, "ui", "Receive Shadows: " + receive_text + "  (click to toggle)", dx + 8.0, iy, receive_color[0], receive_color[1], receive_color[2], receive_color[3])
                 iy = iy + 16.0
-                add_text(font_r, "ui", "Tools menu toggles render flags", dx + 8.0, iy, 0.357, 0.627, 0.914, 1.0)
+                add_text(font_r, "ui", "Details and Tools both update render flags", dx + 8.0, iy, 0.357, 0.627, 0.914, 1.0)
         else:
             add_text(font_r, "ui", "Select an entity to view details", dx + 4.0, dy + 8.0, 0.439, 0.439, 0.439, 1.0)
 

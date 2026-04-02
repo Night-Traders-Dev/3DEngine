@@ -46,7 +46,7 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 - **Responsive layout** — Panels reposition automatically when the window is resized
 - **Menu system** — File, Edit, Window, Tools, Help dropdown menus + right-click context menu
 - **Themed UI** — Centralized dark theme with accent colors, hover/active/disabled button states, borders, shadows, and focus rings
-- **Editable properties** — Click transform values in Details panel to type new numbers (with blinking cursor, undo support)
+- **Editable properties** — Click transform and light values in Details panel to type new numbers, and click render/light shadow booleans to toggle them inline with undo support
 - **Scrollable panels** — Mouse wheel scrolls all floating window content with visible scrollbars
 - **Material presets** — Apply Metal, Wood, Glass, Gold materials from Tools menu
 - **Imported animation controls** — Preview imported glTF clips in the editor, switch clips, scrub time, toggle looping, tune playback speed on the selected entity, inspect imported skin/joint counts, and drive first-pass skinned mesh playback
@@ -68,6 +68,7 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 | MMB + Drag | Pan camera |
 | Scroll Wheel | Zoom / scroll panels |
 | Left Click | Select entity (viewport raycast or outliner) |
+| Left Click (details value) | Edit transform/light numbers or toggle render/light flags inline |
 | Right Click (viewport) | Context menu (Add Cube/Sphere/Light, Delete) |
 | 1 / 2 / 3 | Translate / Rotate / Scale gizmo |
 | R / F / E | Place Cube / Sphere / Model |

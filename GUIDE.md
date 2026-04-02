@@ -127,7 +127,7 @@ Press **F1** at any time to see the full keyboard shortcuts overlay.
 - **Viewport** (center) — 3D scene with dark background so lit objects stand out clearly
 - **Floating Windows** — Draggable, resizable panels that snap to screen edges and reposition on window resize:
   - **Outliner** — Scrollable list of all entities, click to select
-  - **Details** — Editable transform properties (click values to type new numbers), component sections with accent bars, color-coded booleans
+  - **Details** — Editable transform and light properties, inline render/shadow toggles, component sections with accent bars, color-coded booleans
   - **Content Browser** — Asset list, shortcuts, imported model info
 - **Status Bar** (bottom) — Entity count, draw count, mode, FPS
 
@@ -140,7 +140,7 @@ Press **F1** at any time to see the full keyboard shortcuts overlay.
 | Scroll Wheel | Zoom viewport / scroll panels |
 | Left Click (viewport) | Select entity by raycast |
 | Left Click (outliner) | Select entity from list |
-| Left Click (details value) | Edit property inline (type number, Enter to commit) |
+| Left Click (details value) | Edit transform/light numbers or toggle render/shadow flags inline |
 | Right Click (viewport) | Context menu (Add Cube/Sphere/Physics, Delete) |
 | 1 / 2 / 3 | Translate / Rotate / Scale gizmo mode |
 | R / F / E | Place Cube / Sphere / Model |
@@ -161,13 +161,16 @@ Press **F1** at any time to see the full keyboard shortcuts overlay.
 
 ### Inline Property Editing
 
-Click any X, Y, or Z value in the Details panel to enter edit mode:
+Click transform axes or light numeric values in the Details panel to enter edit mode:
 
 - Type a new number using the keyboard
 - Press **Enter** to commit (creates an undo-able command)
 - Press **Escape** to cancel and restore the original value
 - A blinking cursor shows the current edit position
 - Use **Backspace**, **Delete**, **Home**, **End**, **Left/Right** to navigate
+- Use the mouse wheel to nudge the active numeric field, with **Shift** for a larger step
+
+Render and shadow booleans such as mesh visibility, mesh `cast_shadows` / `receive_shadows`, and directional-light `cast_shadows` can now be toggled directly from the Details panel as well as from the Tools/context menus.
 
 ### Menu Bar
 
