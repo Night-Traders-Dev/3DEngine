@@ -82,7 +82,7 @@ proc generate_game_script(world, scene_name, settings):
     push(L, "from lighting import init_light_gpu, update_light_ubo")
     push(L, "from render_system import create_lit_material, draw_mesh_lit, draw_mesh_lit_surface")
     if has_imported_assets:
-        push(L, "from asset_import import import_gltf")
+        push(L, "from asset_import import import_gltf, imported_asset_draws")
         push(L, "from pbr_material import create_pbr_renderer, create_pbr_fallback_textures")
         push(L, "from pbr_material import create_pbr_material_from_imported, bind_pbr_material, draw_pbr")
     push(L, "from sky import create_sky, sky_preset_day, init_sky_gpu, draw_sky")
@@ -277,6 +277,15 @@ proc generate_game_script(world, scene_name, settings):
             push(L, mv + "[" + q + "emission_strength" + q + "] = " + _fmt(mc["emission_strength"]))
             push(L, mv + "[" + q + "alpha" + q + "] = " + _fmt(mc["alpha"]))
             push(L, "add_component(world, " + v + ", " + q + "material" + q + ", " + mv + ")")
+        if has_component(world, eid, "animation_state"):
+            let anim = get_component(world, eid, "animation_state")
+            let playing = "false"
+            if dict_has(anim, "playing") and anim["playing"]:
+                playing = "true"
+            let clip_name = ""
+            if dict_has(anim, "clip"):
+                clip_name = anim["clip"]
+            push(L, "add_component(world, " + v + ", " + q + "animation_state" + q + ", {" + q + "clip" + q + ": " + q + clip_name + q + ", " + q + "playing" + q + ": " + playing + "})")
         push(L, "")
         ei = ei + 1
 
@@ -345,20 +354,22 @@ proc generate_game_script(world, scene_name, settings):
         push(L, "        let t = get_component(world, eid, " + q + "transform" + q + ")")
         push(L, "        let asset = get_component(world, eid, " + q + "imported_asset" + q + ")")
         push(L, "        let model = transform_to_matrix(t)")
-        push(L, "        let mvp = mat4_mul(vp, model)")
+        push(L, "        let draws = imported_asset_draws(asset)")
         push(L, "        let gi = 0")
-        push(L, "        while gi < len(asset[" + q + "gpu_meshes" + q + "]):")
-        push(L, "            let gm = asset[" + q + "gpu_meshes" + q + "][gi]")
+        push(L, "        while gi < len(draws):")
+        push(L, "            let gm = draws[gi]")
         push(L, "            let material_index = -1")
         push(L, "            if dict_has(gm, " + q + "material_index" + q + "):")
         push(L, "                material_index = gm[" + q + "material_index" + q + "]")
+        push(L, "            let imported_model = mat4_mul(model, gm[" + q + "model" + q + "])")
+        push(L, "            let imported_mvp = mat4_mul(vp, imported_model)")
         push(L, "            if pbr_renderer != nil and material_index >= 0 and dict_has(asset, " + q + "pbr_materials" + q + ") and material_index < len(asset[" + q + "pbr_materials" + q + "]):")
-        push(L, "                draw_pbr(cmd, pbr_renderer, gm[" + q + "gpu_mesh" + q + "], mvp, model, ls[" + q + "desc_set" + q + "], asset[" + q + "pbr_materials" + q + "][material_index])")
+        push(L, "                draw_pbr(cmd, pbr_renderer, gm[" + q + "gpu_mesh" + q + "], imported_mvp, imported_model, ls[" + q + "desc_set" + q + "], asset[" + q + "pbr_materials" + q + "][material_index])")
         push(L, "            else:")
         push(L, "                let surface = nil")
         push(L, "                if material_index >= 0 and material_index < len(asset[" + q + "materials" + q + "]):")
         push(L, "                    surface = _imported_runtime_surface(asset[" + q + "materials" + q + "][material_index])")
-        push(L, "                draw_mesh_lit_surface(cmd, lit_mat, gm[" + q + "gpu_mesh" + q + "], mvp, model, ls[" + q + "desc_set" + q + "], surface)")
+        push(L, "                draw_mesh_lit_surface(cmd, lit_mat, gm[" + q + "gpu_mesh" + q + "], imported_mvp, imported_model, ls[" + q + "desc_set" + q + "], surface)")
         push(L, "            gi = gi + 1")
         push(L, "        iri = iri + 1")
     push(L, "    let rl = query(world, [" + q + "transform" + q + ", " + q + "mesh_id" + q + "])")

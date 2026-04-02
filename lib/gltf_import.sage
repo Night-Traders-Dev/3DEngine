@@ -189,6 +189,15 @@ proc _parse_node(node):
     let mesh_node = cJSON_GetObjectItem(node, "mesh")
     if mesh_node != nil:
         info["mesh"] = cJSON_GetNumberValue(mesh_node)
+    info["matrix"] = nil
+    let matrix_node = cJSON_GetObjectItem(node, "matrix")
+    if matrix_node != nil:
+        let matrix = []
+        let mi = 0
+        while mi < 16:
+            push(matrix, cJSON_GetNumberValue(cJSON_GetArrayItem(matrix_node, mi)))
+            mi = mi + 1
+        info["matrix"] = matrix
     info["translation"] = vec3(0.0, 0.0, 0.0)
     let trans = cJSON_GetObjectItem(node, "translation")
     if trans != nil:
@@ -196,6 +205,21 @@ proc _parse_node(node):
         let ty = cJSON_GetNumberValue(cJSON_GetArrayItem(trans, 1))
         let tz = cJSON_GetNumberValue(cJSON_GetArrayItem(trans, 2))
         info["translation"] = vec3(tx, ty, tz)
+    info["rotation"] = [1.0, 0.0, 0.0, 0.0]
+    let rot = cJSON_GetObjectItem(node, "rotation")
+    if rot != nil:
+        let qx = cJSON_GetNumberValue(cJSON_GetArrayItem(rot, 0))
+        let qy = cJSON_GetNumberValue(cJSON_GetArrayItem(rot, 1))
+        let qz = cJSON_GetNumberValue(cJSON_GetArrayItem(rot, 2))
+        let qw = cJSON_GetNumberValue(cJSON_GetArrayItem(rot, 3))
+        info["rotation"] = [qw, qx, qy, qz]
+    info["scale"] = vec3(1.0, 1.0, 1.0)
+    let scl = cJSON_GetObjectItem(node, "scale")
+    if scl != nil:
+        let sx = cJSON_GetNumberValue(cJSON_GetArrayItem(scl, 0))
+        let sy = cJSON_GetNumberValue(cJSON_GetArrayItem(scl, 1))
+        let sz = cJSON_GetNumberValue(cJSON_GetArrayItem(scl, 2))
+        info["scale"] = vec3(sx, sy, sz)
     info["children"] = []
     let ch = cJSON_GetObjectItem(node, "children")
     if ch != nil:

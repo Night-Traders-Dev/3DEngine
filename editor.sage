@@ -81,7 +81,7 @@ from frustum import extract_frustum_planes, aabb_in_frustum
 from shadow_map import create_shadow_renderer, compute_light_vp
 from post_fx import create_postfx, pfx_cinematic, build_vignette_quads
 from lod import create_lod_config, compute_lod
-from asset_import import import_gltf, scan_importable_assets
+from asset_import import import_gltf, scan_importable_assets, imported_asset_draws
 import io
 
 print "=== Forge Engine Editor ==="
@@ -1247,19 +1247,22 @@ while running:
                 if has_component(world, eid, "imported_asset"):
                     let asset = get_component(world, eid, "imported_asset")
                     let pbr_materials = _ensure_imported_pbr_materials(asset)
+                    let draws = imported_asset_draws(asset)
                     let gi = 0
-                    while gi < len(asset["gpu_meshes"]):
-                        let gm = asset["gpu_meshes"][gi]
+                    while gi < len(draws):
+                        let gm = draws[gi]
                         let material_index = -1
                         if dict_has(gm, "material_index"):
                             material_index = gm["material_index"]
+                        let imported_model = mat4_mul(model, gm["model"])
+                        let imported_mvp = mat4_mul(vp, imported_model)
                         if pbr_renderer != nil and material_index >= 0 and material_index < len(pbr_materials):
-                            draw_pbr(cmd, pbr_renderer, gm["gpu_mesh"], mvp, model, ls["desc_set"], pbr_materials[material_index])
+                            draw_pbr(cmd, pbr_renderer, gm["gpu_mesh"], imported_mvp, imported_model, ls["desc_set"], pbr_materials[material_index])
                         else:
                             let surface = nil
                             if material_index >= 0 and material_index < len(asset["materials"]):
                                 surface = _surface_from_imported_material(asset["materials"][material_index])
-                            draw_mesh_lit_surface(cmd, lit_mat, gm["gpu_mesh"], mvp, model, ls["desc_set"], surface)
+                            draw_mesh_lit_surface(cmd, lit_mat, gm["gpu_mesh"], imported_mvp, imported_model, ls["desc_set"], surface)
                         draw_count = draw_count + 1
                         gi = gi + 1
                 else:
@@ -1614,6 +1617,8 @@ while running:
                 let ia = get_component(world, cur_sel, "imported_asset")
                 add_text(font_r, "ui", "Material", dx + 6.0, iy + 2.0, 0.784, 0.784, 0.784, 1.0)
                 iy = iy + 24.0
+                add_text(font_r, "ui", "Meshes: " + str(len(ia["gpu_meshes"])) + "  Nodes: " + str(len(ia["nodes"])), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                iy = iy + 18.0
                 if len(ia["materials"]) > 0:
                     let mat = ia["materials"][0]
                     add_text(font_r, "ui", mat["name"], dx + 8.0, iy, 0.65, 0.65, 0.65, 1.0)
@@ -1621,6 +1626,13 @@ while running:
                     add_text(font_r, "ui", "Metallic: " + _fmt_num(mat["metallic"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
                     iy = iy + 16.0
                     add_text(font_r, "ui", "Roughness: " + _fmt_num(mat["roughness"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                    iy = iy + 16.0
+                if has_component(world, cur_sel, "animation_state"):
+                    let anim = get_component(world, cur_sel, "animation_state")
+                    let clip_name = ""
+                    if dict_has(anim, "clip"):
+                        clip_name = anim["clip"]
+                    add_text(font_r, "ui", "Clip: " + clip_name, dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
             # MaterialComponent (if present)
             if has_component(world, cur_sel, "material"):
                 let mc = get_component(world, cur_sel, "material")

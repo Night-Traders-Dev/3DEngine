@@ -3,6 +3,7 @@
 from scene_editor import create_scene_editor, place_entity
 from scene_serial import serialize_scene, load_scene_string
 from codegen import generate_game_script
+from asset_import import imported_asset_draws
 from ecs import create_world, add_component
 from components import MaterialComponent, CameraComponent, PointLightComponent
 from math3d import vec3
@@ -59,9 +60,23 @@ check("camera fov exported", contains(code, "player[\"fov\"] = 75"))
 check("point light exported", contains(code, "point_light(-3, 5, 1, 1, 0.7, 0.5, 3.8, 14)"))
 check("imported asset export helper present", contains(code, "_import_runtime_asset(\"assets/Box.gltf\""))
 check("imported asset runtime import present", contains(code, "from asset_import import import_gltf"))
+check("imported asset hierarchy helper present", contains(code, "imported_asset_draws"))
 check("imported asset pbr path present", contains(code, "draw_pbr"))
 check("material-aware draw remains enabled", contains(code, "draw_mesh_lit_surface"))
 check("fallback generated point light omitted", contains(code, "point_light(5.0, 4.0, 3.0, 1.0, 0.8, 0.6, 3.0, 20.0)") == false)
+
+let synthetic_asset = {
+    "gpu_meshes": [{"gpu_mesh": 11, "material_index": 0, "mesh_index": 0}],
+    "nodes": [
+        {"name": "Root", "mesh_index": -1, "position": vec3(1.0, 0.0, 0.0), "rotation": [1.0, 0.0, 0.0, 0.0], "scale": vec3(1.0, 1.0, 1.0), "children": [1], "parent": -1},
+        {"name": "MeshNode", "mesh_index": 0, "position": vec3(0.0, 2.0, 0.0), "rotation": [1.0, 0.0, 0.0, 0.0], "scale": vec3(1.0, 1.0, 1.0), "children": [], "parent": 0}
+    ]
+}
+let draws = imported_asset_draws(synthetic_asset)
+check("hierarchy draw entry built", len(draws) == 1)
+check("hierarchy draw keeps gpu mesh", draws[0]["gpu_mesh"] == 11)
+check("hierarchy world translation x", draws[0]["model"][12] > 0.9)
+check("hierarchy world translation y", draws[0]["model"][13] > 1.9)
 
 print ""
 print "Results: " + str(p) + " passed, " + str(f) + " failed"
