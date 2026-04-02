@@ -10,6 +10,7 @@ from asset_import import imported_animation_duration, imported_skin_joint_matric
 from ecs import create_world, add_component
 from components import MaterialComponent, CameraComponent, PointLightComponent, MeshRendererComponent
 from math3d import vec3, mat4_identity
+from voxel_world import create_voxel_world, set_voxel
 
 import math
 
@@ -53,6 +54,11 @@ let imported_e = place_entity(editor, vec3(-1.0, 0.0, -2.0), "ExportModel", nil)
 add_component(world, imported_e, "imported_asset", {"source": "assets/Box.gltf", "name": "Box.gltf", "gpu_meshes": [{"gpu_mesh": 1, "material_index": 0}], "materials": [{"name": "Default"}]})
 add_component(world, imported_e, "mesh_id", {"mesh": nil, "name": "imported"})
 
+let voxel_e = place_entity(editor, vec3(2.0, 0.0, -4.0), "ExportVoxel", nil)
+let voxel_comp = create_voxel_world(16, 10, 16)
+set_voxel(voxel_comp, 8, 1, 8, 3)
+add_component(world, voxel_e, "voxel_world", voxel_comp)
+
 let saved = serialize_scene(world, "SmokeScene")
 check("scene serialized", saved != nil)
 let loaded = load_scene_string(saved)
@@ -72,6 +78,9 @@ check("imported asset pbr path present", contains(code, "draw_pbr_controlled"))
 check("material-aware draw remains enabled", contains(code, "draw_mesh_lit_surface_controlled"))
 check("imported asset skinned pbr path present", contains(code, "draw_pbr_skinned_controlled"))
 check("imported asset skinned lit path present", contains(code, "draw_mesh_lit_surface_skinned_controlled"))
+check("voxel world import present", contains(code, "from voxel_world import voxel_world_from_sage, voxel_visible_draws"))
+check("voxel world restore present", contains(code, "voxel_world_from_sage({"))
+check("voxel world runtime query present", contains(code, "query(world, [\"transform\", \"voxel_world\"])"))
 check("shadow helper emitted", contains(code, "proc _render_shadow_world"))
 check("stabilized shadow matrix emitted", contains(code, "compute_light_vp_stable(shadow_light[\"direction\"], focus_point, 45.0, shadow_renderer[\"resolution\"] + 0.0)"))
 check("shadow prepass emitted", contains(code, "_render_shadow_world(shadow_renderer, world, ls, player_eye_position(player))"))

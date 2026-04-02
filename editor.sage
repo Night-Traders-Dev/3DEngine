@@ -8,6 +8,7 @@
 #   Left Click = Select entity | ESC = Deselect
 #   1 = Translate | 2 = Rotate | 3 = Scale gizmo mode
 #   R = Place cube | F = Place sphere | D = Delete selected
+#   SHIFT+LMB/RMB = Edit selected voxel world | SHIFT+Z/X = Voxel brush
 #   Q = Duplicate | 5 = Generate code | 4 = Save scene | CTRL+Q = Quit
 
 import gpu
@@ -874,6 +875,7 @@ print ""
 print "Controls:"
 print "  RMB=Orbit  MMB=Pan  Scroll=Zoom  Right-Click=Context Menu"
 print "  R=Cube  F=Sphere  E=Model  D=Delete  Q=Dup  TAB=Physics"
+print "  SHIFT+LMB/RMB=Voxel Break/Place  SHIFT+Z/X=Voxel Brush"
 print "  1/2/3=Move/Rotate/Scale  4=Save  5=Code  ENTER=Play"
 print "  CTRL+Z/Y=Undo/Redo  CTRL+A=Select All  CTRL+N/O/S=New/Open/Save"
 print "  Drag window title bars to reposition panels"
@@ -2374,7 +2376,7 @@ while running:
         if cb_base_y + 4.0 < cb_max_y:
             add_text(font_r, "ui", _clip_text_line("R=Cube  F=Sphere  E=Model  D=Del  Q=Dup  TAB=Physics", cb_max_chars), cca["x"] + 4.0, cb_base_y + 4.0, 0.38, 0.38, 0.42, 1.0)
         if cb_base_y + 22.0 < cb_max_y:
-            add_text(font_r, "ui", _clip_text_line("LClick=Select  RMB=Orbit  Scroll=Zoom  ENTER=Play", cb_max_chars), cca["x"] + 4.0, cb_base_y + 22.0, 0.38, 0.38, 0.42, 1.0)
+            add_text(font_r, "ui", _clip_text_line("LClick=Select  SHIFT+LMB/RMB=Voxel Edit  ENTER=Play", cb_max_chars), cca["x"] + 4.0, cb_base_y + 22.0, 0.38, 0.38, 0.42, 1.0)
         let content_rows = _content_filtered()
         let total_h = 44.0 + len(content_rows) * 18.0
         update_window_content_height(win_content, total_h)

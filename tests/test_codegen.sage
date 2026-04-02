@@ -6,6 +6,7 @@ from components import CameraComponent, PointLightComponent, DirectionalLightCom
 from physics import RigidbodyComponent, SphereColliderComponent
 from gameplay import HealthComponent
 from math3d import vec3
+from voxel_world import create_voxel_world, set_voxel
 
 let p = 0
 let f = 0
@@ -91,6 +92,13 @@ add_component(w, e6, "imported_asset", {"source": "assets/Box.gltf", "name": "Bo
 add_component(w, e6, "mesh_id", {"mesh": nil, "name": "imported"})
 add_component(w, e6, "animation_state", {"clip": "Spin", "playing": true, "time": 1.25, "speed": 1.5, "looping": false})
 
+let e7 = spawn(w)
+add_component(w, e7, "transform", TransformComponent(0.0, 0.0, 0.0))
+add_component(w, e7, "name", NameComponent("VoxelChunk"))
+let voxel_comp = create_voxel_world(16, 10, 16)
+set_voxel(voxel_comp, 8, 1, 8, 3)
+add_component(w, e7, "voxel_world", voxel_comp)
+
 let code = generate_game_script(w, "TestScene", {"width": 800, "height": 600})
 check("code generated", code != nil)
 check("code has content", len(code) > 100)
@@ -142,6 +150,11 @@ check("contains imported animation advance", contains(code, "advance_imported_an
 check("contains animated imported draws", contains(code, "imported_asset_draws(asset, anim_state)"))
 check("contains skinned pbr draw import", contains(code, "draw_pbr_skinned_controlled"))
 check("contains skinned lit draw import", contains(code, "draw_mesh_lit_surface_skinned_controlled"))
+check("contains voxel world runtime import", contains(code, "from voxel_world import voxel_world_from_sage, voxel_visible_draws"))
+check("contains voxel world component restore", contains(code, "voxel_world_from_sage({"))
+check("contains voxel world render query", contains(code, "query(world, [\"transform\", \"voxel_world\"])"))
+check("contains voxel world draw path", contains(code, "draw_mesh_lit_surface_controlled(cmd, lit_mat, draw[\"gpu_mesh\"], voxel_mvp"))
+check("contains voxel world shadow path", contains(code, "shadow_draw_mesh(shadow_renderer, cmd, draws[di][\"gpu_mesh\"], model)"))
 check("contains shadow map import", contains(code, "from shadow_map import create_shadow_renderer"))
 check("contains stabilized shadow import", contains(code, "compute_light_vp_stable"))
 check("contains shadow source setter", contains(code, "set_lit_material_shadow_source"))
