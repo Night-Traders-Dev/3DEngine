@@ -21,15 +21,14 @@ layout(set = 0, binding = 0) uniform SceneUBO {
     vec4 fogColor;       // rgb = fog color, w = unused
 } scene;
 
-// Material push: model matrix occupies 128 bytes of push constants
-// Material properties come from vertex color / UV procedurally for now
+layout(push_constant) uniform PushConstants {
+    mat4 mvp;
+    mat4 model;
+    vec4 baseColor;
+} pc;
 
 void main() {
-    // Checkerboard base color from UV
-    float cx = floor(fragUV.x * 4.0);
-    float cy = floor(fragUV.y * 4.0);
-    float checker = mod(cx + cy, 2.0);
-    vec3 baseColor = mix(vec3(0.7, 0.7, 0.7), vec3(0.35, 0.35, 0.35), checker);
+    vec3 baseColor = pc.baseColor.rgb;
 
     vec3 N = normalize(fragNormal);
     vec3 V = normalize(scene.viewPos.xyz - fragWorldPos);
@@ -98,5 +97,5 @@ void main() {
 
     // Gamma correction
     result = pow(result, vec3(1.0 / 2.2));
-    outColor = vec4(result, 1.0);
+    outColor = vec4(result, pc.baseColor.a);
 }

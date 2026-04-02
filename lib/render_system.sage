@@ -35,9 +35,9 @@ proc create_lit_material(render_pass, desc_layout, desc_set):
         print "ERROR: Failed to load lit shaders"
         return nil
 
-    # Pipeline layout: push = 128 bytes (MVP + Model), 1 descriptor set (SceneUBO)
+    # Pipeline layout: push = 144 bytes (MVP + Model + baseColor), 1 descriptor set (SceneUBO)
     let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
-    let pipe_layout = gpu.create_pipeline_layout([desc_layout], 128, stage_flags)
+    let pipe_layout = gpu.create_pipeline_layout([desc_layout], 144, stage_flags)
 
     let cfg = {}
     cfg["layout"] = pipe_layout
@@ -106,11 +106,10 @@ proc create_unlit_material(render_pass):
 # ============================================================================
 # Draw helpers
 # ============================================================================
-proc draw_mesh_lit(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set):
-    gpu.cmd_bind_graphics_pipeline(cmd, mat["pipeline"])
-    let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
-    gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 0, desc_set, 0)
-    # Pack MVP + Model (32 floats = 128 bytes)
+proc build_lit_push_data(mvp_data, model_data, base_color):
+    let color = [0.75, 0.75, 0.75, 1.0]
+    if base_color != nil:
+        color = base_color
     let push_data = []
     let i = 0
     while i < 16:
@@ -120,6 +119,34 @@ proc draw_mesh_lit(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set):
     while i < 16:
         push(push_data, model_data[i])
         i = i + 1
+    push(push_data, color[0])
+    push(push_data, color[1])
+    push(push_data, color[2])
+    push(push_data, color[3])
+    return push_data
+
+proc draw_mesh_lit(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set):
+    gpu.cmd_bind_graphics_pipeline(cmd, mat["pipeline"])
+    let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
+    gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 0, desc_set, 0)
+    let push_data = build_lit_push_data(mvp_data, model_data, nil)
+    gpu.cmd_push_constants(cmd, mat["pipe_layout"], stage_flags, push_data)
+    gpu.cmd_bind_vertex_buffer(cmd, mesh_gpu["vbuf"])
+    gpu.cmd_bind_index_buffer(cmd, mesh_gpu["ibuf"])
+    gpu.cmd_draw_indexed(cmd, mesh_gpu["index_count"], 1, 0, 0, 0)
+
+proc draw_mesh_lit_surface(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, surface):
+    let base_color = [0.75, 0.75, 0.75, 1.0]
+    if surface != nil and dict_has(surface, "albedo"):
+        base_color[0] = surface["albedo"][0]
+        base_color[1] = surface["albedo"][1]
+        base_color[2] = surface["albedo"][2]
+        if dict_has(surface, "alpha"):
+            base_color[3] = surface["alpha"]
+    gpu.cmd_bind_graphics_pipeline(cmd, mat["pipeline"])
+    let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
+    gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 0, desc_set, 0)
+    let push_data = build_lit_push_data(mvp_data, model_data, base_color)
     gpu.cmd_push_constants(cmd, mat["pipe_layout"], stage_flags, push_data)
     gpu.cmd_bind_vertex_buffer(cmd, mesh_gpu["vbuf"])
     gpu.cmd_bind_index_buffer(cmd, mesh_gpu["ibuf"])

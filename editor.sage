@@ -30,7 +30,7 @@ from mesh import cube_mesh, sphere_mesh, plane_mesh, upload_mesh
 from lighting import create_light_scene, directional_light, point_light
 from lighting import add_light, set_ambient, set_view_position
 from lighting import init_light_gpu, update_light_ubo
-from render_system import create_lit_material, draw_mesh_lit
+from render_system import create_lit_material, draw_mesh_lit, draw_mesh_lit_surface
 from sky import create_sky, sky_preset_day, init_sky_gpu, draw_sky
 from editor_grid import create_editor_grid, draw_editor_grid
 from ui_renderer import create_ui_renderer, draw_ui, build_ui_vertices
@@ -1172,7 +1172,11 @@ while running:
                 let mi = get_component(world, eid, "mesh_id")
                 let model = transform_to_matrix(t)
                 let mvp = mat4_mul(vp, model)
-                draw_mesh_lit(cmd, lit_mat, mi["mesh"], mvp, model, ls["desc_set"])
+                if has_component(world, eid, "material"):
+                    let surface = get_component(world, eid, "material")
+                    draw_mesh_lit_surface(cmd, lit_mat, mi["mesh"], mvp, model, ls["desc_set"], surface)
+                else:
+                    draw_mesh_lit(cmd, lit_mat, mi["mesh"], mvp, model, ls["desc_set"])
                 draw_count = draw_count + 1
         ri = ri + 1
 

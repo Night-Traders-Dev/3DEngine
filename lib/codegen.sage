@@ -14,6 +14,21 @@ proc _fmt(n):
     let r = math.floor(n * 1000.0 + 0.5) / 1000.0
     return str(r)
 
+proc _bool_lit(v):
+    if v:
+        return "true"
+    return "false"
+
+proc _vec3_expr(v):
+    return "vec3(" + _fmt(v[0]) + ", " + _fmt(v[1]) + ", " + _fmt(v[2]) + ")"
+
+proc _transform_ctor_expr(t):
+    let has_rotation = math.abs(t["rotation"][0]) > 0.0001 or math.abs(t["rotation"][1]) > 0.0001 or math.abs(t["rotation"][2]) > 0.0001
+    let has_scale = math.abs(t["scale"][0] - 1.0) > 0.0001 or math.abs(t["scale"][1] - 1.0) > 0.0001 or math.abs(t["scale"][2] - 1.0) > 0.0001
+    if has_rotation or has_scale:
+        return "TransformComponentFull(" + _vec3_expr(t["position"]) + ", " + _vec3_expr(t["rotation"]) + ", " + _vec3_expr(t["scale"]) + ")"
+    return "TransformComponent(" + _fmt(t["position"][0]) + ", " + _fmt(t["position"][1]) + ", " + _fmt(t["position"][2]) + ")"
+
 # ============================================================================
 # Generate a complete game script from world state
 # ============================================================================
@@ -32,14 +47,14 @@ proc generate_game_script(world, scene_name, settings):
     push(L, "from renderer import shutdown_renderer, check_resize, update_title_fps")
     push(L, "from ecs import create_world, spawn, add_component, get_component")
     push(L, "from ecs import has_component, query, register_system, tick_systems, flush_dead")
-    push(L, "from components import TransformComponent, NameComponent")
+    push(L, "from components import TransformComponent, TransformComponentFull, NameComponent, MaterialComponent")
     push(L, "from engine_math import transform_to_matrix")
     push(L, "from math3d import vec3, mat4_mul, mat4_perspective, radians")
     push(L, "from mesh import cube_mesh, sphere_mesh, plane_mesh, upload_mesh")
     push(L, "from lighting import create_light_scene, directional_light, point_light")
     push(L, "from lighting import add_light, set_ambient, set_view_position")
     push(L, "from lighting import init_light_gpu, update_light_ubo")
-    push(L, "from render_system import create_lit_material, draw_mesh_lit")
+    push(L, "from render_system import create_lit_material, draw_mesh_lit, draw_mesh_lit_surface")
     push(L, "from sky import create_sky, sky_preset_day, init_sky_gpu, draw_sky")
     push(L, "from player_controller import create_player_controller, update_player")
     push(L, "from player_controller import player_view_matrix, player_eye_position")
@@ -114,7 +129,7 @@ proc generate_game_script(world, scene_name, settings):
         let v = "e" + str(ei)
         let t = get_component(world, eid, "transform")
         push(L, "let " + v + " = spawn(world)")
-        push(L, "add_component(world, " + v + ", " + q + "transform" + q + ", TransformComponent(" + _fmt(t["position"][0]) + ", " + _fmt(t["position"][1]) + ", " + _fmt(t["position"][2]) + "))")
+        push(L, "add_component(world, " + v + ", " + q + "transform" + q + ", " + _transform_ctor_expr(t) + ")")
         push(L, "add_component(world, " + v + ", " + q + "name" + q + ", NameComponent(" + q + name + q + "))")
         if has_component(world, eid, "mesh_id"):
             let mi = get_component(world, eid, "mesh_id")
@@ -127,22 +142,48 @@ proc generate_game_script(world, scene_name, settings):
             push(L, "add_component(world, " + v + ", " + q + "mesh_id" + q + ", {" + q + "mesh" + q + ": " + mn + "})")
         if has_component(world, eid, "rigidbody"):
             let rb = get_component(world, eid, "rigidbody")
+            let rbv = v + "_rb"
             if rb["is_kinematic"]:
-                push(L, "add_component(world, " + v + ", " + q + "rigidbody" + q + ", StaticBodyComponent())")
+                push(L, "let " + rbv + " = StaticBodyComponent()")
             else:
-                push(L, "add_component(world, " + v + ", " + q + "rigidbody" + q + ", RigidbodyComponent(" + _fmt(rb["mass"]) + "))")
+                push(L, "let " + rbv + " = RigidbodyComponent(" + _fmt(rb["mass"]) + ")")
+            push(L, rbv + "[" + q + "use_gravity" + q + "] = " + _bool_lit(rb["use_gravity"]))
+            push(L, rbv + "[" + q + "is_kinematic" + q + "] = " + _bool_lit(rb["is_kinematic"]))
+            push(L, rbv + "[" + q + "restitution" + q + "] = " + _fmt(rb["restitution"]))
+            push(L, rbv + "[" + q + "friction" + q + "] = " + _fmt(rb["friction"]))
+            push(L, rbv + "[" + q + "linear_damping" + q + "] = " + _fmt(rb["linear_damping"]))
+            push(L, "add_component(world, " + v + ", " + q + "rigidbody" + q + ", " + rbv + ")")
             if has_component(world, eid, "collider"):
                 let col = get_component(world, eid, "collider")
+                let colv = v + "_col"
                 if col["type"] == "sphere":
-                    push(L, "add_component(world, " + v + ", " + q + "collider" + q + ", SphereColliderComponent(" + _fmt(col["radius"]) + "))")
+                    push(L, "let " + colv + " = SphereColliderComponent(" + _fmt(col["radius"]) + ")")
                 else:
-                    push(L, "add_component(world, " + v + ", " + q + "collider" + q + ", BoxColliderComponent(" + _fmt(col["half"][0]) + ", " + _fmt(col["half"][1]) + ", " + _fmt(col["half"][2]) + "))")
+                    push(L, "let " + colv + " = BoxColliderComponent(" + _fmt(col["half"][0]) + ", " + _fmt(col["half"][1]) + ", " + _fmt(col["half"][2]) + ")")
+                push(L, colv + "[" + q + "offset" + q + "] = " + _vec3_expr(col["offset"]))
+                push(L, colv + "[" + q + "is_trigger" + q + "] = " + _bool_lit(col["is_trigger"]))
+                push(L, "add_component(world, " + v + ", " + q + "collider" + q + ", " + colv + ")")
         if has_component(world, eid, "health"):
             let hp = get_component(world, eid, "health")
-            push(L, "add_component(world, " + v + ", " + q + "health" + q + ", HealthComponent(" + _fmt(hp["max"]) + "))")
+            let hpv = v + "_health"
+            push(L, "let " + hpv + " = HealthComponent(" + _fmt(hp["max"]) + ")")
+            push(L, hpv + "[" + q + "current" + q + "] = " + _fmt(hp["current"]))
+            push(L, hpv + "[" + q + "alive" + q + "] = " + _bool_lit(hp["alive"]))
+            push(L, hpv + "[" + q + "invulnerable" + q + "] = " + _bool_lit(hp["invulnerable"]))
+            push(L, hpv + "[" + q + "regen_rate" + q + "] = " + _fmt(hp["regen_rate"]))
+            push(L, hpv + "[" + q + "regen_delay" + q + "] = " + _fmt(hp["regen_delay"]))
+            push(L, hpv + "[" + q + "last_damage_time" + q + "] = " + _fmt(hp["last_damage_time"]))
+            push(L, "add_component(world, " + v + ", " + q + "health" + q + ", " + hpv + ")")
         if has_component(world, eid, "material"):
             let mc = get_component(world, eid, "material")
-            push(L, "add_component(world, " + v + ", " + q + "material" + q + ", MaterialComponent(" + _fmt(mc["albedo"][0]) + ", " + _fmt(mc["albedo"][1]) + ", " + _fmt(mc["albedo"][2]) + "))")
+            let mv = v + "_mat"
+            push(L, "let " + mv + " = MaterialComponent(" + _fmt(mc["albedo"][0]) + ", " + _fmt(mc["albedo"][1]) + ", " + _fmt(mc["albedo"][2]) + ")")
+            push(L, mv + "[" + q + "metallic" + q + "] = " + _fmt(mc["metallic"]))
+            push(L, mv + "[" + q + "roughness" + q + "] = " + _fmt(mc["roughness"]))
+            push(L, mv + "[" + q + "emission" + q + "] = " + _vec3_expr(mc["emission"]))
+            push(L, mv + "[" + q + "emission_strength" + q + "] = " + _fmt(mc["emission_strength"]))
+            push(L, mv + "[" + q + "alpha" + q + "] = " + _fmt(mc["alpha"]))
+            push(L, "add_component(world, " + v + ", " + q + "material" + q + ", " + mv + ")")
         push(L, "")
         ei = ei + 1
 
@@ -200,7 +241,11 @@ proc generate_game_script(world, scene_name, settings):
     push(L, "        let mi = get_component(world, eid, " + q + "mesh_id" + q + ")")
     push(L, "        let model = transform_to_matrix(t)")
     push(L, "        let mvp = mat4_mul(vp, model)")
-    push(L, "        draw_mesh_lit(cmd, lit_mat, mi[" + q + "mesh" + q + "], mvp, model, ls[" + q + "desc_set" + q + "])")
+    push(L, "        if has_component(world, eid, " + q + "material" + q + "):")
+    push(L, "            let surface = get_component(world, eid, " + q + "material" + q + ")")
+    push(L, "            draw_mesh_lit_surface(cmd, lit_mat, mi[" + q + "mesh" + q + "], mvp, model, ls[" + q + "desc_set" + q + "], surface)")
+    push(L, "        else:")
+    push(L, "            draw_mesh_lit(cmd, lit_mat, mi[" + q + "mesh" + q + "], mvp, model, ls[" + q + "desc_set" + q + "])")
     push(L, "        ri = ri + 1")
     push(L, "    let sw = r[" + q + "width" + q + "] + 0.0")
     push(L, "    let sh = r[" + q + "height" + q + "] + 0.0")

@@ -1,7 +1,7 @@
 # test_render_system.sage - Sanity checks for the render system (non-GPU parts)
 # Run: ./run.sh tests/test_render_system.sage
 
-from render_system import create_material_registry, register_material, get_material
+from render_system import create_material_registry, register_material, get_material, build_lit_push_data
 
 let pass_count = 0
 let fail_count = 0
@@ -59,6 +59,23 @@ mat_override["pipeline"] = 99
 register_material(reg, "test_mat", mat_override)
 let overwritten = get_material(reg, "test_mat")
 check("overwritten material updated", overwritten["pipeline"] == 99)
+
+# --- Lit push data ---
+let mvp = []
+let model = []
+let i = 0
+while i < 16:
+    push(mvp, i + 0.0)
+    push(model, 100.0 + i)
+    i = i + 1
+let lit_push = build_lit_push_data(mvp, model, [0.2, 0.4, 0.6, 0.8])
+check("lit push has 36 floats", len(lit_push) == 36)
+check("lit push starts with mvp", lit_push[0] == 0.0 and lit_push[15] == 15.0)
+check("lit push includes model", lit_push[16] == 100.0 and lit_push[31] == 115.0)
+check("lit push includes base color", lit_push[32] == 0.2 and lit_push[35] == 0.8)
+
+let default_push = build_lit_push_data(mvp, model, nil)
+check("default lit alpha is 1", default_push[35] == 1.0)
 
 # --- Results ---
 print ""
