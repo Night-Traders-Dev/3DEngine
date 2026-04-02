@@ -114,6 +114,7 @@ set_voxel(chunk_world, 16, 1, 1, 3)
 let chunk_mesh_left = build_voxel_chunk_meshes(chunk_world, 0, 0, 0)
 let chunk_mesh_right = build_voxel_chunk_meshes(chunk_world, 1, 0, 0)
 check("chunk mesh culls faces across chunk boundaries", chunk_mesh_left["3"]["face_count"] == 5 and chunk_mesh_right["3"]["face_count"] == 5)
+chunk_world["max_stream_chunk_refresh"] = 8
 let all_chunk_draws = voxel_visible_draws(chunk_world, -7.0, 1.0, -7.0, 8)
 let local_chunk_draws = voxel_visible_draws(chunk_world, -7.0, 1.0, -7.0, 0)
 check("visible draws filter chunk meshes by radius", len(all_chunk_draws) == 2 and len(local_chunk_draws) == 1)

@@ -679,7 +679,7 @@ proc _render_shadow_world(sr, w, light_scene, focus_point, radius):
         if t != nil:
             let model = transform_to_matrix(t)
             let vw = get_component(w, eid, "voxel_world")
-            let draws = voxel_visible_draws(vw, focus_point[0] - t["position"][0], focus_point[1] - t["position"][1], focus_point[2] - t["position"][2], 2)
+            let draws = voxel_visible_draws(vw, focus_point[0] - t["position"][0], focus_point[1] - t["position"][1], focus_point[2] - t["position"][2], 1)
             let di = 0
             while di < len(draws):
                 shadow_draw_mesh(sr, cmd, draws[di]["gpu_mesh"], model)
@@ -1862,7 +1862,7 @@ while running:
         let voxel_half = vec3(vw["size_x"] / 2.0, vw["size_y"] / 2.0, vw["size_z"] / 2.0)
         if aabb_in_frustum(frustum_planes, voxel_center, voxel_half):
             let model = transform_to_matrix(t)
-            let draws = voxel_visible_draws(vw, cam_pos[0] - t["position"][0], cam_pos[1] - t["position"][1], cam_pos[2] - t["position"][2], 2)
+            let draws = voxel_visible_draws(vw, cam_pos[0] - t["position"][0], cam_pos[1] - t["position"][1], cam_pos[2] - t["position"][2], 1)
             let di = 0
             while di < len(draws):
                 let draw = draws[di]

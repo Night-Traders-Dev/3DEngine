@@ -90,6 +90,7 @@ proc create_voxel_world(size_x, size_y, size_z):
     vw["solid_count"] = 0
     vw["template_seed"] = 0.0
     vw["chunk_size"] = 16
+    vw["max_stream_chunk_refresh"] = 2
     vw["dirty_chunks"] = {}
     vw["generated_chunks"] = {}
     _reset_voxel_stream_state(vw)
@@ -1057,11 +1058,22 @@ proc voxel_visible_draws(vw, wx, wy, wz, chunk_radius):
 
     let wanted_keys = dict_keys(wanted)
     let wi = 0
+    let max_refresh = 2
+    if dict_has(vw, "max_stream_chunk_refresh"):
+        max_refresh = vw["max_stream_chunk_refresh"]
+    if max_refresh < 1:
+        max_refresh = 1
+    let refreshed = 0
+    let pending_refresh = false
     while wi < len(wanted_keys):
         let key = wanted_keys[wi]
         let chunk = wanted[key]
         if dict_has(vw["stream_chunks"], key) == false or dict_has(vw["dirty_chunks"], key):
-            _refresh_stream_chunk(vw, chunk["x"], chunk["y"], chunk["z"])
+            if refreshed < max_refresh:
+                _refresh_stream_chunk(vw, chunk["x"], chunk["y"], chunk["z"])
+                refreshed = refreshed + 1
+            else:
+                pending_refresh = true
         wi = wi + 1
 
     let visible = []
@@ -1086,7 +1098,7 @@ proc voxel_visible_draws(vw, wx, wy, wz, chunk_radius):
     vw["stream_draws"] = visible
     vw["stream_center_chunk"] = center_chunk
     vw["stream_chunk_radius"] = chunk_radius
-    vw["dirty"] = len(dict_keys(vw["dirty_chunks"])) > 0
+    vw["dirty"] = pending_refresh or len(dict_keys(vw["dirty_chunks"])) > 0
     return visible
 
 proc raycast_voxel_world(vw, origin, direction, max_dist):

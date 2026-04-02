@@ -49,7 +49,7 @@ echo "=== Startup Smoke Checks ==="
 
 run_smoke_case "editor boot" "editor.sage" "Font loaded:"
 run_smoke_case "asset demo boot" "examples/demo_assets.sage" "Scene: 24 entities"
-run_smoke_case "voxel demo boot" "examples/demo_voxel.sage" "Voxel world generated:"
+run_smoke_case "voxel demo boot" "examples/demo_voxel.sage" "Voxel world bootstrap:"
 
 echo ""
 echo "Results: $pass_count passed, $fail_count failed"

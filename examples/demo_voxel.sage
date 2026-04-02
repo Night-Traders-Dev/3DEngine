@@ -50,6 +50,7 @@ let save_state_file = "/tmp/forge_voxel_template_save.json"
 let save_world_file = "/tmp/forge_voxel_template_world.json"
 let world_seed = 7.0
 let generation_chunk_radius = 2
+let stream_chunk_radius = 1
 
 # ============================================================================
 # Renderer
@@ -93,8 +94,10 @@ load_font(font_r, "ui", "assets/DejaVuSans.ttf", 18.0)
 # ============================================================================
 let voxel = create_voxel_world(96, 24, 96)
 let cube_gpu = upload_mesh(cube_mesh())
+print "Voxel world bootstrap: seed=" + str(world_seed) + " generate=" + str(generation_chunk_radius) + " stream=" + str(stream_chunk_radius)
 ensure_voxel_generated_radius(voxel, 0.0, 0.0, 0.0, generation_chunk_radius, world_seed)
-let draws = voxel_visible_draws(voxel, 0.0, 0.0, 0.0, generation_chunk_radius)
+print "Voxel world seeded: " + str(voxel_generated_chunk_count(voxel)) + " generated chunks"
+let draws = voxel_visible_draws(voxel, 0.0, 0.0, 0.0, stream_chunk_radius)
 print "Voxel world generated: " + str(voxel["solid_count"]) + " solid blocks across " + str(voxel_generated_chunk_count(voxel)) + " generated chunks"
 
 let inventory = create_voxel_inventory()
@@ -247,7 +250,7 @@ while running:
                     _set_status("Load failed: world data was invalid")
                 else:
                     voxel = loaded_world
-                    draws = voxel_visible_draws(voxel, player["position"][0], player["position"][1], player["position"][2], generation_chunk_radius)
+                    draws = voxel_visible_draws(voxel, player["position"][0], player["position"][1], player["position"][2], stream_chunk_radius)
                     if dict_has(state, "inventory"):
                         inventory = voxel_inventory_from_sage(state["inventory"])
                     if dict_has(state, "selected_block") and state["selected_block"] > 0:
@@ -311,7 +314,7 @@ while running:
         else:
             _set_status("No " + voxel_block_name(voxel, selected_block[0]) + " left in inventory")
 
-    draws = voxel_visible_draws(voxel, player["position"][0], player["position"][1], player["position"][2], generation_chunk_radius)
+    draws = voxel_visible_draws(voxel, player["position"][0], player["position"][1], player["position"][2], stream_chunk_radius)
     set_view_position(ls, eye)
     update_light_ubo(ls)
 
