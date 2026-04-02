@@ -61,7 +61,7 @@ proc load_gltf(path):
         let mi = 0
         while mi < mc:
             let mesh_node = cJSON_GetArrayItem(meshes_node, mi)
-            let mesh_info = _parse_mesh_node(mesh_node)
+            let mesh_info = _parse_mesh_node(mesh_node, accessors_node, buffer_views_node, buffers)
             push(result["meshes"], mesh_info)
             mi = mi + 1
     # Parse materials
@@ -131,7 +131,7 @@ proc load_gltf(path):
 # ============================================================================
 # Internal parsers
 # ============================================================================
-proc _parse_mesh_node(node):
+proc _parse_mesh_node(node, accessors_node, buffer_views_node, buffers):
     let info = {}
     let name_node = cJSON_GetObjectItem(node, "name")
     if name_node != nil:
@@ -151,6 +151,81 @@ proc _parse_mesh_node(node):
                 pinfo["material"] = cJSON_GetNumberValue(mat_node)
             else:
                 pinfo["material"] = -1
+            pinfo["vertices"] = []
+            pinfo["indices"] = []
+            pinfo["vertex_count"] = 0
+            pinfo["index_count"] = 0
+            pinfo["has_skinning"] = false
+            let attrs = cJSON_GetObjectItem(prim, "attributes")
+            let positions = []
+            let normals = []
+            let uvs = []
+            let joints = []
+            let weights = []
+            if attrs != nil and accessors_node != nil and buffer_views_node != nil:
+                let pos_node = cJSON_GetObjectItem(attrs, "POSITION")
+                if pos_node != nil:
+                    positions = _decode_accessor_values(accessors_node, buffer_views_node, buffers, cJSON_GetNumberValue(pos_node))
+                let norm_node = cJSON_GetObjectItem(attrs, "NORMAL")
+                if norm_node != nil:
+                    normals = _decode_accessor_values(accessors_node, buffer_views_node, buffers, cJSON_GetNumberValue(norm_node))
+                let uv_node = cJSON_GetObjectItem(attrs, "TEXCOORD_0")
+                if uv_node != nil:
+                    uvs = _decode_accessor_values(accessors_node, buffer_views_node, buffers, cJSON_GetNumberValue(uv_node))
+                let joints_node = cJSON_GetObjectItem(attrs, "JOINTS_0")
+                if joints_node != nil:
+                    joints = _decode_accessor_values(accessors_node, buffer_views_node, buffers, cJSON_GetNumberValue(joints_node))
+                let weights_node = cJSON_GetObjectItem(attrs, "WEIGHTS_0")
+                if weights_node != nil:
+                    weights = _decode_accessor_values(accessors_node, buffer_views_node, buffers, cJSON_GetNumberValue(weights_node))
+                pinfo["has_skinning"] = joints_node != nil and weights_node != nil
+            let vertex_count = len(positions)
+            let vertices = []
+            let vi = 0
+            while vi < vertex_count:
+                let pos = positions[vi]
+                let normal = [0.0, 1.0, 0.0]
+                let uv = [0.0, 0.0]
+                let joint = [0.0, 0.0, 0.0, 0.0]
+                let weight = [1.0, 0.0, 0.0, 0.0]
+                if vi < len(normals) and normals[vi] != nil and len(normals[vi]) >= 3:
+                    normal = normals[vi]
+                if vi < len(uvs) and uvs[vi] != nil and len(uvs[vi]) >= 2:
+                    uv = uvs[vi]
+                if vi < len(joints) and joints[vi] != nil and len(joints[vi]) >= 4:
+                    joint = joints[vi]
+                if vi < len(weights) and weights[vi] != nil and len(weights[vi]) >= 4:
+                    weight = weights[vi]
+                push(vertices, pos[0])
+                push(vertices, pos[1])
+                push(vertices, pos[2])
+                push(vertices, normal[0])
+                push(vertices, normal[1])
+                push(vertices, normal[2])
+                push(vertices, uv[0])
+                push(vertices, uv[1])
+                push(vertices, joint[0])
+                push(vertices, joint[1])
+                push(vertices, joint[2])
+                push(vertices, joint[3])
+                push(vertices, weight[0])
+                push(vertices, weight[1])
+                push(vertices, weight[2])
+                push(vertices, weight[3])
+                vi = vi + 1
+            pinfo["vertices"] = vertices
+            pinfo["vertex_count"] = vertex_count
+            let indices_node = cJSON_GetObjectItem(prim, "indices")
+            let indices = []
+            if indices_node != nil and accessors_node != nil and buffer_views_node != nil:
+                indices = _decode_accessor_values(accessors_node, buffer_views_node, buffers, cJSON_GetNumberValue(indices_node))
+            if len(indices) == 0:
+                let ii = 0
+                while ii < vertex_count:
+                    push(indices, ii)
+                    ii = ii + 1
+            pinfo["indices"] = indices
+            pinfo["index_count"] = len(indices)
             push(info["primitives"], pinfo)
             pi = pi + 1
     return info
@@ -404,6 +479,10 @@ proc _decode_accessor_values(accessors_node, buffer_views_node, buffers, accesso
     let count = cJSON_GetNumberValue(cJSON_GetObjectItem(accessor_node, "count"))
     let component_type = cJSON_GetNumberValue(cJSON_GetObjectItem(accessor_node, "componentType"))
     let type_name = cJSON_GetStringValue(cJSON_GetObjectItem(accessor_node, "type"))
+    let normalized = false
+    let normalized_node = cJSON_GetObjectItem(accessor_node, "normalized")
+    if normalized_node != nil:
+        normalized = cJSON_GetNumberValue(normalized_node) != 0
     let component_count = _accessor_component_count(type_name)
     let component_size = _accessor_component_size(component_type)
     if component_count <= 0 or component_size <= 0:
@@ -424,29 +503,51 @@ proc _decode_accessor_values(accessors_node, buffer_views_node, buffers, accesso
     let i = 0
     while i < count:
         let elem_off = start + i * stride
-        let value = _decode_accessor_value(bytes, elem_off, component_type, component_count)
+        let value = _decode_accessor_value(bytes, elem_off, component_type, component_count, normalized)
         push(values, value)
         i = i + 1
     return values
 
-proc _decode_accessor_value(bytes, offset, component_type, component_count):
+proc _decode_accessor_value(bytes, offset, component_type, component_count, normalized):
     if component_count == 1:
-        return _decode_accessor_component(bytes, offset, component_type)
+        return _decode_accessor_component(bytes, offset, component_type, normalized)
     let result = []
     let comp_size = _accessor_component_size(component_type)
     let ci = 0
     while ci < component_count:
-        push(result, _decode_accessor_component(bytes, offset + ci * comp_size, component_type))
+        push(result, _decode_accessor_component(bytes, offset + ci * comp_size, component_type, normalized))
         ci = ci + 1
     return result
 
-proc _decode_accessor_component(bytes, offset, component_type):
+proc _decode_accessor_component(bytes, offset, component_type, normalized):
     if component_type == 5126:
         return _read_f32_le(bytes, offset)
     if component_type == 5125:
         return _read_u32_le(bytes, offset)
+    if component_type == 5122:
+        let value = _read_i16_le(bytes, offset)
+        if normalized:
+            if value <= -32768:
+                return -1.0
+            return value / 32767.0
+        return value
     if component_type == 5123:
-        return _read_u16_le(bytes, offset)
+        let value = _read_u16_le(bytes, offset)
+        if normalized:
+            return value / 65535.0
+        return value
+    if component_type == 5121:
+        let value = _read_u8(bytes, offset)
+        if normalized:
+            return value / 255.0
+        return value
+    if component_type == 5120:
+        let value = _read_i8(bytes, offset)
+        if normalized:
+            if value <= -128:
+                return -1.0
+            return value / 127.0
+        return value
     return 0.0
 
 proc _accessor_component_count(type_name):
@@ -463,7 +564,9 @@ proc _accessor_component_count(type_name):
     return 0
 
 proc _accessor_component_size(component_type):
-    if component_type == 5123:
+    if component_type == 5120 or component_type == 5121:
+        return 1
+    if component_type == 5122 or component_type == 5123:
         return 2
     if component_type == 5125 or component_type == 5126:
         return 4
@@ -483,10 +586,27 @@ proc _normalize_animation_values(path, values):
         i = i + 1
     return out
 
+proc _read_u8(bytes, offset):
+    if offset >= len(bytes):
+        return 0
+    return bytes[offset]
+
+proc _read_i8(bytes, offset):
+    let value = _read_u8(bytes, offset)
+    if value >= 128:
+        return value - 256
+    return value
+
 proc _read_u16_le(bytes, offset):
     if offset + 2 > len(bytes):
         return 0
     return bytes[offset] + bytes[offset + 1] * 256
+
+proc _read_i16_le(bytes, offset):
+    let value = _read_u16_le(bytes, offset)
+    if value >= 32768:
+        return value - 65536
+    return value
 
 proc _read_u32_le(bytes, offset):
     if offset + 4 > len(bytes):

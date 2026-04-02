@@ -1,7 +1,7 @@
 # test_gltf_import.sage - Sanity checks for glTF importer (parsing only)
 import io
 import math
-from gltf_import import load_gltf, create_gltf_result
+from gltf_import import load_gltf, create_gltf_result, _decode_accessor_component
 
 let p = 0
 let f = 0
@@ -209,6 +209,11 @@ if skinned != nil:
     check("skinned gltf joint name root", skinned["skins"][0]["joint_names"][0] == "Hip")
     check("skinned gltf inverse bind matrices defaulted", len(skinned["skins"][0]["inverse_bind_matrices"]) == 2)
     check("skinned gltf inverse bind identity", skinned["skins"][0]["inverse_bind_matrices"][0][0] > 0.9 and skinned["skins"][0]["inverse_bind_matrices"][0][15] > 0.9)
+
+# --- Accessor component decoding for skinned data ---
+check("joint accessor u8 decode", _decode_accessor_component([1], 0, 5121, false) == 1)
+let normalized_weight = _decode_accessor_component([128], 0, 5121, true)
+check("weight accessor normalized u8 decode", normalized_weight > 0.49 and normalized_weight < 0.51)
 
 # --- Bad file ---
 let bad = load_gltf("/tmp/nonexistent.gltf")

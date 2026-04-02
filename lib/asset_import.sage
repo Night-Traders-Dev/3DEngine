@@ -21,6 +21,7 @@ proc import_gltf(path):
     if gltf == nil:
         print "IMPORT ERROR: Failed to load " + path
         return nil
+    let scene_gltf = gltf_import.load_gltf(path)
 
     let asset = {}
     asset["name"] = path
@@ -32,18 +33,28 @@ proc import_gltf(path):
     # Upload meshes to GPU
     let gpu_meshes = []
     let meshes = gltf["meshes"]
+    let scene_meshes = []
+    if scene_gltf != nil and dict_has(scene_gltf, "meshes"):
+        scene_meshes = scene_gltf["meshes"]
     let mi = 0
     while mi < len(meshes):
         let mesh = meshes[mi]
         let prims = mesh["primitives"]
+        let scene_prims = []
+        if mi < len(scene_meshes) and dict_has(scene_meshes[mi], "primitives"):
+            scene_prims = scene_meshes[mi]["primitives"]
         let pi = 0
         while pi < len(prims):
             let prim = prims[pi]
+            let upload_prim = prim
+            if pi < len(scene_prims):
+                if dict_has(scene_prims[pi], "vertices") and len(scene_prims[pi]["vertices"]) > 0:
+                    upload_prim = scene_prims[pi]
             let mesh_data = {}
-            mesh_data["vertices"] = prim["vertices"]
-            mesh_data["indices"] = prim["indices"]
-            mesh_data["vertex_count"] = prim["vertex_count"]
-            mesh_data["index_count"] = prim["index_count"]
+            mesh_data["vertices"] = upload_prim["vertices"]
+            mesh_data["indices"] = upload_prim["indices"]
+            mesh_data["vertex_count"] = upload_prim["vertex_count"]
+            mesh_data["index_count"] = upload_prim["index_count"]
             mesh_data["has_normals"] = true
             mesh_data["has_uvs"] = true
             let gpu_mesh = upload_mesh(mesh_data)
@@ -56,6 +67,8 @@ proc import_gltf(path):
                 entry["material_index"] = prim["material"]
             else:
                 entry["material_index"] = -1
+            if dict_has(upload_prim, "has_skinning"):
+                entry["has_skinning"] = upload_prim["has_skinning"]
             push(gpu_meshes, entry)
             pi = pi + 1
         mi = mi + 1
@@ -100,7 +113,6 @@ proc import_gltf(path):
 
     # Nodes (scene hierarchy with transforms)
     let node_list = []
-    let scene_gltf = gltf_import.load_gltf(path)
     if scene_gltf != nil and dict_has(scene_gltf, "nodes"):
         let nodes = scene_gltf["nodes"]
         let parent_map = {}

@@ -66,6 +66,8 @@ check("imported asset runtime import present", contains(code, "from asset_import
 check("imported asset hierarchy helper present", contains(code, "imported_asset_draws"))
 check("imported asset pbr path present", contains(code, "draw_pbr"))
 check("material-aware draw remains enabled", contains(code, "draw_mesh_lit_surface"))
+check("imported asset skinned pbr path present", contains(code, "draw_pbr_skinned"))
+check("imported asset skinned lit path present", contains(code, "draw_mesh_lit_surface_skinned"))
 check("fallback generated point light omitted", contains(code, "point_light(5.0, 4.0, 3.0, 1.0, 0.8, 0.6, 3.0, 20.0)") == false)
 
 let synthetic_asset = {

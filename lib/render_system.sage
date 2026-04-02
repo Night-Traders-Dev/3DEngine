@@ -5,8 +5,35 @@ gc_disable()
 # -----------------------------------------
 
 import gpu
-from mesh import mesh_vertex_binding, mesh_vertex_attribs
+from mesh import mesh_vertex_binding, mesh_vertex_attribs, build_skin_palette_uniform_data
+from mesh import MAX_SKIN_JOINTS
 from math3d import mat4_mul, mat4_identity
+
+let SKIN_UBO_FLOATS = MAX_SKIN_JOINTS * 16
+let SKIN_UBO_BYTES = SKIN_UBO_FLOATS * 4
+
+proc _create_skin_binding():
+    let b0 = {}
+    b0["binding"] = 0
+    b0["type"] = gpu.DESC_UNIFORM_BUFFER
+    b0["stage"] = gpu.STAGE_VERTEX
+    b0["count"] = 1
+    let layout = gpu.create_descriptor_layout([b0])
+    let ps0 = {}
+    ps0["type"] = gpu.DESC_UNIFORM_BUFFER
+    ps0["count"] = 1
+    let pool = gpu.create_descriptor_pool(1, [ps0])
+    let desc_set = gpu.allocate_descriptor_set(pool, layout)
+    let ubo = gpu.create_uniform_buffer(SKIN_UBO_BYTES)
+    gpu.update_descriptor(desc_set, 0, gpu.DESC_UNIFORM_BUFFER, ubo)
+    gpu.update_uniform(ubo, build_skin_palette_uniform_data(nil))
+    return {"layout": layout, "pool": pool, "desc_set": desc_set, "ubo": ubo}
+
+proc _update_skin_binding(binding, joint_palette):
+    if binding == nil or dict_has(binding, "ubo") == false:
+        return nil
+    gpu.update_uniform(binding["ubo"], build_skin_palette_uniform_data(joint_palette))
+    return binding["ubo"]
 
 # ============================================================================
 # Material registry
@@ -37,7 +64,8 @@ proc create_lit_material(render_pass, desc_layout, desc_set):
 
     # Pipeline layout: push = 144 bytes (MVP + Model + baseColor), 1 descriptor set (SceneUBO)
     let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
-    let pipe_layout = gpu.create_pipeline_layout([desc_layout], 144, stage_flags)
+    let skin_binding = _create_skin_binding()
+    let pipe_layout = gpu.create_pipeline_layout([desc_layout, skin_binding["layout"]], 144, stage_flags)
 
     let cfg = {}
     cfg["layout"] = pipe_layout
@@ -61,6 +89,10 @@ proc create_lit_material(render_pass, desc_layout, desc_set):
     mat["pipeline"] = pipeline
     mat["pipe_layout"] = pipe_layout
     mat["desc_set"] = desc_set
+    mat["skin_layout"] = skin_binding["layout"]
+    mat["skin_pool"] = skin_binding["pool"]
+    mat["skin_desc_set"] = skin_binding["desc_set"]
+    mat["skin_ubo"] = skin_binding["ubo"]
     mat["vert"] = vert
     mat["frag"] = frag
     return mat
@@ -126,9 +158,17 @@ proc build_lit_push_data(mvp_data, model_data, base_color):
     return push_data
 
 proc draw_mesh_lit(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set):
+    draw_mesh_lit_skinned(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, nil)
+
+proc draw_mesh_lit_skinned(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, skin_draw):
     gpu.cmd_bind_graphics_pipeline(cmd, mat["pipeline"])
     let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
+    let joint_palette = nil
+    if skin_draw != nil and dict_has(skin_draw, "joint_palette"):
+        joint_palette = skin_draw["joint_palette"]
+    _update_skin_binding(mat, joint_palette)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 0, desc_set, 0)
+    gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 1, mat["skin_desc_set"], 0)
     let push_data = build_lit_push_data(mvp_data, model_data, nil)
     gpu.cmd_push_constants(cmd, mat["pipe_layout"], stage_flags, push_data)
     gpu.cmd_bind_vertex_buffer(cmd, mesh_gpu["vbuf"])
@@ -136,6 +176,9 @@ proc draw_mesh_lit(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set):
     gpu.cmd_draw_indexed(cmd, mesh_gpu["index_count"], 1, 0, 0, 0)
 
 proc draw_mesh_lit_surface(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, surface):
+    draw_mesh_lit_surface_skinned(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, surface, nil)
+
+proc draw_mesh_lit_surface_skinned(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, surface, skin_draw):
     let base_color = [0.75, 0.75, 0.75, 1.0]
     if surface != nil and dict_has(surface, "albedo"):
         base_color[0] = surface["albedo"][0]
@@ -145,7 +188,12 @@ proc draw_mesh_lit_surface(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, s
             base_color[3] = surface["alpha"]
     gpu.cmd_bind_graphics_pipeline(cmd, mat["pipeline"])
     let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
+    let joint_palette = nil
+    if skin_draw != nil and dict_has(skin_draw, "joint_palette"):
+        joint_palette = skin_draw["joint_palette"]
+    _update_skin_binding(mat, joint_palette)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 0, desc_set, 0)
+    gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 1, mat["skin_desc_set"], 0)
     let push_data = build_lit_push_data(mvp_data, model_data, base_color)
     gpu.cmd_push_constants(cmd, mat["pipe_layout"], stage_flags, push_data)
     gpu.cmd_bind_vertex_buffer(cmd, mesh_gpu["vbuf"])

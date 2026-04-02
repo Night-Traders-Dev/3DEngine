@@ -31,8 +31,10 @@ from lighting import create_light_scene, directional_light, point_light
 from lighting import add_light, set_ambient, set_view_position
 from lighting import init_light_gpu, update_light_ubo
 from render_system import create_lit_material, draw_mesh_lit, draw_mesh_lit_surface
+from render_system import draw_mesh_lit_surface_skinned
 from pbr_material import create_pbr_renderer, create_pbr_fallback_textures
 from pbr_material import create_pbr_material_from_imported, bind_pbr_material, draw_pbr
+from pbr_material import draw_pbr_skinned
 from sky import create_sky, sky_preset_day, init_sky_gpu, draw_sky
 from editor_grid import create_editor_grid, draw_editor_grid
 from ui_renderer import create_ui_renderer, draw_ui, build_ui_vertices
@@ -1335,12 +1337,12 @@ while running:
                         let imported_model = mat4_mul(model, gm["model"])
                         let imported_mvp = mat4_mul(vp, imported_model)
                         if pbr_renderer != nil and material_index >= 0 and material_index < len(pbr_materials):
-                            draw_pbr(cmd, pbr_renderer, gm["gpu_mesh"], imported_mvp, imported_model, ls["desc_set"], pbr_materials[material_index])
+                            draw_pbr_skinned(cmd, pbr_renderer, gm["gpu_mesh"], imported_mvp, imported_model, ls["desc_set"], pbr_materials[material_index], gm)
                         else:
                             let surface = nil
                             if material_index >= 0 and material_index < len(asset["materials"]):
                                 surface = _surface_from_imported_material(asset["materials"][material_index])
-                            draw_mesh_lit_surface(cmd, lit_mat, gm["gpu_mesh"], imported_mvp, imported_model, ls["desc_set"], surface)
+                            draw_mesh_lit_surface_skinned(cmd, lit_mat, gm["gpu_mesh"], imported_mvp, imported_model, ls["desc_set"], surface, gm)
                         draw_count = draw_count + 1
                         gi = gi + 1
                 else:

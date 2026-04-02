@@ -128,6 +128,8 @@ check("contains imported animation state", contains(code, "\"animation_state\", 
 check("contains imported animation helper import", contains(code, "advance_imported_animation_state"))
 check("contains imported animation advance", contains(code, "advance_imported_animation_state(asset, anim_state, dt)"))
 check("contains animated imported draws", contains(code, "imported_asset_draws(asset, anim_state)"))
+check("contains skinned pbr draw import", contains(code, "draw_pbr_skinned"))
+check("contains skinned lit draw import", contains(code, "draw_mesh_lit_surface_skinned"))
 
 # Save and verify
 import io

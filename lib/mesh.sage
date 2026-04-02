@@ -2,13 +2,80 @@ gc_disable()
 # -----------------------------------------
 # mesh.sage - Mesh generation and loading for SageLang
 # Procedural meshes (cube, plane, sphere) and OBJ file loading
-# Vertex format: [px, py, pz, nx, ny, nz, u, v] per vertex (stride 32 bytes)
+# CPU vertex format: [px, py, pz, nx, ny, nz, u, v] per vertex (stride 32 bytes)
+# GPU vertex format: [px, py, pz, nx, ny, nz, u, v, j0, j1, j2, j3, w0, w1, w2, w3]
 # -----------------------------------------
 
 import gpu
 import math
 
 let VERTEX_STRIDE = 8
+let GPU_VERTEX_STRIDE = 16
+let GPU_VERTEX_STRIDE_BYTES = GPU_VERTEX_STRIDE * 4
+let MAX_SKIN_JOINTS = 128
+
+proc _push_identity_matrix(values):
+    let i = 0
+    while i < 16:
+        if i == 0 or i == 5 or i == 10 or i == 15:
+            push(values, 1.0)
+        else:
+            push(values, 0.0)
+        i = i + 1
+
+proc build_skin_palette_uniform_data(joint_palette):
+    let values = []
+    let ji = 0
+    while joint_palette != nil and ji < len(joint_palette) and ji < MAX_SKIN_JOINTS:
+        let mat = joint_palette[ji]
+        if mat != nil and len(mat) == 16:
+            let mi = 0
+            while mi < 16:
+                push(values, mat[mi])
+                mi = mi + 1
+        else:
+            _push_identity_matrix(values)
+        ji = ji + 1
+    while ji < MAX_SKIN_JOINTS:
+        _push_identity_matrix(values)
+        ji = ji + 1
+    return values
+
+proc normalize_mesh_vertices(vertices, vertex_count):
+    if vertices == nil:
+        return []
+    let count = vertex_count
+    if count <= 0:
+        if len(vertices) % GPU_VERTEX_STRIDE == 0:
+            count = len(vertices) / GPU_VERTEX_STRIDE
+        else:
+            count = len(vertices) / VERTEX_STRIDE
+    if len(vertices) == count * GPU_VERTEX_STRIDE:
+        return vertices
+    if len(vertices) != count * VERTEX_STRIDE:
+        return vertices
+    let out = []
+    let vi = 0
+    while vi < count:
+        let base = vi * VERTEX_STRIDE
+        push(out, vertices[base + 0])
+        push(out, vertices[base + 1])
+        push(out, vertices[base + 2])
+        push(out, vertices[base + 3])
+        push(out, vertices[base + 4])
+        push(out, vertices[base + 5])
+        push(out, vertices[base + 6])
+        push(out, vertices[base + 7])
+        push(out, 0.0)
+        push(out, 0.0)
+        push(out, 0.0)
+        push(out, 0.0)
+        push(out, 1.0)
+        push(out, 0.0)
+        push(out, 0.0)
+        push(out, 0.0)
+        vi = vi + 1
+    return out
 
 # ============================================================================
 # Procedural: Unit Cube (-0.5 to 0.5)
@@ -218,7 +285,8 @@ proc sphere_mesh(rings, segments):
 # Returns dict with vbuf, ibuf, index_count
 # ============================================================================
 proc upload_mesh(mesh_dict):
-    let vbuf = gpu.upload_device_local(mesh_dict["vertices"], gpu.BUFFER_VERTEX)
+    let vertices = normalize_mesh_vertices(mesh_dict["vertices"], mesh_dict["vertex_count"])
+    let vbuf = gpu.upload_device_local(vertices, gpu.BUFFER_VERTEX)
 
     # Index data: pack as uint32 little-endian bytes
     let indices = mesh_dict["indices"]
@@ -248,16 +316,17 @@ proc upload_mesh(mesh_dict):
     result["ibuf"] = ibuf
     result["index_count"] = mesh_dict["index_count"]
     result["vertex_count"] = mesh_dict["vertex_count"]
+    result["vertex_stride"] = GPU_VERTEX_STRIDE
     return result
 
 # ============================================================================
 # Standard vertex binding/attribute descriptions for mesh vertex format
-# [px, py, pz, nx, ny, nz, u, v] stride = 32 bytes
+# [px, py, pz, nx, ny, nz, u, v, j0, j1, j2, j3, w0, w1, w2, w3] stride = 64 bytes
 # ============================================================================
 proc mesh_vertex_binding():
     let b = {}
     b["binding"] = 0
-    b["stride"] = 32
+    b["stride"] = GPU_VERTEX_STRIDE_BYTES
     b["rate"] = gpu.INPUT_RATE_VERTEX
     return b
 
@@ -277,7 +346,17 @@ proc mesh_vertex_attribs():
     a2["binding"] = 0
     a2["format"] = gpu.ATTR_VEC2
     a2["offset"] = 24
-    return [a0, a1, a2]
+    let a3 = {}
+    a3["location"] = 3
+    a3["binding"] = 0
+    a3["format"] = gpu.ATTR_VEC4
+    a3["offset"] = 32
+    let a4 = {}
+    a4["location"] = 4
+    a4["binding"] = 0
+    a4["format"] = gpu.ATTR_VEC4
+    a4["offset"] = 48
+    return [a0, a1, a2, a3, a4]
 
 # ============================================================================
 # OBJ File Loading
@@ -419,7 +498,7 @@ proc load_obj(path):
 # Efficient GPU buffer uploads (device-local memory)
 # ============================================================================
 proc upload_mesh_device_local(mesh_data):
-    let verts = mesh_data["vertices"]
+    let verts = normalize_mesh_vertices(mesh_data["vertices"], mesh_data["vertex_count"])
     let indices = mesh_data["indices"]
     let vbuf = gpu.upload_device_local(verts, gpu.BUFFER_VERTEX)
     let ibuf = gpu.upload_device_local(indices, gpu.BUFFER_INDEX)
@@ -429,8 +508,9 @@ proc upload_mesh_device_local(mesh_data):
     let result = {}
     result["vbuf"] = vbuf
     result["ibuf"] = ibuf
-    result["vertex_count"] = len(verts) / 8
+    result["vertex_count"] = len(verts) / GPU_VERTEX_STRIDE
     result["index_count"] = len(indices)
+    result["vertex_stride"] = GPU_VERTEX_STRIDE
     result["device_local"] = true
     return result
 

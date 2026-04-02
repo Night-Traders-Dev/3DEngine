@@ -2,6 +2,7 @@
 # Run: ./run.sh tests/test_render_system.sage
 
 from render_system import create_material_registry, register_material, get_material, build_lit_push_data
+from mesh import normalize_mesh_vertices, build_skin_palette_uniform_data, MAX_SKIN_JOINTS
 
 let pass_count = 0
 let fail_count = 0
@@ -76,6 +77,22 @@ check("lit push includes base color", lit_push[32] == 0.2 and lit_push[35] == 0.
 
 let default_push = build_lit_push_data(mvp, model, nil)
 check("default lit alpha is 1", default_push[35] == 1.0)
+
+# --- Mesh vertex normalization ---
+let static_vertices = [1.0, 2.0, 3.0, 0.0, 1.0, 0.0, 0.25, 0.75]
+let normalized = normalize_mesh_vertices(static_vertices, 1)
+check("normalized mesh expands stride", len(normalized) == 16)
+check("normalized mesh keeps position", normalized[0] == 1.0 and normalized[2] == 3.0)
+check("normalized mesh keeps uv", normalized[6] == 0.25 and normalized[7] == 0.75)
+check("normalized mesh default joints zero", normalized[8] == 0.0 and normalized[11] == 0.0)
+check("normalized mesh default weight uses identity joint", normalized[12] == 1.0 and normalized[15] == 0.0)
+
+# --- Skin uniform packing ---
+let joint_palette = [[1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 2.0, 3.0, 4.0, 1.0]]
+let skin_uniform = build_skin_palette_uniform_data(joint_palette)
+check("skin uniform covers fixed joint budget", len(skin_uniform) == MAX_SKIN_JOINTS * 16)
+check("skin uniform keeps first matrix translation", skin_uniform[12] == 2.0 and skin_uniform[13] == 3.0 and skin_uniform[14] == 4.0)
+check("skin uniform pads remaining joints with identity", skin_uniform[16] == 1.0 and skin_uniform[31] == 1.0)
 
 # --- Results ---
 print ""

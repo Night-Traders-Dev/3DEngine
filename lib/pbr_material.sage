@@ -5,7 +5,34 @@ gc_disable()
 # -----------------------------------------
 
 import gpu
-from mesh import mesh_vertex_binding, mesh_vertex_attribs
+from mesh import mesh_vertex_binding, mesh_vertex_attribs, build_skin_palette_uniform_data
+from mesh import MAX_SKIN_JOINTS
+
+let SKIN_UBO_FLOATS = MAX_SKIN_JOINTS * 16
+let SKIN_UBO_BYTES = SKIN_UBO_FLOATS * 4
+
+proc _create_skin_binding():
+    let b0 = {}
+    b0["binding"] = 0
+    b0["type"] = gpu.DESC_UNIFORM_BUFFER
+    b0["stage"] = gpu.STAGE_VERTEX
+    b0["count"] = 1
+    let layout = gpu.create_descriptor_layout([b0])
+    let ps0 = {}
+    ps0["type"] = gpu.DESC_UNIFORM_BUFFER
+    ps0["count"] = 1
+    let pool = gpu.create_descriptor_pool(1, [ps0])
+    let desc_set = gpu.allocate_descriptor_set(pool, layout)
+    let ubo = gpu.create_uniform_buffer(SKIN_UBO_BYTES)
+    gpu.update_descriptor(desc_set, 0, gpu.DESC_UNIFORM_BUFFER, ubo)
+    gpu.update_uniform(ubo, build_skin_palette_uniform_data(nil))
+    return {"layout": layout, "pool": pool, "desc_set": desc_set, "ubo": ubo}
+
+proc _update_skin_binding(binding, joint_palette):
+    if binding == nil or dict_has(binding, "ubo") == false:
+        return nil
+    gpu.update_uniform(binding["ubo"], build_skin_palette_uniform_data(joint_palette))
+    return binding["ubo"]
 
 # ============================================================================
 # PBR Material
@@ -96,8 +123,9 @@ proc create_pbr_renderer(render_pass, scene_desc_layout):
     b2["count"] = 1
     let mat_layout = gpu.create_descriptor_layout([b0, b1, b2])
 
+    let skin_binding = _create_skin_binding()
     let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
-    let pipe_layout = gpu.create_pipeline_layout([scene_desc_layout, mat_layout], 176, stage_flags)
+    let pipe_layout = gpu.create_pipeline_layout([scene_desc_layout, mat_layout, skin_binding["layout"]], 176, stage_flags)
 
     let cfg = {}
     cfg["layout"] = pipe_layout
@@ -126,6 +154,10 @@ proc create_pbr_renderer(render_pass, scene_desc_layout):
     pbr["pipe_layout"] = pipe_layout
     pbr["mat_layout"] = mat_layout
     pbr["pool"] = pool
+    pbr["skin_layout"] = skin_binding["layout"]
+    pbr["skin_pool"] = skin_binding["pool"]
+    pbr["skin_desc_set"] = skin_binding["desc_set"]
+    pbr["skin_ubo"] = skin_binding["ubo"]
     pbr["vert"] = vert
     pbr["frag"] = frag
     print "PBR renderer initialized"
@@ -183,11 +215,19 @@ proc build_pbr_push_data(mvp, model, mat_data):
 # Draw mesh with PBR material
 # ============================================================================
 proc draw_pbr(cmd, pbr_renderer, mesh_gpu, mvp, model, scene_desc_set, mat_data):
+    draw_pbr_skinned(cmd, pbr_renderer, mesh_gpu, mvp, model, scene_desc_set, mat_data, nil)
+
+proc draw_pbr_skinned(cmd, pbr_renderer, mesh_gpu, mvp, model, scene_desc_set, mat_data, skin_draw):
     gpu.cmd_bind_graphics_pipeline(cmd, pbr_renderer["pipeline"])
     let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
+    let joint_palette = nil
+    if skin_draw != nil and dict_has(skin_draw, "joint_palette"):
+        joint_palette = skin_draw["joint_palette"]
+    _update_skin_binding(pbr_renderer, joint_palette)
     gpu.cmd_bind_descriptor_set(cmd, pbr_renderer["pipe_layout"], 0, scene_desc_set)
     if mat_data["desc_set"] >= 0:
         gpu.cmd_bind_descriptor_set(cmd, pbr_renderer["pipe_layout"], 1, mat_data["desc_set"])
+    gpu.cmd_bind_descriptor_set(cmd, pbr_renderer["pipe_layout"], 2, pbr_renderer["skin_desc_set"])
     let push_data = build_pbr_push_data(mvp, model, mat_data)
     gpu.cmd_push_constants(cmd, pbr_renderer["pipe_layout"], stage_flags, push_data)
     gpu.cmd_bind_vertex_buffer(cmd, mesh_gpu["vbuf"])
