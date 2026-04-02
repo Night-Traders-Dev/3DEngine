@@ -31,6 +31,7 @@ from player_controller import player_view_matrix, player_eye_position
 from player_controller import player_projection, player_forward
 from game_loop import create_time_state, update_time
 from font import create_font_renderer, load_font, begin_text, add_text, flush_text
+from ui_renderer import create_ui_renderer, draw_ui
 from json import cJSON_Parse, cJSON_Print, cJSON_Delete, cJSON_FromSage, cJSON_ToSage
 from voxel_world import create_voxel_world
 from voxel_world import voxel_block_name, voxel_block_surface, voxel_block_world_center, raycast_voxel_world
@@ -42,7 +43,8 @@ from voxel_world import voxel_world_to_sage, voxel_world_from_sage
 from voxel_world import default_voxel_recipes, try_craft_voxel_recipe
 from voxel_world import save_voxel_world_chunks, load_voxel_world_chunks, voxel_visible_draws
 from voxel_world import voxel_chunk_coords_world, voxel_chunk_size
-from voxel_world import ensure_voxel_generated_radius, voxel_generated_chunk_count, voxel_palette_ids
+from voxel_world import ensure_voxel_generated_radius, voxel_generated_chunk_count
+from voxel_hud import create_voxel_hud, update_voxel_hud
 
 print "=== Forge Engine - Voxel Template Sandbox ==="
 
@@ -88,6 +90,7 @@ catch e:
 # ============================================================================
 let font_r = create_font_renderer(r["render_pass"])
 load_font(font_r, "ui", "assets/DejaVuSans.ttf", 18.0)
+let ui_renderer = create_ui_renderer(r["render_pass"])
 
 # ============================================================================
 # Shared voxel world
@@ -108,6 +111,8 @@ voxel_inventory_add(inventory, 4, 24)
 voxel_inventory_add(inventory, 5, 24)
 voxel_inventory_add(inventory, 6, 0)
 let recipes = default_voxel_recipes()
+let voxel_hud = create_voxel_hud()
+let inventory_open = [false]
 
 # ============================================================================
 # Input
@@ -118,6 +123,7 @@ bind_action(inp, "quit", [gpu.KEY_Q])
 bind_action(inp, "toggle_capture", [gpu.KEY_ESCAPE])
 bind_action(inp, "noclip", [gpu.KEY_TAB])
 bind_action(inp, "sprint", [gpu.KEY_SHIFT])
+bind_action(inp, "toggle_inventory", [gpu.KEY_O])
 
 # ============================================================================
 # Player
@@ -139,7 +145,7 @@ player["grounded"] = true
 # ============================================================================
 let selected_block = [1]
 let target_hit = nil
-let status_line = ["C save  V load  Mine blocks to refill inventory"]
+let status_line = ["O inventory  C save  V load  Mine blocks to refill inventory"]
 let status_timer = [4.0]
 
 proc _highlight_surface():
@@ -195,7 +201,7 @@ let running = true
 print ""
 print "Controls:"
 print "  WASD = Move  Mouse = Look  ESC = Capture mouse  TAB = Noclip"
-print "  Left Mouse = Break block  Right Mouse = Place block  1-5 = Palette  Z = Planks  X = Craft planks"
+print "  Left Mouse = Break block  Right Mouse = Place block  1-5 = Palette  Z = Planks  X = Craft planks  O = Inventory"
 print ""
 
 while running:
@@ -211,6 +217,13 @@ while running:
     if action_just_pressed(inp, "quit"):
         running = false
         continue
+
+    if action_just_pressed(inp, "toggle_inventory"):
+        inventory_open[0] = inventory_open[0] == false
+        if inventory_open[0]:
+            _set_status("Inventory opened")
+        else:
+            _set_status("Inventory closed")
 
     if gpu.key_just_pressed(gpu.KEY_1):
         selected_block[0] = 1
@@ -345,6 +358,9 @@ while running:
     let vp = mat4_mul(proj, view)
     let identity = mat4_identity()
     let world_mvp = mat4_mul(vp, identity)
+    let sw = r["width"] + 0.0
+    let sh = r["height"] + 0.0
+    update_voxel_hud(voxel_hud, voxel, inventory, selected_block[0], inventory_open[0], recipes, sw, sh)
 
     draw_sky(sky, cmd, view, aspect, radians(player["fov"]), ts["total"])
 
@@ -361,33 +377,66 @@ while running:
         let highlight_mvp = mat4_mul(vp, highlight_model)
         draw_mesh_lit_surface_controlled(cmd, lit_mat, cube_gpu, highlight_mvp, highlight_model, ls["desc_set"], _highlight_surface(), false)
 
-    let sw = r["width"] + 0.0
-    let sh = r["height"] + 0.0
     let player_chunk = voxel_chunk_coords_world(voxel, player["position"][0], player["position"][1], player["position"][2])
+    draw_ui(ui_renderer, cmd, voxel_hud["root"], sw, sh)
     begin_text(font_r)
     add_text(font_r, "ui", "VOXEL TEMPLATE SANDBOX", 18.0, 18.0, 0.94, 0.96, 0.98, 1.0)
-    add_text(font_r, "ui", "LMB break  RMB place  1-5 palette  Z planks  X craft  C save  V load  TAB noclip  ESC mouse", 18.0, 42.0, 0.70, 0.74, 0.80, 1.0)
-    add_text(font_r, "ui", "Selected: [" + str(selected_block[0]) + "] " + voxel_block_name(voxel, selected_block[0]) + " x" + str(voxel_inventory_count(inventory, selected_block[0])) + " | Solid blocks: " + str(voxel["solid_count"]), 18.0, sh - 44.0, 0.90, 0.92, 0.95, 1.0)
-    add_text(font_r, "ui", "Chunk: " + str(player_chunk["x"]) + ", " + str(player_chunk["y"]) + ", " + str(player_chunk["z"]) + " | Chunk size: " + str(voxel_chunk_size(voxel)) + " | Generated chunks: " + str(voxel_generated_chunk_count(voxel)) + " | Visible chunk draws: " + str(len(draws)), 18.0, sh - 118.0, 0.72, 0.84, 0.92, 1.0)
-    let palette_ids = voxel_palette_ids(voxel)
-    let px = 18.0
-    let pi = 0
-    while pi < len(palette_ids):
-        let block_id = palette_ids[pi]
-        let palette_surface = voxel_block_surface(voxel, block_id)
-        let color = palette_surface["albedo"]
-        let alpha = 0.72
-        if selected_block[0] == block_id:
-            alpha = 1.0
-        add_text(font_r, "ui", "[" + _palette_slot_label(block_id) + "] " + voxel_block_name(voxel, block_id) + " x" + str(voxel_inventory_count(inventory, block_id)), px, sh - 144.0, color[0], color[1], color[2], alpha)
-        px = px + 154.0
-        pi = pi + 1
+    add_text(font_r, "ui", "LMB break  RMB place  1-5 palette  Z planks  X craft  O inventory  C save  V load  TAB noclip  ESC mouse", 18.0, 42.0, 0.70, 0.74, 0.80, 1.0)
+    add_text(font_r, "ui", "Selected: [" + str(selected_block[0]) + "] " + voxel_block_name(voxel, selected_block[0]) + " x" + str(voxel_inventory_count(inventory, selected_block[0])) + " | Solid blocks: " + str(voxel["solid_count"]), 18.0, 66.0, 0.90, 0.92, 0.95, 1.0)
+    add_text(font_r, "ui", "Chunk: " + str(player_chunk["x"]) + ", " + str(player_chunk["y"]) + ", " + str(player_chunk["z"]) + " | Chunk size: " + str(voxel_chunk_size(voxel)) + " | Generated chunks: " + str(voxel_generated_chunk_count(voxel)) + " | Visible chunk draws: " + str(len(draws)), 18.0, 90.0, 0.72, 0.84, 0.92, 1.0)
     if target_hit != nil:
-        add_text(font_r, "ui", "Target: " + voxel_block_name(voxel, target_hit["block_id"]) + " @ " + str(target_hit["x"]) + ", " + str(target_hit["y"]) + ", " + str(target_hit["z"]), 18.0, sh - 70.0, 0.86, 0.84, 0.72, 1.0)
+        add_text(font_r, "ui", "Target: " + voxel_block_name(voxel, target_hit["block_id"]) + " @ " + str(target_hit["x"]) + ", " + str(target_hit["y"]) + ", " + str(target_hit["z"]), 18.0, 114.0, 0.86, 0.84, 0.72, 1.0)
     else:
-        add_text(font_r, "ui", "Target: none", 18.0, sh - 70.0, 0.55, 0.58, 0.63, 1.0)
+        add_text(font_r, "ui", "Target: none", 18.0, 114.0, 0.55, 0.58, 0.63, 1.0)
     if status_timer[0] > 0.0 and status_line[0] != "":
-        add_text(font_r, "ui", status_line[0], 18.0, sh - 96.0, 0.76, 0.90, 0.74, 1.0)
+        add_text(font_r, "ui", status_line[0], 18.0, 138.0, 0.76, 0.90, 0.74, 1.0)
+
+    let hs = voxel_hud["hotbar_slots"]
+    let hi = 0
+    while hi < len(hs):
+        let slot = hs[hi]
+        if slot["panel"]["visible"]:
+            let sx = slot["panel"]["computed_x"]
+            let sy = slot["panel"]["computed_y"]
+            let label_alpha = 0.78
+            if slot["selected"]:
+                label_alpha = 1.0
+            add_text(font_r, "ui", _palette_slot_label(slot["block_id"]), sx + 4.0, sy + 2.0, 0.96, 0.98, 1.0, label_alpha)
+            add_text(font_r, "ui", str(slot["count"]), sx + 19.0, sy + 28.0, 0.92, 0.94, 0.97, label_alpha)
+        hi = hi + 1
+
+    let craft_panel = voxel_hud["craft_panel"]
+    let craft_recipe = voxel_hud["craft_recipe"]
+    add_text(font_r, "ui", "CRAFTING", craft_panel["computed_x"] + 14.0, craft_panel["computed_y"] + 10.0, 0.94, 0.96, 0.98, 1.0)
+    if craft_recipe != nil:
+        let craft_ready_alpha = 0.82
+        let craft_ready_r = 0.90
+        let craft_ready_g = 0.82
+        let craft_ready_b = 0.36
+        if voxel_hud["craft_ready"]:
+            craft_ready_alpha = 1.0
+            craft_ready_r = 0.42
+            craft_ready_g = 0.88
+            craft_ready_b = 0.46
+        add_text(font_r, "ui", voxel_block_name(voxel, craft_recipe["input_block"]), craft_panel["computed_x"] + 14.0, craft_panel["computed_y"] + 88.0, 0.82, 0.86, 0.90, 1.0)
+        add_text(font_r, "ui", voxel_block_name(voxel, craft_recipe["output_block"]), craft_panel["computed_x"] + 166.0, craft_panel["computed_y"] + 88.0, 0.82, 0.86, 0.90, 1.0)
+        add_text(font_r, "ui", str(voxel_inventory_count(inventory, craft_recipe["input_block"])) + "/" + str(craft_recipe["input_count"]) + "  X Craft", craft_panel["computed_x"] + 76.0, craft_panel["computed_y"] + 44.0, craft_ready_r, craft_ready_g, craft_ready_b, craft_ready_alpha)
+
+    if inventory_open[0]:
+        let inv_panel = voxel_hud["inventory_panel"]
+        add_text(font_r, "ui", "BACKPACK [O]", inv_panel["computed_x"] + 12.0, inv_panel["computed_y"] + 8.0, 0.94, 0.96, 0.98, 1.0)
+        let rows = voxel_hud["inventory_rows"]
+        let ri = 0
+        while ri < len(rows):
+            let row = rows[ri]
+            if row["panel"]["visible"]:
+                let rx = row["panel"]["computed_x"]
+                let ry = row["panel"]["computed_y"]
+                let row_surface = voxel_block_surface(voxel, row["block_id"])
+                let row_color = row_surface["albedo"]
+                add_text(font_r, "ui", row["label"], rx + 40.0, ry + 4.0, row_color[0], row_color[1], row_color[2], 1.0)
+                add_text(font_r, "ui", "x" + str(row["count"]), rx + 178.0, ry + 4.0, 0.92, 0.94, 0.97, 1.0)
+            ri = ri + 1
     add_text(font_r, "ui", "+", sw / 2.0 - 5.0, sh / 2.0 - 12.0, 1.0, 1.0, 1.0, 0.95)
     flush_text(font_r, cmd, sw, sh)
 

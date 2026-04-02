@@ -1,6 +1,6 @@
 # Forge Engine
 
-A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Features a project launcher with game templates, a visual editor with floating windows, TrueType font rendering, PBR lighting, quaternion math, a centralized UI theme system, and 91 engine modules spanning rendering, physics, animation, AI, networking, and content pipelines.
+A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Features a project launcher with game templates, a visual editor with floating windows, TrueType font rendering, PBR lighting, quaternion math, a centralized UI theme system, and 92 engine modules spanning rendering, physics, animation, AI, networking, and content pipelines.
 
 For the complete engine guide, see **[GUIDE.md](GUIDE.md)**. For release numbering rules, see **[VERSIONING.md](VERSIONING.md)**.
 
@@ -16,7 +16,7 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 # Run the voxel sandbox demo
 ./run.sh examples/demo_voxel.sage
 
-# Run tests (54 suites, 1,645 checks)
+# Run tests (55 suites, 1,662 checks)
 ./tests/run_all.sh
 
 # Build distributable package
@@ -36,7 +36,7 @@ When you launch the editor, a **Project Browser** appears first:
 - **Preview area** — Shows selected template details and included features
 - **Keyboard** — Arrow keys to navigate, Enter to create, ESC to exit
 
-The voxel template is now backed by a real starter path: the editor seeds a first-class voxel world actor when you choose `Voxel`, and the shared sandbox gameplay loop lives in [examples/demo_voxel.sage](/home/kraken/Devel/3DEngine/examples/demo_voxel.sage) with inventory-backed mining/placement, a first crafting step for planks, streamed chunk draws around the player, face-aware block colors instead of flat grayscale voxel batches, and chunked sandbox save/load.
+The voxel template is now backed by a real starter path: the editor seeds a first-class voxel world actor when you choose `Voxel`, and the shared sandbox gameplay loop lives in [examples/demo_voxel.sage](/home/kraken/Devel/3DEngine/examples/demo_voxel.sage) with inventory-backed mining/placement, a first crafting step for planks, streamed chunk draws around the player, face-aware block colors instead of flat grayscale voxel batches, a real hotbar/backpack/crafting overlay, and chunked sandbox save/load.
 
 ## Editor
 
@@ -56,7 +56,7 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 - **Directional shadows** — Dedicated sun shadow prepass in the editor, with texel-snapped light matrices to reduce shimmer and imported skinned meshes participating in the same shadow depth path as static meshes
 - **Render flags** — Mesh visibility plus `cast_shadows` / `receive_shadows` now affect the live editor viewport, shadow prepass, and exported runtime, with quick toggles in the Tools/context menus
 - **Voxel world actor** — The `Voxel` launcher path now seeds a first-class voxel world entity in the editor, and selected voxel worlds support inline brush inspection plus `SHIFT+LMB/RMB` block edits with `SHIFT+Z/X` brush cycling
-- **Voxel sandbox loop** — The shared voxel template now supports inventory-backed mining/placement, a first crafted plank block, lazy chunk generation, incremental streamed chunk uploads, face-aware top/side/bottom block colors, and chunked JSON save/load in the playable sandbox path
+- **Voxel sandbox loop** — The shared voxel template now supports inventory-backed mining/placement, a first crafted plank block, lazy chunk generation, incremental streamed chunk uploads, face-aware top/side/bottom block colors, a reusable Minecraft-style hotbar/backpack/crafting HUD, and chunked JSON save/load in the playable sandbox path
 - **Prefab system** — Save entities as reusable .prefab.json templates
 - **Undo/Redo** — CTRL+Z / CTRL+Y with full command history (100 levels)
 - **Modal dialogs** — Quit confirmation, About dialog
@@ -124,7 +124,7 @@ forge-engine/
 ├── run.sh                   # Script runner
 ├── build_dist.sh            # Distribution builder
 ├── VERSION                  # Single source of truth for engine version
-├── lib/                     # Engine modules (91 files)
+├── lib/                     # Engine modules (92 files)
 │   ├── ui_core.sage         # Centralized theme + widget system
 │   ├── ui_widgets.sage      # Advanced widgets (sliders, checkboxes, dropdowns, text fields)
 │   ├── ui_window.sage       # Floating windows, menus, modals
@@ -136,7 +136,7 @@ forge-engine/
 │   └── ...                  # 80+ more engine modules
 ├── shaders/                 # GLSL shader pairs + SPIR-V
 ├── examples/                # 9 demo programs
-├── tests/                   # 54 suites, 1,645 checks
+├── tests/                   # 55 suites, 1,662 checks
 ├── assets/                  # Fonts, models, scenes, prefabs
 │   └── prefabs/             # Saved entity templates
 └── build/                   # Distribution output
@@ -168,7 +168,7 @@ forge-engine/
 `tween` (18 easings) · `animation` (skeletal, keyframes, blend trees, state machine, two-bone IK solver, animation events) · `navigation` (A* pathfinding, steering: seek/flee/arrive/wander/avoid) · `behavior_tree` (action/condition/sequence/selector/inverter/repeater/wait)
 
 ### UI Framework
-`ui_core` (**centralized theme system** with 40+ named colors, spacing constants, font sizing, border/shadow helpers, hover/active/disabled/pressed widget states, focus rings) · `ui_renderer` (batched quads) · `ui_widgets` (buttons, sliders, checkboxes, dropdowns, text input fields, number fields, tree views, scroll panels, section headers, **visible scrollbars**, **per-widget quad collection**) · `ui_window` (floating windows, context menus, modal dialogs, snap-to-edge) · `font` (TrueType via stb_truetype) · `launch_screen` (project browser with templates) · `hud` (health bar with 4-stage color transition, gapped crosshair, themed minimap, score display) · `menu` (themed pause/main/game-over menus with visual hierarchy, button styles, fade animations) · `inspector` (entity property inspector with accent bars, color-coded booleans)
+`ui_core` (**centralized theme system** with 40+ named colors, spacing constants, font sizing, border/shadow helpers, hover/active/disabled/pressed widget states, focus rings) · `ui_renderer` (batched quads) · `ui_widgets` (buttons, sliders, checkboxes, dropdowns, text input fields, number fields, tree views, scroll panels, section headers, **visible scrollbars**, **per-widget quad collection**) · `ui_window` (floating windows, context menus, modal dialogs, snap-to-edge) · `font` (TrueType via stb_truetype) · `launch_screen` (project browser with templates) · `hud` (health bar with 4-stage color transition, gapped crosshair, themed minimap, score display) · `voxel_hud` (**shared voxel hotbar/backpack/crafting HUD**) · `menu` (themed pause/main/game-over menus with visual hierarchy, button styles, fade animations) · `inspector` (entity property inspector with accent bars, color-coded booleans)
 
 ### World
 `terrain` (heightmap, procedural noise) · `water` (animated waves) · `foliage` (scatter rules) · `day_night` (sun cycle) · `scene` (scene graph, level streaming) · `voxel_world` (**shared voxel template terrain generation**, **exposed-face meshing**, **face-aware top/side/bottom material buckets**, **chunk-aware mesh builds**, **incremental streamed chunk draw cache**, **zero-face bucket culling**, **block picking/place-break**, **simple player collision helpers**, **chunked JSON world save/load**, **inventory helpers**, **basic crafting recipes**)
@@ -210,14 +210,14 @@ forge-engine/
 ./run.sh examples/demo_ai.sage           # AI pathfinding + behavior trees
 ./run.sh examples/demo_ui.sage           # HUD + menus
 ./run.sh examples/demo_world.sage        # Terrain + water + day/night
-./run.sh examples/demo_voxel.sage        # Minecraft-style voxel sandbox slice with inventory + crafting + colored block faces + streamed chunk bootstrap + chunked save/load
+./run.sh examples/demo_voxel.sage        # Minecraft-style voxel sandbox slice with hotbar/backpack HUD + inventory + crafting + colored block faces + streamed chunk bootstrap + chunked save/load
 ./run.sh examples/demo_particles.sage    # Particles + VFX
 ```
 
 ## Testing
 
 ```bash
-./tests/run_all.sh            # 54 suites, 1,645 individual checks
+./tests/run_all.sh            # 55 suites, 1,662 individual checks
 ./run.sh tests/test_ecs.sage  # Run individual suite
 ```
 
@@ -229,8 +229,8 @@ The suite now includes dedicated renderer sanity checks for startup helpers such
 # Build a self-contained distributable package
 ./build_dist.sh
 
-# Output: build/dist/ (3.9MB extracted)
-# Contains: sage runtime + 110 .sage modules + VERSION + shaders + assets
+# Output: build/dist/ (4.1MB extracted)
+# Contains: sage runtime + 111 .sage modules + VERSION + shaders + assets
 
 # Run from dist:
 cd build/dist && ./forge_engine
