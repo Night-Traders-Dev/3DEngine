@@ -72,11 +72,26 @@ let synthetic_asset = {
         {"name": "MeshNode", "mesh_index": 0, "position": vec3(0.0, 2.0, 0.0), "rotation": [1.0, 0.0, 0.0, 0.0], "scale": vec3(1.0, 1.0, 1.0), "children": [], "parent": 0}
     ]
 }
-let draws = imported_asset_draws(synthetic_asset)
+let draws = imported_asset_draws(synthetic_asset, nil)
 check("hierarchy draw entry built", len(draws) == 1)
 check("hierarchy draw keeps gpu mesh", draws[0]["gpu_mesh"] == 11)
 check("hierarchy world translation x", draws[0]["model"][12] > 0.9)
 check("hierarchy world translation y", draws[0]["model"][13] > 1.9)
+
+let animated_asset = {
+    "gpu_meshes": [{"gpu_mesh": 21, "material_index": 0, "mesh_index": 0}],
+    "nodes": [
+        {"name": "AnimatedMesh", "mesh_index": 0, "position": vec3(0.0, 0.0, 0.0), "rotation": [1.0, 0.0, 0.0, 0.0], "scale": vec3(1.0, 1.0, 1.0), "children": [], "parent": -1}
+    ],
+    "animations": [
+        {"name": "Bounce", "duration": 1.0, "looping": true, "channels": [
+            {"node": 0, "path": "translation", "interpolation": "LINEAR", "times": [0.0, 1.0], "values": [vec3(0.0, 0.0, 0.0), vec3(0.0, 3.0, 0.0)]}
+        ]}
+    ]
+}
+let animated_draws = imported_asset_draws(animated_asset, {"clip": "Bounce", "playing": true, "time": 0.5, "speed": 1.0})
+check("animated draw entry built", len(animated_draws) == 1)
+check("animated draw samples translation", animated_draws[0]["model"][13] > 1.4)
 
 print ""
 print "Results: " + str(p) + " passed, " + str(f) + " failed"

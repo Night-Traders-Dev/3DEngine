@@ -63,7 +63,7 @@ v_comp["angular"] = vec3(0.0, 0.5, 0.0)
 add_component(w, e2, "velocity", v_comp)
 add_component(w, e2, "health", HealthComponent(50.0))
 add_component(w, e2, "imported_asset", {"source": "assets/Box.gltf", "name": "Box.gltf", "gpu_meshes": [{"gpu_mesh": 1}], "materials": [{"name": "Default"}]})
-add_component(w, e2, "animation_state", {"clip": "Idle", "playing": true})
+add_component(w, e2, "animation_state", {"clip": "Idle", "playing": true, "time": 2.0, "speed": 0.5})
 add_component(w, e2, "asset_ref", {"kind": "texture", "path": "assets/text_test.png"})
 add_tag(w, e2, "enemy")
 add_tag(w, e2, "shootable")
@@ -154,6 +154,8 @@ while i < len(all_eids):
             if has_component(w2, eid, "animation_state"):
                 let bas = get_component(w2, eid, "animation_state")
                 check("box animation clip", bas["clip"] == "Idle")
+                check("box animation time", approx(bas["time"], 2.0))
+                check("box animation speed", approx(bas["speed"], 0.5))
             check("box has asset ref", has_component(w2, eid, "asset_ref"))
             if has_component(w2, eid, "asset_ref"):
                 let bar = get_component(w2, eid, "asset_ref")

@@ -285,7 +285,13 @@ proc generate_game_script(world, scene_name, settings):
             let clip_name = ""
             if dict_has(anim, "clip"):
                 clip_name = anim["clip"]
-            push(L, "add_component(world, " + v + ", " + q + "animation_state" + q + ", {" + q + "clip" + q + ": " + q + clip_name + q + ", " + q + "playing" + q + ": " + playing + "})")
+            let anim_time = "0.0"
+            if dict_has(anim, "time"):
+                anim_time = _fmt(anim["time"])
+            let anim_speed = "1.0"
+            if dict_has(anim, "speed"):
+                anim_speed = _fmt(anim["speed"])
+            push(L, "add_component(world, " + v + ", " + q + "animation_state" + q + ", {" + q + "clip" + q + ": " + q + clip_name + q + ", " + q + "playing" + q + ": " + playing + ", " + q + "time" + q + ": " + anim_time + ", " + q + "speed" + q + ": " + anim_speed + "})")
         push(L, "")
         ei = ei + 1
 
@@ -354,7 +360,18 @@ proc generate_game_script(world, scene_name, settings):
         push(L, "        let t = get_component(world, eid, " + q + "transform" + q + ")")
         push(L, "        let asset = get_component(world, eid, " + q + "imported_asset" + q + ")")
         push(L, "        let model = transform_to_matrix(t)")
-        push(L, "        let draws = imported_asset_draws(asset)")
+        push(L, "        let anim_state = nil")
+        push(L, "        if has_component(world, eid, " + q + "animation_state" + q + "):")
+        push(L, "            anim_state = get_component(world, eid, " + q + "animation_state" + q + ")")
+        push(L, "            let anim_speed = 1.0")
+        push(L, "            if dict_has(anim_state, " + q + "speed" + q + "):")
+        push(L, "                anim_speed = anim_state[" + q + "speed" + q + "]")
+        push(L, "            if dict_has(anim_state, " + q + "playing" + q + ") and anim_state[" + q + "playing" + q + "]:")
+        push(L, "                let anim_time = 0.0")
+        push(L, "                if dict_has(anim_state, " + q + "time" + q + "):")
+        push(L, "                    anim_time = anim_state[" + q + "time" + q + "]")
+        push(L, "                anim_state[" + q + "time" + q + "] = anim_time + dt * anim_speed")
+        push(L, "        let draws = imported_asset_draws(asset, anim_state)")
         push(L, "        let gi = 0")
         push(L, "        while gi < len(draws):")
         push(L, "            let gm = draws[gi]")

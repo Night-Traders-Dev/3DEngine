@@ -6,9 +6,11 @@ gc_disable()
 
 import gpu
 import io
+import math
 import gltf_import
 from mesh import upload_mesh
-from math3d import vec3, quat_to_matrix, mat4_identity, mat4_translate, mat4_scale, mat4_mul
+from math3d import vec3, v3_lerp, quat_to_matrix, quat_slerp
+from math3d import mat4_identity, mat4_translate, mat4_scale, mat4_mul
 
 # ============================================================================
 # Import a glTF file (mesh + materials + animations)
@@ -146,8 +148,14 @@ proc import_gltf(path):
     asset["nodes"] = node_list
 
     # Animations
-    asset["animations"] = gltf["animations"]
-    asset["animation_count"] = gltf["animation_count"]
+    asset["animations"] = []
+    asset["animation_count"] = 0
+    if scene_gltf != nil and dict_has(scene_gltf, "animations"):
+        asset["animations"] = scene_gltf["animations"]
+        asset["animation_count"] = len(asset["animations"])
+    else:
+        asset["animations"] = gltf["animations"]
+        asset["animation_count"] = gltf["animation_count"]
 
     # Stats
     asset["mesh_count"] = len(gpu_meshes)
@@ -157,36 +165,179 @@ proc import_gltf(path):
     print "Imported: " + path + " (" + str(len(gpu_meshes)) + " meshes, " + str(len(mat_list)) + " materials)"
     return asset
 
-proc imported_node_local_matrix(node):
+proc _imported_node_pose(node, override_pose):
+    let pose = {}
+    pose["position"] = vec3(0.0, 0.0, 0.0)
+    pose["scale"] = vec3(1.0, 1.0, 1.0)
+    pose["rotation"] = [1.0, 0.0, 0.0, 0.0]
+    pose["matrix"] = nil
+    if node != nil:
+        if dict_has(node, "position"):
+            pose["position"] = node["position"]
+        if dict_has(node, "scale"):
+            pose["scale"] = node["scale"]
+        if dict_has(node, "rotation"):
+            pose["rotation"] = node["rotation"]
+        if dict_has(node, "matrix") and node["matrix"] != nil:
+            pose["matrix"] = node["matrix"]
+    if override_pose != nil:
+        if dict_has(override_pose, "position"):
+            pose["position"] = override_pose["position"]
+        if dict_has(override_pose, "scale"):
+            pose["scale"] = override_pose["scale"]
+        if dict_has(override_pose, "rotation"):
+            pose["rotation"] = override_pose["rotation"]
+        if dict_has(override_pose, "matrix"):
+            pose["matrix"] = override_pose["matrix"]
+    return pose
+
+proc imported_node_local_matrix(node, override_pose):
     if node == nil:
         return mat4_identity()
-    if dict_has(node, "matrix") and node["matrix"] != nil and len(node["matrix"]) == 16:
-        return node["matrix"]
-    let pos = vec3(0.0, 0.0, 0.0)
-    let scl = vec3(1.0, 1.0, 1.0)
-    let rot = [1.0, 0.0, 0.0, 0.0]
-    if dict_has(node, "position"):
-        pos = node["position"]
-    if dict_has(node, "scale"):
-        scl = node["scale"]
-    if dict_has(node, "rotation"):
-        rot = node["rotation"]
+    let pose = _imported_node_pose(node, override_pose)
+    if pose["matrix"] != nil and len(pose["matrix"]) == 16:
+        return pose["matrix"]
+    let pos = pose["position"]
+    let scl = pose["scale"]
+    let rot = pose["rotation"]
     return mat4_mul(mat4_translate(pos[0], pos[1], pos[2]), mat4_mul(quat_to_matrix(rot), mat4_scale(scl[0], scl[1], scl[2])))
 
-proc _imported_node_world(asset, node_index, cache):
+proc _imported_node_world(asset, node_index, cache, overrides):
     let key = str(node_index)
     if dict_has(cache, key):
         return cache[key]
     let node = asset["nodes"][node_index]
-    let local = imported_node_local_matrix(node)
+    let override_pose = nil
+    if overrides != nil and dict_has(overrides, key):
+        override_pose = overrides[key]
+    let local = imported_node_local_matrix(node, override_pose)
     let world = local
     if dict_has(node, "parent") and node["parent"] >= 0:
-        let parent_world = _imported_node_world(asset, node["parent"], cache)
+        let parent_world = _imported_node_world(asset, node["parent"], cache, overrides)
         world = mat4_mul(parent_world, local)
     cache[key] = world
     return world
 
-proc imported_asset_draws(asset):
+proc _normalized_clip_name(clip_name):
+    if clip_name == nil:
+        return ""
+    let sep = " :: "
+    let last = -1
+    let i = 0
+    while i <= len(clip_name) - len(sep):
+        if clip_name[i] == " " and clip_name[i + 1] == ":" and clip_name[i + 2] == ":" and clip_name[i + 3] == " ":
+            last = i
+        i = i + 1
+    if last < 0:
+        return clip_name
+    let out = ""
+    i = last + len(sep)
+    while i < len(clip_name):
+        out = out + clip_name[i]
+        i = i + 1
+    return out
+
+proc resolve_imported_animation(asset, clip_name):
+    if asset == nil or dict_has(asset, "animations") == false or len(asset["animations"]) == 0:
+        return nil
+    let requested = _normalized_clip_name(clip_name)
+    if requested != "":
+        let i = 0
+        while i < len(asset["animations"]):
+            let anim = asset["animations"][i]
+            if dict_has(anim, "name") and anim["name"] == requested:
+                return anim
+            i = i + 1
+    return asset["animations"][0]
+
+proc _animation_sample_time(anim, animation_state):
+    let sample_time = 0.0
+    if animation_state != nil and dict_has(animation_state, "time"):
+        sample_time = animation_state["time"]
+    let duration = 0.0
+    if anim != nil and dict_has(anim, "duration"):
+        duration = anim["duration"]
+    let looping = true
+    if anim != nil and dict_has(anim, "looping"):
+        looping = anim["looping"]
+    if animation_state != nil and dict_has(animation_state, "looping"):
+        looping = animation_state["looping"]
+    if duration > 0.0001:
+        if looping:
+            sample_time = sample_time - math.floor(sample_time / duration) * duration
+        else:
+            if sample_time < 0.0:
+                sample_time = 0.0
+            if sample_time > duration:
+                sample_time = duration
+    return sample_time
+
+proc _sample_imported_channel(channel, sample_time):
+    if channel == nil or dict_has(channel, "times") == false or dict_has(channel, "values") == false:
+        return nil
+    let times = channel["times"]
+    let values = channel["values"]
+    if len(times) == 0 or len(values) == 0:
+        return nil
+    if len(times) == 1 or sample_time <= times[0]:
+        return values[0]
+    let last_index = len(times) - 1
+    if sample_time >= times[last_index]:
+        if last_index < len(values):
+            return values[last_index]
+        return values[len(values) - 1]
+    let i = 0
+    while i < len(times) - 1:
+        let ta = times[i]
+        let tb = times[i + 1]
+        if sample_time <= tb:
+            let t = 0.0
+            let dt = tb - ta
+            if dt > 0.000001:
+                t = (sample_time - ta) / dt
+            if t < 0.0:
+                t = 0.0
+            if t > 1.0:
+                t = 1.0
+            if dict_has(channel, "interpolation") and channel["interpolation"] == "STEP":
+                return values[i]
+            if channel["path"] == "rotation":
+                return quat_slerp(values[i], values[i + 1], t)
+            return v3_lerp(values[i], values[i + 1], t)
+        i = i + 1
+    return values[len(values) - 1]
+
+proc _sample_imported_animation_overrides(asset, animation_state):
+    let overrides = {}
+    if asset == nil or animation_state == nil:
+        return overrides
+    let clip_name = ""
+    if dict_has(animation_state, "clip"):
+        clip_name = animation_state["clip"]
+    let anim = resolve_imported_animation(asset, clip_name)
+    if anim == nil:
+        return overrides
+    let sample_time = _animation_sample_time(anim, animation_state)
+    let ci = 0
+    while ci < len(anim["channels"]):
+        let channel = anim["channels"][ci]
+        let value = _sample_imported_channel(channel, sample_time)
+        if value != nil:
+            let key = str(channel["node"])
+            let pose = {}
+            if dict_has(overrides, key):
+                pose = overrides[key]
+            if channel["path"] == "translation":
+                pose["position"] = value
+            if channel["path"] == "rotation":
+                pose["rotation"] = value
+            if channel["path"] == "scale":
+                pose["scale"] = value
+            overrides[key] = pose
+        ci = ci + 1
+    return overrides
+
+proc imported_asset_draws(asset, animation_state):
     if asset == nil:
         return []
     let draws = []
@@ -198,11 +349,12 @@ proc imported_asset_draws(asset):
             gi = gi + 1
         return draws
     let cache = {}
+    let overrides = _sample_imported_animation_overrides(asset, animation_state)
     let ni = 0
     while ni < len(asset["nodes"]):
         let node = asset["nodes"][ni]
         if dict_has(node, "mesh_index") and node["mesh_index"] >= 0:
-            let node_model = _imported_node_world(asset, ni, cache)
+            let node_model = _imported_node_world(asset, ni, cache, overrides)
             let gi = 0
             while gi < len(asset["gpu_meshes"]):
                 let gm = asset["gpu_meshes"][gi]

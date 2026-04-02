@@ -18,6 +18,7 @@ let r = create_gltf_result()
 check("result created", r != nil)
 check("meshes empty", len(r["meshes"]) == 0)
 check("materials empty", len(r["materials"]) == 0)
+check("animations empty", len(r["animations"]) == 0)
 
 # --- Parse minimal glTF JSON ---
 from json import cJSON_CreateObject, cJSON_CreateArray, cJSON_CreateNumber, cJSON_CreateString
@@ -123,6 +124,18 @@ if result != nil:
     check("node scale x", result["nodes"][0]["scale"][0] > 1.9)
     check("node child ref", result["nodes"][0]["children"][0] == 1)
     check("child node has matrix", result["nodes"][1]["matrix"][12] > 3.9)
+
+let animated = load_gltf("assets/BoxAnimated.gltf")
+check("animated gltf loaded", animated != nil)
+if animated != nil:
+    check("animated gltf has animations", animated["animation_count"] > 0)
+    check("animated gltf channel count", len(animated["animations"][0]["channels"]) > 1)
+    check("animated gltf translation channel", animated["animations"][0]["channels"][1]["path"] == "translation")
+    check("animated gltf rotation channel", animated["animations"][0]["channels"][0]["path"] == "rotation")
+    check("animated gltf duration parsed", animated["animations"][0]["duration"] > 3.7)
+    check("animated gltf translation sample parsed", animated["animations"][0]["channels"][1]["values"][1][1] > 2.5)
+    let qw = animated["animations"][0]["channels"][0]["values"][0][0]
+    check("animated gltf quaternion converted to wxyz", qw > 0.9 or qw < -0.9)
 
 # --- Bad file ---
 let bad = load_gltf("/tmp/nonexistent.gltf")

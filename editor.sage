@@ -331,6 +331,11 @@ proc _add_content_asset(name, kind, path):
     if kind == "animation":
         push(content_assets_animations, row)
 
+proc _add_animation_content_asset(name, path, clip_name):
+    let row = {"name": name, "kind": "animation", "path": path, "clip": clip_name}
+    push(content_assets_all, row)
+    push(content_assets_animations, row)
+
 proc _content_filtered():
     if content_filter == "models":
         return content_assets_models
@@ -416,7 +421,7 @@ while ai < len(importable_assets):
                         let a = asset["animations"][ani]
                         if dict_has(a, "name"):
                             aname = a["name"]
-                    _add_content_asset(ia["name"] + " :: " + aname, "animation", ia["path"])
+                    _add_animation_content_asset(ia["name"] + " :: " + aname, ia["path"], aname)
                     ani = ani + 1
     ai = ai + 1
 
@@ -832,8 +837,11 @@ while running:
                             entity_counter = entity_counter + 1
                             let pos = vec3(cam["target"][0], 0.0, cam["target"][2])
                             let eid = place_entity(editor, pos, "Anim_" + str(entity_counter), nil)
+                            let clip_name = selected_asset["name"]
+                            if dict_has(selected_asset, "clip"):
+                                clip_name = selected_asset["clip"]
                             add_component(world, eid, "imported_asset", model_asset)
-                            add_component(world, eid, "animation_state", {"clip": selected_asset["name"], "playing": true})
+                            add_component(world, eid, "animation_state", {"clip": clip_name, "playing": true, "time": 0.0, "speed": 1.0})
                             if len(model_asset["gpu_meshes"]) > 0:
                                 add_component(world, eid, "mesh_id", {"mesh": model_asset["gpu_meshes"][0]["gpu_mesh"], "name": "imported"})
                         else:
@@ -1247,7 +1255,18 @@ while running:
                 if has_component(world, eid, "imported_asset"):
                     let asset = get_component(world, eid, "imported_asset")
                     let pbr_materials = _ensure_imported_pbr_materials(asset)
-                    let draws = imported_asset_draws(asset)
+                    let anim_state = nil
+                    if has_component(world, eid, "animation_state"):
+                        anim_state = get_component(world, eid, "animation_state")
+                        let anim_speed = 1.0
+                        if dict_has(anim_state, "speed"):
+                            anim_speed = anim_state["speed"]
+                        if dict_has(anim_state, "playing") and anim_state["playing"]:
+                            let anim_time = 0.0
+                            if dict_has(anim_state, "time"):
+                                anim_time = anim_state["time"]
+                            anim_state["time"] = anim_time + ts["dt"] * anim_speed
+                    let draws = imported_asset_draws(asset, anim_state)
                     let gi = 0
                     while gi < len(draws):
                         let gm = draws[gi]
