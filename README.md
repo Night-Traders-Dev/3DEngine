@@ -16,7 +16,7 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 # Run a game demo
 ./run.sh examples/demo_world.sage
 
-# Run tests (49 suites, 1,403 checks)
+# Run tests (49 suites, 1,417 checks)
 ./tests/run_all.sh
 
 # Build distributable package
@@ -86,7 +86,7 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 
 ### Code Generation
 
-Press **ENTER** or use File > Export Game to generate `assets/generated_game.sage` — a complete, runnable game with renderer, physics, HUD, FPS controls, and game loop. Export now preserves authored scene lights and uses the primary scene camera to seed the generated runtime player transform, yaw/pitch, and FOV instead of always falling back to generator defaults.
+Press **ENTER** or use File > Export Game to generate `assets/generated_game.sage` — a complete, runnable game with renderer, physics, HUD, FPS controls, and game loop. Export now preserves authored scene lights, uses the primary scene camera to seed the generated runtime player transform, yaw/pitch, and FOV, and re-imports authored glTF assets at runtime so imported models do not collapse back to primitive-only draws.
 
 ```bash
 ./run.sh assets/generated_game.sage
@@ -116,7 +116,7 @@ forge-engine/
 │   └── ...                  # 80+ more engine modules
 ├── shaders/                 # GLSL shader pairs + SPIR-V
 ├── examples/                # 8 demo programs
-├── tests/                   # 49 suites, 1,403 checks
+├── tests/                   # 49 suites, 1,417 checks
 ├── assets/                  # Fonts, models, scenes, prefabs
 │   └── prefabs/             # Saved entity templates
 └── build/                   # Distribution output
@@ -142,7 +142,7 @@ forge-engine/
 `player_controller` (FPS, ground check, step climbing, slope limits) · `gameplay` (health, damage/heal, timers, state machines, spawners, scoring with combos)
 
 ### Content
-`asset_manager` (caching) · `asset_cache` · `scene_serial` (JSON save/load, prefab save/load) · `asset_import` (glTF 2.0, **async loading queue**, **HTTP download**, imported material metadata + textures) · `asset_browser` (search, filter, categories) · `audio` (OpenAL FFI) · `hot_reload` (directory watching) · `codegen` (game script generation, **scene light/camera export**, **LLVM native compilation**) · `material` (8 PBR presets) · `mesh` (**device-local uploads**, **struct vertex packing**)
+`asset_manager` (caching) · `asset_cache` · `scene_serial` (JSON save/load, prefab save/load, **imported asset references**) · `asset_import` (glTF 2.0, **async loading queue**, **HTTP download**, imported material metadata + textures) · `asset_browser` (search, filter, categories) · `audio` (OpenAL FFI) · `hot_reload` (directory watching) · `codegen` (game script generation, **scene light/camera export**, **runtime glTF re-import**, **LLVM native compilation**) · `material` (8 PBR presets) · `mesh` (**device-local uploads**, **struct vertex packing**)
 
 ### Animation & AI
 `tween` (18 easings) · `animation` (skeletal, keyframes, blend trees, state machine, two-bone IK solver, animation events) · `navigation` (A* pathfinding, steering: seek/flee/arrive/wander/avoid) · `behavior_tree` (action/condition/sequence/selector/inverter/repeater/wait)
@@ -196,7 +196,7 @@ forge-engine/
 ## Testing
 
 ```bash
-./tests/run_all.sh            # 49 suites, 1,403 individual checks
+./tests/run_all.sh            # 49 suites, 1,417 individual checks
 ./run.sh tests/test_ecs.sage  # Run individual suite
 ```
 

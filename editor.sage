@@ -277,8 +277,36 @@ proc _rehydrate_mesh_refs(w):
         if mname == "sphere":
             m["mesh"] = sphere_gpu
         else:
+            if mname == "imported":
+                mi = mi + 1
+                continue
             m["mesh"] = cube_gpu
         mi = mi + 1
+
+proc _rehydrate_imported_assets(w):
+    let imported_ids = query(w, ["imported_asset"])
+    let ii = 0
+    while ii < len(imported_ids):
+        let eid = imported_ids[ii]
+        let ia = get_component(w, eid, "imported_asset")
+        let source = ""
+        if dict_has(ia, "source"):
+            source = ia["source"]
+        if source != "":
+            let asset = nil
+            if dict_has(ia, "name") and dict_has(imported_models, ia["name"]):
+                asset = imported_models[ia["name"]]
+            if asset == nil:
+                asset = import_gltf(source)
+                if asset != nil:
+                    _ensure_imported_pbr_materials(asset)
+                    if dict_has(ia, "name"):
+                        imported_models[ia["name"]] = asset
+            if asset != nil:
+                add_component(w, eid, "imported_asset", asset)
+                if len(asset["gpu_meshes"]) > 0:
+                    add_component(w, eid, "mesh_id", {"mesh": asset["gpu_meshes"][0]["gpu_mesh"], "name": "imported"})
+        ii = ii + 1
 
 # Scan for importable assets
 let importable_assets = scan_importable_assets("assets")
@@ -547,6 +575,7 @@ while running:
                     world = loaded_shortcut["world"]
                     register_system(world, "physics", ["rigidbody", "transform"], create_physics_system(physics_world))
                     _rehydrate_mesh_refs(world)
+                    _rehydrate_imported_assets(world)
                     editor["world"] = world
                     deselect(editor)
                     let entities_after_load = query(world, ["transform"])
@@ -683,6 +712,7 @@ while running:
                         world = restored["world"]
                         register_system(world, "physics", ["rigidbody", "transform"], create_physics_system(physics_world))
                         _rehydrate_mesh_refs(world)
+                        _rehydrate_imported_assets(world)
                         editor["world"] = world
                         deselect(editor)
                 play_mode = false
@@ -830,6 +860,7 @@ while running:
                         world = loaded_menu["world"]
                         register_system(world, "physics", ["rigidbody", "transform"], create_physics_system(physics_world))
                         _rehydrate_mesh_refs(world)
+                        _rehydrate_imported_assets(world)
                         editor["world"] = world
                         deselect(editor)
                         let entities_after_load_menu = query(world, ["transform"])
@@ -1104,6 +1135,7 @@ while running:
                     world = restored_enter["world"]
                     register_system(world, "physics", ["rigidbody", "transform"], create_physics_system(physics_world))
                     _rehydrate_mesh_refs(world)
+                    _rehydrate_imported_assets(world)
                     editor["world"] = world
                     deselect(editor)
             play_mode = false

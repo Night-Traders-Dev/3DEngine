@@ -134,6 +134,21 @@ proc serialize_material(comp):
     cJSON_AddNumberToObject(obj, "alpha", comp["alpha"])
     return obj
 
+proc serialize_imported_asset(comp):
+    let obj = cJSON_CreateObject()
+    let source = ""
+    if dict_has(comp, "source"):
+        source = comp["source"]
+    cJSON_AddStringToObject(obj, "source", source)
+    let name = source
+    if dict_has(comp, "name"):
+        name = comp["name"]
+    cJSON_AddStringToObject(obj, "name", name)
+    return obj
+
+proc serialize_sage_dict(comp):
+    return cJSON_FromSage(comp)
+
 let _serializers = {}
 _serializers["transform"] = serialize_transform
 _serializers["name"] = serialize_name
@@ -146,6 +161,9 @@ _serializers["health"] = serialize_health
 _serializers["rigidbody"] = serialize_rigidbody
 _serializers["collider"] = serialize_collider
 _serializers["material"] = serialize_material
+_serializers["imported_asset"] = serialize_imported_asset
+_serializers["asset_ref"] = serialize_sage_dict
+_serializers["animation_state"] = serialize_sage_dict
 
 proc register_serializer(comp_type, serialize_fn):
     _serializers[comp_type] = serialize_fn
@@ -378,6 +396,30 @@ proc deserialize_material(node):
         mc["alpha"] = cJSON_GetNumberValue(al)
     return mc
 _deserializers["material"] = deserialize_material
+
+proc deserialize_imported_asset(node):
+    let asset = {}
+    asset["source"] = cJSON_GetStringValue(cJSON_GetObjectItem(node, "source"))
+    let name_node = cJSON_GetObjectItem(node, "name")
+    if name_node != nil:
+        asset["name"] = cJSON_GetStringValue(name_node)
+    else:
+        asset["name"] = asset["source"]
+    asset["gpu_meshes"] = []
+    asset["materials"] = []
+    asset["nodes"] = []
+    asset["animations"] = []
+    asset["animation_count"] = 0
+    asset["mesh_count"] = 0
+    asset["material_count"] = 0
+    asset["node_count"] = 0
+    return asset
+_deserializers["imported_asset"] = deserialize_imported_asset
+
+proc deserialize_sage_dict(node):
+    return cJSON_ToSage(node)
+_deserializers["asset_ref"] = deserialize_sage_dict
+_deserializers["animation_state"] = deserialize_sage_dict
 
 proc register_deserializer(comp_type, deserialize_fn):
     _deserializers[comp_type] = deserialize_fn

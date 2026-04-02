@@ -78,6 +78,12 @@ add_component(w, e5, "transform", t5)
 add_component(w, e5, "name", NameComponent("SunLight"))
 add_component(w, e5, "light", DirectionalLightComponent(1.0, 0.95, 0.9, 1.6))
 
+let e6 = spawn(w)
+add_component(w, e6, "transform", TransformComponent(-3.0, 0.0, 1.0))
+add_component(w, e6, "name", NameComponent("ImportedCrate"))
+add_component(w, e6, "imported_asset", {"source": "assets/Box.gltf", "name": "Box.gltf", "gpu_meshes": [{"gpu_mesh": 1, "material_index": 0}], "materials": [{"name": "Default"}]})
+add_component(w, e6, "mesh_id", {"mesh": nil, "name": "imported"})
+
 let code = generate_game_script(w, "TestScene", {"width": 800, "height": 600})
 check("code generated", code != nil)
 check("code has content", len(code) > 100)
@@ -112,6 +118,10 @@ check("contains authored camera fov", contains(code, "player[\"fov\"] = 80"))
 check("contains authored point light", contains(code, "point_light(2, 6, -1, 0.8, 0.7, 1, 4.2, 12)"))
 check("contains authored directional light", contains(code, "directional_light("))
 check("omits fallback point light when authored lights exist", contains(code, "point_light(5.0, 4.0, 3.0, 1.0, 0.8, 0.6, 3.0, 20.0)") == false)
+check("contains imported asset import", contains(code, "from asset_import import import_gltf"))
+check("contains pbr draw import", contains(code, "draw_pbr"))
+check("contains imported asset helper", contains(code, "_import_runtime_asset(\"assets/Box.gltf\""))
+check("contains imported render query", contains(code, "query(world, [\"transform\", \"imported_asset\"])"))
 
 # Save and verify
 import io

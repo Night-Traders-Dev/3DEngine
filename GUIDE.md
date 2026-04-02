@@ -69,7 +69,7 @@ forge-engine/
 ├── shaders/             # GLSL + SPIR-V shaders
 ├── assets/              # Fonts, textures, saved scenes
 ├── examples/            # 8 demo programs
-├── tests/               # 49 test suites, 1,403 checks
+├── tests/               # 49 test suites, 1,417 checks
 └── build/               # Distribution output
     └── dist/            # Self-contained distributable
 ```
@@ -777,6 +777,8 @@ let model = import_gltf("assets/character.gltf")
 
 Imported glTF assets keep their per-material albedo, metallic, roughness, and texture references. In the editor, imported meshes now prefer the PBR render path when material data is available, with a lit-material fallback for meshes that only provide partial surface data.
 
+Scene save/load and Play-In-Editor snapshots preserve imported asset references by storing the stable source path and rehydrating the full GPU-ready asset on load. That keeps imported content alive across open/save/play cycles instead of limiting it to the original live editor session.
+
 ### Material Presets
 
 ```python
@@ -849,6 +851,7 @@ Generated scripts now carry more of the authored scene intent across the editor/
 
 - Authored point and directional light entities are emitted into the generated lighting setup.
 - The primary scene camera seeds the runtime player controller position, yaw, pitch, FOV, near plane, and far plane.
+- Imported glTF entities are re-imported on startup and rendered through the generated PBR path when material data is available.
 - Material-bearing entities continue to use the material-aware lit draw path after export.
 
 ### GPU-Driven Rendering
