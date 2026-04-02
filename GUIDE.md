@@ -70,7 +70,7 @@ forge-engine/
 ├── shaders/             # GLSL + SPIR-V shaders
 ├── assets/              # Fonts, textures, saved scenes
 ├── examples/            # 8 demo programs
-├── tests/               # 53 test suites, 1,567 checks
+├── tests/               # 53 test suites, 1,576 checks
 └── build/               # Distribution output
     └── dist/            # Self-contained distributable
 ```
@@ -865,7 +865,7 @@ Generated scripts now carry more of the authored scene intent across the editor/
 
 - Authored point and directional light entities are emitted into the generated lighting setup.
 - The primary scene camera seeds the runtime player controller position, yaw, pitch, FOV, near plane, and far plane.
-- Generated games now run the same first-pass directional shadow prepass used by the editor, with a single primary directional light feeding the forward lit/PBR path.
+- Generated games now run the same first-pass directional shadow prepass used by the editor, with a single primary directional light feeding the forward lit/PBR path and the light-space projection snapped to the shadow texel grid for better stability.
 - Mesh-backed entities now preserve `mesh_renderer` visibility plus `cast_shadows` / `receive_shadows` flags through export, so the generated runtime respects the same authored render/shadow controls as the editor viewport.
 - Imported glTF entities are re-imported on startup, rendered through the generated PBR path when material data is available, keep their authored node hierarchy transforms, preserve transform-animation clip playback through `animation_state`, including clip, time, speed, and looping state, and deform imported skinned meshes through the same shared 128-joint skinning path and shadow depth path used by the editor.
 - Material-bearing entities continue to use the material-aware lit draw path after export.
@@ -977,6 +977,13 @@ Supported: `FORGE_WIDTH`, `FORGE_HEIGHT`, `FORGE_FULLSCREEN`, `FORGE_VSYNC`, `FO
 ---
 
 ## SageLang Reference
+
+### Current Status
+
+- SageLang is currently on the March 2026 `v2.0.0` specification-lock release, so core semantics and module-system behavior are intentionally frozen.
+- The official updates also add REPL `:runtime jit` and `:runtime aot` modes, and the project reports 1987+ tests passing in that line.
+- Sage centralizes its own version string through a repo-root `VERSION` file now, which matches Forge's single-source versioning approach.
+- Sage's roadmap still lists native codegen for module/class/GPU support as future work, so Forge keeps validating the interpreted/editor/export runtime path directly inside this repo.
 
 ### Key Language Features
 

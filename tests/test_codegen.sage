@@ -143,9 +143,11 @@ check("contains animated imported draws", contains(code, "imported_asset_draws(a
 check("contains skinned pbr draw import", contains(code, "draw_pbr_skinned_controlled"))
 check("contains skinned lit draw import", contains(code, "draw_mesh_lit_surface_skinned_controlled"))
 check("contains shadow map import", contains(code, "from shadow_map import create_shadow_renderer"))
+check("contains stabilized shadow import", contains(code, "compute_light_vp_stable"))
 check("contains shadow source setter", contains(code, "set_lit_material_shadow_source"))
 check("contains shadow renderer init", contains(code, "shadow_renderer = create_shadow_renderer(2048)"))
 check("contains shadow world helper", contains(code, "proc _render_shadow_world"))
+check("contains stabilized shadow matrix build", contains(code, "compute_light_vp_stable(shadow_light[\"direction\"], focus_point, 45.0, shadow_renderer[\"resolution\"] + 0.0)"))
 check("contains shadow prepass call", contains(code, "_render_shadow_world(shadow_renderer, world, ls, player_eye_position(player))"))
 check("contains shadow draw import", contains(code, "shadow_draw_mesh_skinned"))
 

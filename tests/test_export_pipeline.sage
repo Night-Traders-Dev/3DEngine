@@ -73,6 +73,7 @@ check("material-aware draw remains enabled", contains(code, "draw_mesh_lit_surfa
 check("imported asset skinned pbr path present", contains(code, "draw_pbr_skinned_controlled"))
 check("imported asset skinned lit path present", contains(code, "draw_mesh_lit_surface_skinned_controlled"))
 check("shadow helper emitted", contains(code, "proc _render_shadow_world"))
+check("stabilized shadow matrix emitted", contains(code, "compute_light_vp_stable(shadow_light[\"direction\"], focus_point, 45.0, shadow_renderer[\"resolution\"] + 0.0)"))
 check("shadow prepass emitted", contains(code, "_render_shadow_world(shadow_renderer, world, ls, player_eye_position(player))"))
 check("shadow renderer init emitted", contains(code, "shadow_renderer = create_shadow_renderer(2048)"))
 check("mesh renderer helper emitted", contains(code, "proc _mesh_receives_shadows"))

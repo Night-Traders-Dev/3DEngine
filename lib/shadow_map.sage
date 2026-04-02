@@ -5,7 +5,9 @@ gc_disable()
 # -----------------------------------------
 
 import gpu
+import math
 from math3d import vec3, v3_normalize, mat4_ortho, mat4_look_at, mat4_mul, mat4_identity
+from math3d import mat4_mul_vec4
 from mesh import mesh_vertex_binding, mesh_vertex_attribs, build_skin_palette_uniform_data
 from mesh import MAX_SKIN_JOINTS
 
@@ -148,13 +150,46 @@ proc create_shadow_renderer(resolution):
 # ============================================================================
 # Compute light view-projection for directional light
 # ============================================================================
-proc compute_light_vp(light_dir, scene_center, scene_radius):
+proc shadow_texel_world_size(scene_radius, resolution):
+    let r = math.abs(scene_radius)
+    if r < 0.0001:
+        r = 0.0001
+    let span = r * 2.0
+    if resolution < 1.0:
+        return span
+    return span / resolution
+
+proc snap_shadow_view_center(light_view, scene_center, scene_radius, resolution):
+    let stable_view = []
+    let i = 0
+    while i < len(light_view):
+        push(stable_view, light_view[i])
+        i = i + 1
+    if len(stable_view) != 16:
+        return stable_view
+    let texel = shadow_texel_world_size(scene_radius, resolution)
+    if texel <= 0.000001:
+        return stable_view
+    let center_ls = mat4_mul_vec4(stable_view, [scene_center[0], scene_center[1], scene_center[2], 1.0])
+    let snapped_x = math.floor(center_ls[0] / texel + 0.5) * texel
+    let snapped_y = math.floor(center_ls[1] / texel + 0.5) * texel
+    stable_view[12] = stable_view[12] + (snapped_x - center_ls[0])
+    stable_view[13] = stable_view[13] + (snapped_y - center_ls[1])
+    return stable_view
+
+proc compute_light_vp_stable(light_dir, scene_center, scene_radius, resolution):
     let dir = v3_normalize(light_dir)
-    let light_pos = vec3(scene_center[0] - dir[0] * scene_radius, scene_center[1] - dir[1] * scene_radius, scene_center[2] - dir[2] * scene_radius)
+    let r = math.abs(scene_radius)
+    if r < 0.1:
+        r = 0.1
+    let light_pos = vec3(scene_center[0] - dir[0] * r, scene_center[1] - dir[1] * r, scene_center[2] - dir[2] * r)
     let light_view = mat4_look_at(light_pos, scene_center, vec3(0.0, 1.0, 0.0))
-    let r = scene_radius
+    light_view = snap_shadow_view_center(light_view, scene_center, r, resolution)
     let light_proj = mat4_ortho(0.0 - r, r, 0.0 - r, r, 0.1, r * 3.0)
     return mat4_mul(light_proj, light_view)
+
+proc compute_light_vp(light_dir, scene_center, scene_radius):
+    return compute_light_vp_stable(light_dir, scene_center, scene_radius, 2048.0)
 
 # ============================================================================
 # Begin/end a dedicated shadow frame

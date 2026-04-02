@@ -1,8 +1,10 @@
 # test_shadow_map.sage - Sanity checks for shadow map helpers (non-GPU parts)
 
-from shadow_map import build_shadow_uniform_data, compute_light_vp, primary_shadow_light
+import math
+from shadow_map import build_shadow_uniform_data, compute_light_vp, compute_light_vp_stable, primary_shadow_light
+from shadow_map import shadow_texel_world_size, snap_shadow_view_center
 from lighting import create_light_scene, point_light, directional_light, add_light
-from math3d import vec3
+from math3d import vec3, mat4_identity, mat4_mul_vec4
 
 let p = 0
 let f = 0
@@ -32,6 +34,23 @@ check("shadow selector skips disabled directional light", disabled_primary["inde
 
 let light_vp = compute_light_vp(vec3(-0.3, -0.8, -0.5), vec3(2.0, 1.0, -3.0), 40.0)
 check("light vp has 16 floats", len(light_vp) == 16)
+let stable_light_vp = compute_light_vp_stable(vec3(-0.3, -0.8, -0.5), vec3(2.0, 1.0, -3.0), 40.0, 1024.0)
+check("stable light vp has 16 floats", len(stable_light_vp) == 16)
+
+let texel = shadow_texel_world_size(16.0, 1024.0)
+check("shadow texel size tracks scene span", texel > 0.031 and texel < 0.032)
+let snap_center = vec3(10.018, 5.018, 2.0)
+let snapped_view = snap_shadow_view_center(mat4_identity(), snap_center, 16.0, 1024.0)
+let snapped_center = mat4_mul_vec4(snapped_view, [snap_center[0], snap_center[1], snap_center[2], 1.0])
+let snapped_x_steps = math.floor(snapped_center[0] / texel + 0.5)
+let snapped_y_steps = math.floor(snapped_center[1] / texel + 0.5)
+check("snapped center x lands on texel grid", math.abs(snapped_center[0] - snapped_x_steps * texel) < 0.000001)
+check("snapped center y lands on texel grid", math.abs(snapped_center[1] - snapped_y_steps * texel) < 0.000001)
+let nearby_center_pos = vec3(snap_center[0] + texel * 0.25, snap_center[1] + texel * 0.25, snap_center[2])
+let nearby_view = snap_shadow_view_center(mat4_identity(), nearby_center_pos, 16.0, 1024.0)
+let nearby_center = mat4_mul_vec4(nearby_view, [nearby_center_pos[0], nearby_center_pos[1], nearby_center_pos[2], 1.0])
+check("sub-texel motion keeps snapped x stable", math.abs(snapped_center[0] - nearby_center[0]) < 0.000001)
+check("sub-texel motion keeps snapped y stable", math.abs(snapped_center[1] - nearby_center[1]) < 0.000001)
 
 let shadow_uniform = build_shadow_uniform_data(light_vp, true, 2048.0, 3)
 check("shadow uniform has 20 floats", len(shadow_uniform) == 20)

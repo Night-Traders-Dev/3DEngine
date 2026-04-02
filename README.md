@@ -16,7 +16,7 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 # Run a game demo
 ./run.sh examples/demo_world.sage
 
-# Run tests (53 suites, 1,567 checks)
+# Run tests (53 suites, 1,576 checks)
 ./tests/run_all.sh
 
 # Build distributable package
@@ -25,6 +25,7 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 
 The engine release version is sourced from the repo-root `VERSION` file and exposed in runtime UI/build paths through `lib/forge_version.sage`.
 Forge stays on `0.y.z` while we are still building toward a fully functional Unreal-style engine release; `1.0.0` is intentionally reserved for when the core workflows are truly there.
+SageLang itself is currently on the March 2026 `v2.0.0` specification-lock line, with stable core semantics/module behavior plus new REPL `:runtime jit` / `:runtime aot` modes, while its roadmap still keeps native module/class/GPU codegen on the future-work list. Forge therefore continues to validate editor/runtime/export flows against the local Sage runtime rather than assuming native parity is done everywhere.
 
 ## Project Browser
 
@@ -50,7 +51,7 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 - **Scrollable panels** — Mouse wheel scrolls all floating window content with visible scrollbars
 - **Material presets** — Apply Metal, Wood, Glass, Gold materials from Tools menu
 - **Imported animation controls** — Preview imported glTF clips in the editor, switch clips, scrub time, toggle looping, tune playback speed on the selected entity, inspect imported skin/joint counts, and drive first-pass skinned mesh playback
-- **Directional shadows** — Dedicated sun shadow prepass in the editor, with imported skinned meshes participating in the same shadow depth path as static meshes
+- **Directional shadows** — Dedicated sun shadow prepass in the editor, with texel-snapped light matrices to reduce shimmer and imported skinned meshes participating in the same shadow depth path as static meshes
 - **Render flags** — Mesh visibility plus `cast_shadows` / `receive_shadows` now affect the live editor viewport, shadow prepass, and exported runtime, with quick toggles in the Tools/context menus
 - **Prefab system** — Save entities as reusable .prefab.json templates
 - **Undo/Redo** — CTRL+Z / CTRL+Y with full command history (100 levels)
@@ -97,7 +98,7 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 
 ### Code Generation
 
-Press **ENTER** or use File > Export Game to generate `assets/generated_game.sage` — a complete, runnable game with renderer, physics, HUD, FPS controls, and game loop. Export now preserves authored scene lights, uses the primary scene camera to seed the generated runtime player transform, yaw/pitch, and FOV, runs a directional shadow prepass, carries mesh visibility plus `cast_shadows` / `receive_shadows` into the generated runtime, and re-imports authored glTF assets at runtime with node hierarchy transforms, transform-animation clip playback, and first-pass GPU skinned mesh deformation, including clip selection, current time, speed, and looping state. The current skinning path uses a shared 128-joint-per-draw budget and is still missing broader character tooling beyond playback.
+Press **ENTER** or use File > Export Game to generate `assets/generated_game.sage` — a complete, runnable game with renderer, physics, HUD, FPS controls, and game loop. Export now preserves authored scene lights, uses the primary scene camera to seed the generated runtime player transform, yaw/pitch, and FOV, runs a directional shadow prepass with the same texel-snapped light matrix logic used by the editor, carries mesh visibility plus `cast_shadows` / `receive_shadows` into the generated runtime, and re-imports authored glTF assets at runtime with node hierarchy transforms, transform-animation clip playback, and first-pass GPU skinned mesh deformation, including clip selection, current time, speed, and looping state. The current skinning path uses a shared 128-joint-per-draw budget and is still missing broader character tooling beyond playback.
 
 ```bash
 ./run.sh assets/generated_game.sage
@@ -129,7 +130,7 @@ forge-engine/
 │   └── ...                  # 80+ more engine modules
 ├── shaders/                 # GLSL shader pairs + SPIR-V
 ├── examples/                # 8 demo programs
-├── tests/                   # 53 suites, 1,567 checks
+├── tests/                   # 53 suites, 1,576 checks
 ├── assets/                  # Fonts, models, scenes, prefabs
 │   └── prefabs/             # Saved entity templates
 └── build/                   # Distribution output
@@ -146,7 +147,7 @@ forge-engine/
 `math3d` — vec2/3/4, mat4 (multiply, translate, scale, rotate, perspective, look_at, ortho, inverse), quaternions (mul, slerp, from_euler, to_matrix, rotate_vec3)
 
 ### Rendering
-`renderer` (Vulkan swapchain, frame sync, **pipeline cache**, **secondary command buffers**) · `render_system` (**indirect draw**, **compute dispatch**, **anisotropic samplers**, **pipeline barriers**, **directional shadow binding**) · `lighting` (16 lights, fog, UBO) · `sky` (procedural presets, **cubemap skybox**) · `pbr_material` (Cook-Torrance BRDF, **shadowed forward PBR**) · `textures` · `shadow_map` (depth pass, PCF, **dedicated prepass submission**, **skinned shadow depth**) · `deferred` (G-buffer MRT) · `frustum` (culling) · `lod` (5 distance levels) · `taa` (temporal anti-aliasing) · `frame_graph` (pass dependencies, **GPU barrier integration**) · `editor_grid` · `post_fx` (vignette, color grading, fade) · `postprocess` (bloom, tone mapping, fullscreen passes, **offscreen targets**)
+`renderer` (Vulkan swapchain, frame sync, **pipeline cache**, **secondary command buffers**) · `render_system` (**indirect draw**, **compute dispatch**, **anisotropic samplers**, **pipeline barriers**, **directional shadow binding**) · `lighting` (16 lights, fog, UBO) · `sky` (procedural presets, **cubemap skybox**) · `pbr_material` (Cook-Torrance BRDF, **shadowed forward PBR**) · `textures` · `shadow_map` (depth pass, PCF, **dedicated prepass submission**, **texel-snapped directional stability**, **skinned shadow depth**) · `deferred` (G-buffer MRT) · `frustum` (culling) · `lod` (5 distance levels) · `taa` (temporal anti-aliasing) · `frame_graph` (pass dependencies, **GPU barrier integration**) · `editor_grid` · `post_fx` (vignette, color grading, fade) · `postprocess` (bloom, tone mapping, fullscreen passes, **offscreen targets**)
 
 ### Physics
 `collision` (AABB/sphere/ray/capsule, collision callbacks/events) · `physics` (rigidbody, gravity, restitution, fixed/distance/hinge constraints, constraint solver) · `spatial_grid` (broadphase, **octree** for large scenes)
@@ -209,7 +210,7 @@ forge-engine/
 ## Testing
 
 ```bash
-./tests/run_all.sh            # 53 suites, 1,567 individual checks
+./tests/run_all.sh            # 53 suites, 1,576 individual checks
 ./run.sh tests/test_ecs.sage  # Run individual suite
 ```
 

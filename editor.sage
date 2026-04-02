@@ -84,7 +84,7 @@ from gameplay import HealthComponent
 import sys
 from game_loop import create_time_state, update_time
 from frustum import extract_frustum_planes, aabb_in_frustum
-from shadow_map import create_shadow_renderer, compute_light_vp, primary_shadow_light
+from shadow_map import create_shadow_renderer, compute_light_vp_stable, primary_shadow_light
 from shadow_map import begin_shadow_frame, end_shadow_frame, shadow_draw_mesh, shadow_draw_mesh_skinned
 from post_fx import create_postfx, pfx_cinematic, build_vignette_quads
 from lod import create_lod_config, compute_lod
@@ -175,7 +175,7 @@ try:
         set_lit_material_shadow_source(lit_mat, shadow_renderer)
         if pbr_renderer != nil:
             set_pbr_shadow_source(pbr_renderer, shadow_renderer)
-        let shadow_light_vp = compute_light_vp(vec3(-0.3, -0.8, -0.5), vec3(0.0, 0.0, 0.0), 50.0)
+        let shadow_light_vp = compute_light_vp_stable(vec3(-0.3, -0.8, -0.5), vec3(0.0, 0.0, 0.0), 50.0, shadow_renderer["resolution"] + 0.0)
         shadow_renderer["light_vp"] = shadow_light_vp
         print "Shadow map initialized (2048x2048)"
 catch e:
@@ -526,7 +526,7 @@ proc _render_shadow_world(sr, w, light_scene, focus_point, radius):
     let shadow_light = primary_shadow_light(light_scene)
     if shadow_light["index"] < 0:
         return false
-    let light_vp = compute_light_vp(shadow_light["direction"], focus_point, radius)
+    let light_vp = compute_light_vp_stable(shadow_light["direction"], focus_point, radius, sr["resolution"] + 0.0)
     let cmd = begin_shadow_frame(sr, light_vp, shadow_light["index"])
     let renderers = query(w, ["transform", "mesh_id"])
     let i = 0
