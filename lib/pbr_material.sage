@@ -19,7 +19,51 @@ proc create_pbr_material_data():
     m["albedo_color"] = [1.0, 1.0, 1.0, 1.0]
     m["metallic"] = 0.0
     m["roughness"] = 0.5
+    m["use_albedo_texture"] = false
+    m["use_normal_texture"] = false
+    m["use_metallic_roughness_texture"] = false
     m["desc_set"] = -1
+    return m
+
+proc create_pbr_fallback_textures():
+    let textures = {}
+    let flags = gpu.IMAGE_SAMPLED | gpu.IMAGE_TRANSFER_DST
+    textures["albedo"] = gpu.create_image(1, 1, 1, gpu.FORMAT_RGBA8, flags)
+    textures["normal"] = gpu.create_image(1, 1, 1, gpu.FORMAT_RGBA8, flags)
+    textures["mr"] = gpu.create_image(1, 1, 1, gpu.FORMAT_RGBA8, flags)
+    return textures
+
+proc create_pbr_material_from_imported(mat_info, fallback_textures):
+    let m = create_pbr_material_data()
+    if mat_info == nil:
+        return m
+    if dict_has(mat_info, "albedo_color"):
+        m["albedo_color"] = mat_info["albedo_color"]
+    if dict_has(mat_info, "metallic"):
+        m["metallic"] = mat_info["metallic"]
+    if dict_has(mat_info, "roughness"):
+        m["roughness"] = mat_info["roughness"]
+
+    if dict_has(mat_info, "albedo_tex") and mat_info["albedo_tex"] >= 0:
+        m["albedo_texture"] = mat_info["albedo_tex"]
+        m["use_albedo_texture"] = true
+    else:
+        if fallback_textures != nil and dict_has(fallback_textures, "albedo"):
+            m["albedo_texture"] = fallback_textures["albedo"]
+
+    if dict_has(mat_info, "normal_tex") and mat_info["normal_tex"] >= 0:
+        m["normal_texture"] = mat_info["normal_tex"]
+        m["use_normal_texture"] = true
+    else:
+        if fallback_textures != nil and dict_has(fallback_textures, "normal"):
+            m["normal_texture"] = fallback_textures["normal"]
+
+    if dict_has(mat_info, "mr_tex") and mat_info["mr_tex"] >= 0:
+        m["metallic_roughness_texture"] = mat_info["mr_tex"]
+        m["use_metallic_roughness_texture"] = true
+    else:
+        if fallback_textures != nil and dict_has(fallback_textures, "mr"):
+            m["metallic_roughness_texture"] = fallback_textures["mr"]
     return m
 
 # ============================================================================
@@ -53,7 +97,7 @@ proc create_pbr_renderer(render_pass, scene_desc_layout):
     let mat_layout = gpu.create_descriptor_layout([b0, b1, b2])
 
     let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
-    let pipe_layout = gpu.create_pipeline_layout([scene_desc_layout, mat_layout], 128, stage_flags)
+    let pipe_layout = gpu.create_pipeline_layout([scene_desc_layout, mat_layout], 176, stage_flags)
 
     let cfg = {}
     cfg["layout"] = pipe_layout
@@ -102,15 +146,7 @@ proc bind_pbr_material(pbr_renderer, mat_data, sampler):
     mat_data["sampler"] = sampler
     return ds
 
-# ============================================================================
-# Draw mesh with PBR material
-# ============================================================================
-proc draw_pbr(cmd, pbr_renderer, mesh_gpu, mvp, model, scene_desc_set, mat_data):
-    gpu.cmd_bind_graphics_pipeline(cmd, pbr_renderer["pipeline"])
-    let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
-    gpu.cmd_bind_descriptor_set(cmd, pbr_renderer["pipe_layout"], 0, scene_desc_set)
-    if mat_data["desc_set"] >= 0:
-        gpu.cmd_bind_descriptor_set(cmd, pbr_renderer["pipe_layout"], 1, mat_data["desc_set"])
+proc build_pbr_push_data(mvp, model, mat_data):
     let push_data = []
     let i = 0
     while i < 16:
@@ -120,6 +156,39 @@ proc draw_pbr(cmd, pbr_renderer, mesh_gpu, mvp, model, scene_desc_set, mat_data)
     while i < 16:
         push(push_data, model[i])
         i = i + 1
+    push(push_data, mat_data["albedo_color"][0])
+    push(push_data, mat_data["albedo_color"][1])
+    push(push_data, mat_data["albedo_color"][2])
+    push(push_data, mat_data["albedo_color"][3])
+    push(push_data, mat_data["metallic"])
+    push(push_data, mat_data["roughness"])
+    push(push_data, 0.0)
+    push(push_data, 0.0)
+    if mat_data["use_albedo_texture"]:
+        push(push_data, 1.0)
+    else:
+        push(push_data, 0.0)
+    if mat_data["use_normal_texture"]:
+        push(push_data, 1.0)
+    else:
+        push(push_data, 0.0)
+    if mat_data["use_metallic_roughness_texture"]:
+        push(push_data, 1.0)
+    else:
+        push(push_data, 0.0)
+    push(push_data, 0.0)
+    return push_data
+
+# ============================================================================
+# Draw mesh with PBR material
+# ============================================================================
+proc draw_pbr(cmd, pbr_renderer, mesh_gpu, mvp, model, scene_desc_set, mat_data):
+    gpu.cmd_bind_graphics_pipeline(cmd, pbr_renderer["pipeline"])
+    let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
+    gpu.cmd_bind_descriptor_set(cmd, pbr_renderer["pipe_layout"], 0, scene_desc_set)
+    if mat_data["desc_set"] >= 0:
+        gpu.cmd_bind_descriptor_set(cmd, pbr_renderer["pipe_layout"], 1, mat_data["desc_set"])
+    let push_data = build_pbr_push_data(mvp, model, mat_data)
     gpu.cmd_push_constants(cmd, pbr_renderer["pipe_layout"], stage_flags, push_data)
     gpu.cmd_bind_vertex_buffer(cmd, mesh_gpu["vbuf"])
     gpu.cmd_bind_index_buffer(cmd, mesh_gpu["ibuf"])

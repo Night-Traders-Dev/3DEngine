@@ -233,9 +233,24 @@ proc duplicate_selected(ed):
         if has_component(w, src, "health"):
             let hp = get_component(w, src, "health")
             add_component(w, eid, "health", _clone_sage(hp))
+        if has_component(w, src, "camera"):
+            let cam = get_component(w, src, "camera")
+            add_component(w, eid, "camera", _clone_sage(cam))
         if has_component(w, src, "light"):
             let lt = get_component(w, src, "light")
             add_component(w, eid, "light", _clone_sage(lt))
+        if has_component(w, src, "material"):
+            let mat = get_component(w, src, "material")
+            add_component(w, eid, "material", _clone_sage(mat))
+        if has_component(w, src, "imported_asset"):
+            let asset = get_component(w, src, "imported_asset")
+            add_component(w, eid, "imported_asset", _clone_sage(asset))
+        if has_component(w, src, "animation_state"):
+            let anim = get_component(w, src, "animation_state")
+            add_component(w, eid, "animation_state", _clone_sage(anim))
+        if has_component(w, src, "asset_ref"):
+            let asset_ref = get_component(w, src, "asset_ref")
+            add_component(w, eid, "asset_ref", _clone_sage(asset_ref))
         add_tag(w, eid, "editable")
         push(new_ids, eid)
         si = si + 1

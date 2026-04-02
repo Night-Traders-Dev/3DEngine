@@ -5,6 +5,14 @@ layout(location = 1) in vec3 fragNormal;
 layout(location = 2) in vec2 fragUV;
 layout(location = 0) out vec4 outColor;
 
+layout(push_constant) uniform PushConstants {
+    mat4 mvp;
+    mat4 model;
+    vec4 baseColor;
+    vec4 materialParams; // metallic, roughness, unused, unused
+    vec4 textureFlags;   // useAlbedo, useNormal, useMR, unused
+} pc;
+
 struct Light {
     vec4 position;   // xyz + type (0=point,1=dir,2=spot)
     vec4 color;      // rgb + intensity
@@ -62,13 +70,23 @@ vec3 getNormalFromMap() {
 }
 
 void main() {
-    vec4 albedoSample = texture(albedoMap, fragUV);
-    vec3 albedo = pow(albedoSample.rgb, vec3(2.2)); // sRGB to linear
-    vec2 mr = texture(metallicRoughnessMap, fragUV).bg; // glTF convention: B=metallic, G=roughness
-    float metallic = mr.x;
-    float roughness = max(mr.y, 0.04);
+    vec4 albedoSample = vec4(1.0);
+    if (pc.textureFlags.x > 0.5) {
+        albedoSample = texture(albedoMap, fragUV);
+    }
+    vec3 albedo = pow(albedoSample.rgb * pc.baseColor.rgb, vec3(2.2));
+    float metallic = pc.materialParams.x;
+    float roughness = max(pc.materialParams.y, 0.04);
+    if (pc.textureFlags.z > 0.5) {
+        vec2 mr = texture(metallicRoughnessMap, fragUV).bg; // glTF convention: B=metallic, G=roughness
+        metallic *= mr.x;
+        roughness = max(mr.y * max(pc.materialParams.y, 0.04), 0.04);
+    }
 
-    vec3 N = getNormalFromMap();
+    vec3 N = normalize(fragNormal);
+    if (pc.textureFlags.y > 0.5) {
+        N = getNormalFromMap();
+    }
     vec3 V = normalize(scene.viewPos.xyz - fragWorldPos);
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
@@ -121,5 +139,5 @@ void main() {
     // Reinhard tone mapping + gamma
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0 / 2.2));
-    outColor = vec4(color, albedoSample.a);
+    outColor = vec4(color, albedoSample.a * pc.baseColor.a);
 }

@@ -31,6 +31,8 @@ from lighting import create_light_scene, directional_light, point_light
 from lighting import add_light, set_ambient, set_view_position
 from lighting import init_light_gpu, update_light_ubo
 from render_system import create_lit_material, draw_mesh_lit, draw_mesh_lit_surface
+from pbr_material import create_pbr_renderer, create_pbr_fallback_textures
+from pbr_material import create_pbr_material_from_imported, bind_pbr_material, draw_pbr
 from sky import create_sky, sky_preset_day, init_sky_gpu, draw_sky
 from editor_grid import create_editor_grid, draw_editor_grid
 from ui_renderer import create_ui_renderer, draw_ui, build_ui_vertices
@@ -141,6 +143,9 @@ set_ambient(ls, 0.25, 0.25, 0.3, 0.5)
 set_view_position(ls, vec3(0.0, 5.0, 10.0))
 update_light_ubo(ls)
 let lit_mat = create_lit_material(r["render_pass"], ls["desc_layout"], ls["desc_set"])
+let pbr_renderer = create_pbr_renderer(r["render_pass"], ls["desc_layout"])
+let pbr_sampler = gpu.create_sampler(gpu.FILTER_LINEAR, gpu.FILTER_LINEAR, gpu.ADDRESS_REPEAT)
+let pbr_fallbacks = create_pbr_fallback_textures()
 
 let sky = create_sky()
 sky_preset_day(sky)
@@ -327,6 +332,37 @@ proc _clip_text_line(text, max_chars):
         i = i + 1
     return out + "..."
 
+proc _surface_from_imported_material(mat_info):
+    if mat_info == nil:
+        return nil
+    let surface = {}
+    surface["albedo"] = vec3(1.0, 1.0, 1.0)
+    surface["alpha"] = 1.0
+    if dict_has(mat_info, "albedo_color"):
+        surface["albedo"] = vec3(mat_info["albedo_color"][0], mat_info["albedo_color"][1], mat_info["albedo_color"][2])
+        if len(mat_info["albedo_color"]) > 3:
+            surface["alpha"] = mat_info["albedo_color"][3]
+    return surface
+
+proc _ensure_imported_pbr_materials(asset):
+    if asset == nil:
+        return []
+    if dict_has(asset, "pbr_materials") and len(asset["pbr_materials"]) == len(asset["materials"]):
+        return asset["pbr_materials"]
+    let built = []
+    let mats = []
+    if dict_has(asset, "materials"):
+        mats = asset["materials"]
+    let i = 0
+    while i < len(mats):
+        let pbr_mat = create_pbr_material_from_imported(mats[i], pbr_fallbacks)
+        if pbr_renderer != nil and pbr_sampler >= 0:
+            bind_pbr_material(pbr_renderer, pbr_mat, pbr_sampler)
+        push(built, pbr_mat)
+        i = i + 1
+    asset["pbr_materials"] = built
+    return built
+
 print "Found " + str(len(importable_assets)) + " importable assets"
 
 # Auto-import any .gltf files found
@@ -342,6 +378,7 @@ while ai < len(importable_assets):
     if ia["type"] == "model" and endswith(ia["name"], ".gltf"):
         let asset = import_gltf(ia["path"])
         if asset != nil:
+            _ensure_imported_pbr_materials(asset)
             imported_models[ia["name"]] = asset
             if asset["animation_count"] > 0:
                 let ani = 0
@@ -730,9 +767,11 @@ while running:
                             if endswith(selected_asset["path"], ".gltf") or endswith(selected_asset["path"], ".glb"):
                                 let imported = import_gltf(selected_asset["path"])
                                 if imported != nil:
+                                    _ensure_imported_pbr_materials(imported)
                                     imported_models[model_key] = imported
                         if dict_has(imported_models, model_key):
                             let model_asset = imported_models[model_key]
+                            _ensure_imported_pbr_materials(model_asset)
                             entity_counter = entity_counter + 1
                             let pos = vec3(cam["target"][0], 0.0, cam["target"][2])
                             let eid = place_entity(editor, pos, "Model_" + str(entity_counter), nil)
@@ -759,6 +798,7 @@ while running:
                             model_key = mk[0]
                         if model_key != "":
                             let model_asset = imported_models[model_key]
+                            _ensure_imported_pbr_materials(model_asset)
                             entity_counter = entity_counter + 1
                             let pos = vec3(cam["target"][0], 0.0, cam["target"][2])
                             let eid = place_entity(editor, pos, "Anim_" + str(entity_counter), nil)
@@ -1013,6 +1053,7 @@ while running:
         let model_keys = dict_keys(imported_models)
         if len(model_keys) > 0:
             let model_asset = imported_models[model_keys[0]]
+            _ensure_imported_pbr_materials(model_asset)
             entity_counter = entity_counter + 1
             let pos = vec3(cam["target"][0], 0.0, cam["target"][2])
             let eid = place_entity(editor, pos, model_asset["name"] + "_" + str(entity_counter), nil)
@@ -1169,15 +1210,34 @@ while running:
         if aabb_in_frustum(frustum_planes, pos, half_ext):
             let lod_level = compute_lod(editor_lod, cam_pos, pos)
             if lod_level < 5:
-                let mi = get_component(world, eid, "mesh_id")
                 let model = transform_to_matrix(t)
                 let mvp = mat4_mul(vp, model)
-                if has_component(world, eid, "material"):
-                    let surface = get_component(world, eid, "material")
-                    draw_mesh_lit_surface(cmd, lit_mat, mi["mesh"], mvp, model, ls["desc_set"], surface)
+                if has_component(world, eid, "imported_asset"):
+                    let asset = get_component(world, eid, "imported_asset")
+                    let pbr_materials = _ensure_imported_pbr_materials(asset)
+                    let gi = 0
+                    while gi < len(asset["gpu_meshes"]):
+                        let gm = asset["gpu_meshes"][gi]
+                        let material_index = -1
+                        if dict_has(gm, "material_index"):
+                            material_index = gm["material_index"]
+                        if pbr_renderer != nil and material_index >= 0 and material_index < len(pbr_materials):
+                            draw_pbr(cmd, pbr_renderer, gm["gpu_mesh"], mvp, model, ls["desc_set"], pbr_materials[material_index])
+                        else:
+                            let surface = nil
+                            if material_index >= 0 and material_index < len(asset["materials"]):
+                                surface = _surface_from_imported_material(asset["materials"][material_index])
+                            draw_mesh_lit_surface(cmd, lit_mat, gm["gpu_mesh"], mvp, model, ls["desc_set"], surface)
+                        draw_count = draw_count + 1
+                        gi = gi + 1
                 else:
-                    draw_mesh_lit(cmd, lit_mat, mi["mesh"], mvp, model, ls["desc_set"])
-                draw_count = draw_count + 1
+                    let mi = get_component(world, eid, "mesh_id")
+                    if has_component(world, eid, "material"):
+                        let surface = get_component(world, eid, "material")
+                        draw_mesh_lit_surface(cmd, lit_mat, mi["mesh"], mvp, model, ls["desc_set"], surface)
+                    else:
+                        draw_mesh_lit(cmd, lit_mat, mi["mesh"], mvp, model, ls["desc_set"])
+                    draw_count = draw_count + 1
         ri = ri + 1
 
     # Gizmo visualization (draw handles as colored boxes)

@@ -5,8 +5,8 @@ from scene_editor import create_scene_editor, select_entity, deselect
 from scene_editor import place_entity, delete_selected, duplicate_selected
 from scene_editor import apply_gizmo_delta, editor_stats
 from scene_editor import toggle_entity_selection, select_all_entities, selected_entities
-from ecs import create_world, spawn, add_component, has_component, entity_count
-from components import TransformComponent, NameComponent
+from ecs import create_world, spawn, add_component, has_component, entity_count, get_component
+from components import TransformComponent, NameComponent, CameraComponent, MaterialComponent
 from collision import ray_vs_aabb
 from math3d import vec3
 from gizmo import GIZMO_TRANSLATE, GIZMO_ROTATE, GIZMO_SCALE
@@ -46,9 +46,16 @@ check("entity has name", has_component(w, eid, "name"))
 check("auto-selected", ed["selected"] == eid)
 
 # Check position
-from ecs import get_component
 let t = get_component(w, eid, "transform")
 check("placed at correct pos", approx(t["position"][0], 5.0))
+
+let cam_comp = CameraComponent(80.0, 0.1, 250.0)
+cam_comp["active"] = true
+add_component(w, eid, "camera", cam_comp)
+let mat_comp = MaterialComponent(0.4, 0.5, 0.9)
+mat_comp["metallic"] = 0.7
+add_component(w, eid, "material", mat_comp)
+add_component(w, eid, "imported_asset", {"name": "MockImport", "materials": [{"name": "Blue"}], "gpu_meshes": [{"gpu_mesh": 7, "material_index": 0}]})
 
 # --- Select/deselect ---
 deselect(ed)
@@ -93,9 +100,18 @@ check("duplicate created", eid2 > 0)
 check("duplicate selected", ed["selected"] == eid2)
 check("duplicate has transform", has_component(w, eid2, "transform"))
 check("duplicate has name", has_component(w, eid2, "name"))
+check("duplicate has camera", has_component(w, eid2, "camera"))
+check("duplicate has material", has_component(w, eid2, "material"))
+check("duplicate has imported asset", has_component(w, eid2, "imported_asset"))
 let t6 = get_component(w, eid2, "transform")
 let t_orig = get_component(w, eid, "transform")
 check("duplicate offset x", t6["position"][0] > t_orig["position"][0])
+let dup_cam = get_component(w, eid2, "camera")
+check("duplicate camera active", dup_cam["active"] == true)
+let dup_mat = get_component(w, eid2, "material")
+check("duplicate material metallic", approx(dup_mat["metallic"], 0.7))
+let dup_asset = get_component(w, eid2, "imported_asset")
+check("duplicate imported asset name", dup_asset["name"] == "MockImport")
 
 # --- Delete ---
 let before_count = entity_count(w)

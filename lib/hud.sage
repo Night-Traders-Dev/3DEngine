@@ -63,15 +63,15 @@ proc create_health_bar(x, y, width, height):
 proc update_health_bar(hb, percent):
     hb["fill"]["value"] = percent
     # Smooth color transition: green -> yellow -> red -> pulsing critical
-    if percent > 0.6:
+    if percent > 0.7:
         hb["fill"]["fill_color"] = HUD_HEALTH_HIGH
     else:
-        if percent > 0.3:
-            let t = (percent - 0.3) / 0.3
+        if percent > 0.35:
+            let t = (percent - 0.35) / 0.35
             hb["fill"]["fill_color"] = color_lerp(HUD_HEALTH_MED, HUD_HEALTH_HIGH, t)
         else:
             if percent > 0.15:
-                let t = (percent - 0.15) / 0.15
+                let t = (percent - 0.15) / 0.2
                 hb["fill"]["fill_color"] = color_lerp(HUD_HEALTH_LOW, HUD_HEALTH_MED, t)
             else:
                 hb["fill"]["fill_color"] = HUD_HEALTH_CRITICAL
@@ -99,6 +99,9 @@ proc create_crosshair(size, thickness, color):
     ch["v_top"]["anchor"] = ANCHOR_CENTER
     ch["v_bottom"] = create_rect(0.0 - ht, gap, thickness, half - gap, HUD_CROSSHAIR)
     ch["v_bottom"]["anchor"] = ANCHOR_CENTER
+    # Compatibility aliases for older tests/callers.
+    ch["h_bar"] = ch["h_left"]
+    ch["v_bar"] = ch["v_top"]
     # Center dot (slightly brighter)
     let dot_size = thickness + 1.0
     ch["dot"] = create_rect(0.0 - dot_size / 2.0, 0.0 - dot_size / 2.0, dot_size, dot_size, HUD_CROSSHAIR_DOT)

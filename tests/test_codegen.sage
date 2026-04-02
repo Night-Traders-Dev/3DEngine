@@ -2,6 +2,7 @@
 from codegen import generate_game_script
 from ecs import create_world, spawn, add_component
 from components import TransformComponent, NameComponent, MaterialComponent
+from components import CameraComponent, PointLightComponent, DirectionalLightComponent
 from physics import RigidbodyComponent, SphereColliderComponent
 from gameplay import HealthComponent
 from math3d import vec3
@@ -55,6 +56,28 @@ hp2["regen_delay"] = 1.5
 hp2["last_damage_time"] = 8.0
 add_component(w, e2, "health", hp2)
 
+let e3 = spawn(w)
+let t3 = TransformComponent(10.0, 3.6, -4.0)
+add_component(w, e3, "transform", t3)
+add_component(w, e3, "name", NameComponent("GameplayCamera"))
+let cam3 = CameraComponent(80.0, 0.2, 900.0)
+cam3["active"] = true
+cam3["yaw"] = 0.75
+cam3["pitch"] = -0.15
+add_component(w, e3, "camera", cam3)
+
+let e4 = spawn(w)
+add_component(w, e4, "transform", TransformComponent(2.0, 6.0, -1.0))
+add_component(w, e4, "name", NameComponent("AuthoredLamp"))
+add_component(w, e4, "light", PointLightComponent(0.8, 0.7, 1.0, 4.2, 12.0))
+
+let e5 = spawn(w)
+let t5 = TransformComponent(0.0, 5.0, 0.0)
+t5["rotation"] = vec3(0.4, 0.2, 0.0)
+add_component(w, e5, "transform", t5)
+add_component(w, e5, "name", NameComponent("SunLight"))
+add_component(w, e5, "light", DirectionalLightComponent(1.0, 0.95, 0.9, 1.6))
+
 let code = generate_game_script(w, "TestScene", {"width": 800, "height": 600})
 check("code generated", code != nil)
 check("code has content", len(code) > 100)
@@ -83,6 +106,12 @@ check("contains collider trigger flag", contains(code, "[\"is_trigger\"] = true"
 check("contains collider offset", contains(code, "[\"offset\"] = vec3(0, 1, 0)"))
 check("contains health current", contains(code, "[\"current\"] = 40"))
 check("contains health regen", contains(code, "[\"regen_rate\"] = 3"))
+check("contains authored camera position", contains(code, "player[\"position\"] = vec3(10, 2, -4)"))
+check("contains authored camera yaw", contains(code, "player[\"yaw\"] = 0.75"))
+check("contains authored camera fov", contains(code, "player[\"fov\"] = 80"))
+check("contains authored point light", contains(code, "point_light(2, 6, -1, 0.8, 0.7, 1, 4.2, 12)"))
+check("contains authored directional light", contains(code, "directional_light("))
+check("omits fallback point light when authored lights exist", contains(code, "point_light(5.0, 4.0, 3.0, 1.0, 0.8, 0.6, 3.0, 20.0)") == false)
 
 # Save and verify
 import io

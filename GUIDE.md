@@ -69,7 +69,7 @@ forge-engine/
 ├── shaders/             # GLSL + SPIR-V shaders
 ├── assets/              # Fonts, textures, saved scenes
 ├── examples/            # 8 demo programs
-├── tests/               # 47 test suites, 1,396 checks
+├── tests/               # 49 test suites, 1,403 checks
 └── build/               # Distribution output
     └── dist/            # Self-contained distributable
 ```
@@ -775,6 +775,8 @@ let model = import_gltf("assets/character.gltf")
 # model["gpu_meshes"], model["materials"], model["animations"]
 ```
 
+Imported glTF assets keep their per-material albedo, metallic, roughness, and texture references. In the editor, imported meshes now prefer the PBR render path when material data is available, with a lit-material fallback for meshes that only provide partial surface data.
+
 ### Material Presets
 
 ```python
@@ -842,6 +844,12 @@ io.writefile("my_game.sage", code)
 # Run interpreted:
 # ./run.sh my_game.sage
 ```
+
+Generated scripts now carry more of the authored scene intent across the editor/runtime boundary:
+
+- Authored point and directional light entities are emitted into the generated lighting setup.
+- The primary scene camera seeds the runtime player controller position, yaw, pitch, FOV, near plane, and far plane.
+- Material-bearing entities continue to use the material-aware lit draw path after export.
 
 ### GPU-Driven Rendering
 

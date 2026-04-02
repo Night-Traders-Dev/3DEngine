@@ -29,6 +29,31 @@ proc _transform_ctor_expr(t):
         return "TransformComponentFull(" + _vec3_expr(t["position"]) + ", " + _vec3_expr(t["rotation"]) + ", " + _vec3_expr(t["scale"]) + ")"
     return "TransformComponent(" + _fmt(t["position"][0]) + ", " + _fmt(t["position"][1]) + ", " + _fmt(t["position"][2]) + ")"
 
+proc _find_primary_camera(world):
+    let cameras = query(world, ["transform", "camera"])
+    if len(cameras) == 0:
+        return -1
+    let i = 0
+    while i < len(cameras):
+        let cam = get_component(world, cameras[i], "camera")
+        if dict_has(cam, "active") and cam["active"]:
+            return cameras[i]
+        i = i + 1
+    return cameras[0]
+
+proc _directional_light_dir(transform):
+    let rot = transform["rotation"]
+    let has_rotation = math.abs(rot[0]) > 0.0001 or math.abs(rot[1]) > 0.0001 or math.abs(rot[2]) > 0.0001
+    if has_rotation == false:
+        return vec3(-0.3, -0.8, -0.5)
+    let pitch = rot[0]
+    let yaw = rot[1]
+    let cp = math.cos(pitch)
+    let sp = math.sin(pitch)
+    let cy = math.cos(yaw)
+    let sy = math.sin(yaw)
+    return vec3(0.0 - sy * cp, 0.0 - sp, 0.0 - cy * cp)
+
 # ============================================================================
 # Generate a complete game script from world state
 # ============================================================================
@@ -86,8 +111,27 @@ proc generate_game_script(world, scene_name, settings):
     push(L, "")
     push(L, "let ls = create_light_scene()")
     push(L, "init_light_gpu(ls)")
-    push(L, "add_light(ls, directional_light(-0.3, -0.8, -0.5, 1.0, 0.95, 0.9, 1.2))")
-    push(L, "add_light(ls, point_light(5.0, 4.0, 3.0, 1.0, 0.8, 0.6, 3.0, 20.0))")
+    let authored_lights = query(world, ["transform", "light"])
+    if len(authored_lights) > 0:
+        let li = 0
+        while li < len(authored_lights):
+            let light_eid = authored_lights[li]
+            let light_t = get_component(world, light_eid, "transform")
+            let light = get_component(world, light_eid, "light")
+            let light_color = light["color"]
+            if light["type"] == "directional":
+                let light_dir = _directional_light_dir(light_t)
+                push(L, "add_light(ls, directional_light(" + _fmt(light_dir[0]) + ", " + _fmt(light_dir[1]) + ", " + _fmt(light_dir[2]) + ", " + _fmt(light_color[0]) + ", " + _fmt(light_color[1]) + ", " + _fmt(light_color[2]) + ", " + _fmt(light["intensity"]) + "))")
+            else:
+                let light_pos = light_t["position"]
+                let light_radius = 20.0
+                if dict_has(light, "radius"):
+                    light_radius = light["radius"]
+                push(L, "add_light(ls, point_light(" + _fmt(light_pos[0]) + ", " + _fmt(light_pos[1]) + ", " + _fmt(light_pos[2]) + ", " + _fmt(light_color[0]) + ", " + _fmt(light_color[1]) + ", " + _fmt(light_color[2]) + ", " + _fmt(light["intensity"]) + ", " + _fmt(light_radius) + "))")
+            li = li + 1
+    else:
+        push(L, "add_light(ls, directional_light(-0.3, -0.8, -0.5, 1.0, 0.95, 0.9, 1.2))")
+        push(L, "add_light(ls, point_light(5.0, 4.0, 3.0, 1.0, 0.8, 0.6, 3.0, 20.0))")
     push(L, "set_ambient(ls, 0.2, 0.2, 0.25, 0.4)")
     push(L, "let lit_mat = create_lit_material(r[" + q + "render_pass" + q + "], ls[" + q + "desc_layout" + q + "], ls[" + q + "desc_set" + q + "])")
     push(L, "let sky = create_sky()")
@@ -189,7 +233,18 @@ proc generate_game_script(world, scene_name, settings):
 
     # Player + Input
     push(L, "let player = create_player_controller()")
-    push(L, "player[" + q + "position" + q + "] = vec3(0.0, 2.0, 15.0)")
+    let export_camera = _find_primary_camera(world)
+    if export_camera >= 0:
+        let cam_t = get_component(world, export_camera, "transform")
+        let cam = get_component(world, export_camera, "camera")
+        push(L, "player[" + q + "position" + q + "] = vec3(" + _fmt(cam_t["position"][0]) + ", " + _fmt(cam_t["position"][1] - 1.6) + ", " + _fmt(cam_t["position"][2]) + ")")
+        push(L, "player[" + q + "yaw" + q + "] = " + _fmt(cam["yaw"]))
+        push(L, "player[" + q + "pitch" + q + "] = " + _fmt(cam["pitch"]))
+        push(L, "player[" + q + "fov" + q + "] = " + _fmt(cam["fov"]))
+        push(L, "player[" + q + "near" + q + "] = " + _fmt(cam["near"]))
+        push(L, "player[" + q + "far" + q + "] = " + _fmt(cam["far"]))
+    else:
+        push(L, "player[" + q + "position" + q + "] = vec3(0.0, 2.0, 15.0)")
     push(L, "player[" + q + "speed" + q + "] = 8.0")
     push(L, "let inp = create_input()")
     push(L, "default_fps_bindings(inp)")
