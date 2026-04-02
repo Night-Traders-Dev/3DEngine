@@ -115,11 +115,11 @@ proc create_lit_material(render_pass, desc_layout, desc_set):
         print "ERROR: Failed to load lit shaders"
         return nil
 
-    # Pipeline layout: push = 144 bytes (MVP + Model + baseColor), 1 descriptor set (SceneUBO)
+    # Pipeline layout: push = 160 bytes (MVP + Model + baseColor + shadow flags), 1 descriptor set (SceneUBO)
     let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
     let skin_binding = _create_skin_binding()
     let shadow_binding = _create_shadow_binding()
-    let pipe_layout = gpu.create_pipeline_layout([desc_layout, skin_binding["layout"], shadow_binding["layout"]], 144, stage_flags)
+    let pipe_layout = gpu.create_pipeline_layout([desc_layout, skin_binding["layout"], shadow_binding["layout"]], 160, stage_flags)
 
     let cfg = {}
     cfg["layout"] = pipe_layout
@@ -205,10 +205,13 @@ proc create_unlit_material(render_pass):
 # ============================================================================
 # Draw helpers
 # ============================================================================
-proc build_lit_push_data(mvp_data, model_data, base_color):
+proc build_lit_push_data(mvp_data, model_data, base_color, receive_shadows):
     let color = [0.75, 0.75, 0.75, 1.0]
     if base_color != nil:
         color = base_color
+    let receive_flag = 1.0
+    if receive_shadows == false:
+        receive_flag = 0.0
     let push_data = []
     let i = 0
     while i < 16:
@@ -222,12 +225,22 @@ proc build_lit_push_data(mvp_data, model_data, base_color):
     push(push_data, color[1])
     push(push_data, color[2])
     push(push_data, color[3])
+    push(push_data, receive_flag)
+    push(push_data, 0.0)
+    push(push_data, 0.0)
+    push(push_data, 0.0)
     return push_data
 
 proc draw_mesh_lit(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set):
-    draw_mesh_lit_skinned(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, nil)
+    draw_mesh_lit_controlled(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, true)
+
+proc draw_mesh_lit_controlled(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, receive_shadows):
+    draw_mesh_lit_skinned_controlled(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, nil, receive_shadows)
 
 proc draw_mesh_lit_skinned(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, skin_draw):
+    draw_mesh_lit_skinned_controlled(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, skin_draw, true)
+
+proc draw_mesh_lit_skinned_controlled(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, skin_draw, receive_shadows):
     gpu.cmd_bind_graphics_pipeline(cmd, mat["pipeline"])
     let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
     let joint_palette = nil
@@ -238,16 +251,22 @@ proc draw_mesh_lit_skinned(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, s
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 0, desc_set, 0)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 1, mat["skin_desc_set"], 0)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 2, mat["shadow_desc_set"], 0)
-    let push_data = build_lit_push_data(mvp_data, model_data, nil)
+    let push_data = build_lit_push_data(mvp_data, model_data, nil, receive_shadows)
     gpu.cmd_push_constants(cmd, mat["pipe_layout"], stage_flags, push_data)
     gpu.cmd_bind_vertex_buffer(cmd, mesh_gpu["vbuf"])
     gpu.cmd_bind_index_buffer(cmd, mesh_gpu["ibuf"])
     gpu.cmd_draw_indexed(cmd, mesh_gpu["index_count"], 1, 0, 0, 0)
 
 proc draw_mesh_lit_surface(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, surface):
-    draw_mesh_lit_surface_skinned(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, surface, nil)
+    draw_mesh_lit_surface_controlled(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, surface, true)
+
+proc draw_mesh_lit_surface_controlled(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, surface, receive_shadows):
+    draw_mesh_lit_surface_skinned_controlled(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, surface, nil, receive_shadows)
 
 proc draw_mesh_lit_surface_skinned(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, surface, skin_draw):
+    draw_mesh_lit_surface_skinned_controlled(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, surface, skin_draw, true)
+
+proc draw_mesh_lit_surface_skinned_controlled(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, surface, skin_draw, receive_shadows):
     let base_color = [0.75, 0.75, 0.75, 1.0]
     if surface != nil and dict_has(surface, "albedo"):
         base_color[0] = surface["albedo"][0]
@@ -265,7 +284,7 @@ proc draw_mesh_lit_surface_skinned(cmd, mat, mesh_gpu, mvp_data, model_data, des
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 0, desc_set, 0)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 1, mat["skin_desc_set"], 0)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 2, mat["shadow_desc_set"], 0)
-    let push_data = build_lit_push_data(mvp_data, model_data, base_color)
+    let push_data = build_lit_push_data(mvp_data, model_data, base_color, receive_shadows)
     gpu.cmd_push_constants(cmd, mat["pipe_layout"], stage_flags, push_data)
     gpu.cmd_bind_vertex_buffer(cmd, mesh_gpu["vbuf"])
     gpu.cmd_bind_index_buffer(cmd, mesh_gpu["ibuf"])

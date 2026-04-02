@@ -39,6 +39,7 @@ check("point light pos y", approx(pl["position"][1], 2.0))
 check("point light color r", approx(pl["color"][0], 1.0))
 check("point light intensity", approx(pl["intensity"], 5.0))
 check("point light radius", approx(pl["radius"], 20.0))
+check("point light shadows disabled by default", pl["cast_shadows"] == false)
 check("point light enabled", pl["enabled"] == true)
 
 # --- Directional light ---
@@ -46,6 +47,7 @@ let dl = directional_light(0.0, -1.0, 0.0, 1.0, 1.0, 0.9, 1.5)
 check("dir light type", dl["type"] == LIGHT_TYPE_DIRECTIONAL)
 check("dir light direction normalized", approx(dl["position"][1], -1.0))
 check("dir light intensity", approx(dl["intensity"], 1.5))
+check("dir light shadows enabled by default", dl["cast_shadows"] == true)
 
 # --- Spot light ---
 let sl = spot_light(0.0, 5.0, 0.0, 1.0, 1.0, 1.0, 3.0, 15.0, 15.0, 30.0)
@@ -54,6 +56,7 @@ check("spot light position", approx(sl["position"][1], 5.0))
 check("spot light has inner cone", sl["inner_cone"] > 0.0)
 check("spot light has outer cone", sl["outer_cone"] > 0.0)
 check("inner > outer (cosines)", sl["inner_cone"] > sl["outer_cone"])
+check("spot light shadows disabled by default", sl["cast_shadows"] == false)
 
 # --- Add lights ---
 let idx0 = add_light(ls, pl)

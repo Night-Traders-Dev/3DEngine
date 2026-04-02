@@ -32,6 +32,7 @@ layout(push_constant) uniform PushConstants {
     mat4 mvp;
     mat4 model;
     vec4 baseColor;
+    vec4 shadowControl;
 } pc;
 
 float sample_shadow(vec3 normal, vec3 lightDir) {
@@ -113,7 +114,7 @@ void main() {
 
         atten *= intensity;
         float visibility = 1.0;
-        if (lightType == 1 && i == int(shadow_data.shadowParams.w + 0.5)) {
+        if (pc.shadowControl.x > 0.5 && lightType == 1 && i == int(shadow_data.shadowParams.w + 0.5)) {
             visibility = sample_shadow(N, L);
         }
 

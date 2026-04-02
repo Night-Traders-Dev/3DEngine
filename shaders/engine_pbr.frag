@@ -11,6 +11,7 @@ layout(push_constant) uniform PushConstants {
     vec4 baseColor;
     vec4 materialParams; // metallic, roughness, unused, unused
     vec4 textureFlags;   // useAlbedo, useNormal, useMR, unused
+    vec4 shadowControl;
 } pc;
 
 struct Light {
@@ -153,7 +154,7 @@ void main() {
         }
         atten *= intensity;
         float visibility = 1.0;
-        if (lightType == 1 && i == int(shadow_data.shadowParams.w + 0.5)) {
+        if (pc.shadowControl.x > 0.5 && lightType == 1 && i == int(shadow_data.shadowParams.w + 0.5)) {
             visibility = sample_shadow(N, L);
         }
 

@@ -55,6 +55,7 @@ proc point_light(px, py, pz, r, g, b, intensity, radius):
     l["radius"] = radius
     l["inner_cone"] = 0.0
     l["outer_cone"] = 0.0
+    l["cast_shadows"] = false
     l["enabled"] = true
     return l
 
@@ -67,6 +68,7 @@ proc directional_light(dx, dy, dz, r, g, b, intensity):
     l["radius"] = 0.0
     l["inner_cone"] = 0.0
     l["outer_cone"] = 0.0
+    l["cast_shadows"] = true
     l["enabled"] = true
     return l
 
@@ -80,6 +82,7 @@ proc spot_light(px, py, pz, r, g, b, intensity, radius, inner_deg, outer_deg):
     l["radius"] = radius
     l["inner_cone"] = math.cos(inner_deg * 3.14159265 / 180.0)
     l["outer_cone"] = math.cos(outer_deg * 3.14159265 / 180.0)
+    l["cast_shadows"] = false
     l["enabled"] = true
     return l
 

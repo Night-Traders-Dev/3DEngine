@@ -212,13 +212,17 @@ proc generate_game_script(world, scene_name, settings):
             let light_color = light["color"]
             if light["type"] == "directional":
                 let light_dir = _directional_light_dir(light_t)
-                push(L, "add_light(ls, directional_light(" + _fmt(light_dir[0]) + ", " + _fmt(light_dir[1]) + ", " + _fmt(light_dir[2]) + ", " + _fmt(light_color[0]) + ", " + _fmt(light_color[1]) + ", " + _fmt(light_color[2]) + ", " + _fmt(light["intensity"]) + "))")
+                push(L, "let light_idx_" + str(li) + " = add_light(ls, directional_light(" + _fmt(light_dir[0]) + ", " + _fmt(light_dir[1]) + ", " + _fmt(light_dir[2]) + ", " + _fmt(light_color[0]) + ", " + _fmt(light_color[1]) + ", " + _fmt(light_color[2]) + ", " + _fmt(light["intensity"]) + "))")
+                if dict_has(light, "cast_shadows"):
+                    push(L, "ls[" + q + "lights" + q + "][light_idx_" + str(li) + "][" + q + "cast_shadows" + q + "] = " + _bool_lit(light["cast_shadows"]))
             else:
                 let light_pos = light_t["position"]
                 let light_radius = 20.0
                 if dict_has(light, "radius"):
                     light_radius = light["radius"]
-                push(L, "add_light(ls, point_light(" + _fmt(light_pos[0]) + ", " + _fmt(light_pos[1]) + ", " + _fmt(light_pos[2]) + ", " + _fmt(light_color[0]) + ", " + _fmt(light_color[1]) + ", " + _fmt(light_color[2]) + ", " + _fmt(light["intensity"]) + ", " + _fmt(light_radius) + "))")
+                push(L, "let light_idx_" + str(li) + " = add_light(ls, point_light(" + _fmt(light_pos[0]) + ", " + _fmt(light_pos[1]) + ", " + _fmt(light_pos[2]) + ", " + _fmt(light_color[0]) + ", " + _fmt(light_color[1]) + ", " + _fmt(light_color[2]) + ", " + _fmt(light["intensity"]) + ", " + _fmt(light_radius) + "))")
+                if dict_has(light, "cast_shadows"):
+                    push(L, "ls[" + q + "lights" + q + "][light_idx_" + str(li) + "][" + q + "cast_shadows" + q + "] = " + _bool_lit(light["cast_shadows"]))
             li = li + 1
     else:
         push(L, "add_light(ls, directional_light(-0.3, -0.8, -0.5, 1.0, 0.95, 0.9, 1.2))")

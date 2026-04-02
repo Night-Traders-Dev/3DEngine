@@ -6,6 +6,7 @@ layout(push_constant) uniform PushConstants {
     mat4 mvp;
     mat4 model;
     vec4 baseColor;
+    vec4 shadowControl;
 } pc;
 
 layout(set = 1, binding = 0) uniform SkinningUBO {

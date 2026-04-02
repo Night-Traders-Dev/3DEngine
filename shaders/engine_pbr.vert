@@ -8,6 +8,7 @@ layout(push_constant) uniform PushConstants {
     vec4 baseColor;
     vec4 materialParams;
     vec4 textureFlags;
+    vec4 shadowControl;
 } pc;
 
 layout(set = 2, binding = 0) uniform SkinningUBO {

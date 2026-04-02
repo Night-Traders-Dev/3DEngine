@@ -42,7 +42,10 @@ proc primary_shadow_light(ls):
     let i = 0
     while i < len(ls["lights"]):
         let light = ls["lights"][i]
-        if light != nil and light["enabled"] and light["type"] == 1:
+        let casts = true
+        if light != nil and dict_has(light, "cast_shadows"):
+            casts = light["cast_shadows"]
+        if light != nil and light["enabled"] and light["type"] == 1 and casts:
             return {"index": i, "direction": light["position"]}
         i = i + 1
     return fallback

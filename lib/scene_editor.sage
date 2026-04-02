@@ -224,6 +224,9 @@ proc duplicate_selected(ed):
         if has_component(w, src, "mesh_id"):
             let sm = get_component(w, src, "mesh_id")
             add_component(w, eid, "mesh_id", _clone_sage(sm))
+        if has_component(w, src, "mesh_renderer"):
+            let smr = get_component(w, src, "mesh_renderer")
+            add_component(w, eid, "mesh_renderer", _clone_sage(smr))
         if has_component(w, src, "rigidbody"):
             let rb = get_component(w, src, "rigidbody")
             add_component(w, eid, "rigidbody", _clone_sage(rb))

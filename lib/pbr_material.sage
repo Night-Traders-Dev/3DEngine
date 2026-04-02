@@ -179,7 +179,7 @@ proc create_pbr_renderer(render_pass, scene_desc_layout):
     let skin_binding = _create_skin_binding()
     let shadow_binding = _create_shadow_binding()
     let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
-    let pipe_layout = gpu.create_pipeline_layout([scene_desc_layout, mat_layout, skin_binding["layout"], shadow_binding["layout"]], 176, stage_flags)
+    let pipe_layout = gpu.create_pipeline_layout([scene_desc_layout, mat_layout, skin_binding["layout"], shadow_binding["layout"]], 192, stage_flags)
 
     let cfg = {}
     cfg["layout"] = pipe_layout
@@ -245,8 +245,11 @@ proc bind_pbr_material(pbr_renderer, mat_data, sampler):
     mat_data["sampler"] = sampler
     return ds
 
-proc build_pbr_push_data(mvp, model, mat_data):
+proc build_pbr_push_data(mvp, model, mat_data, receive_shadows):
     let push_data = []
+    let receive_flag = 1.0
+    if receive_shadows == false:
+        receive_flag = 0.0
     let i = 0
     while i < 16:
         push(push_data, mvp[i])
@@ -276,15 +279,25 @@ proc build_pbr_push_data(mvp, model, mat_data):
     else:
         push(push_data, 0.0)
     push(push_data, 0.0)
+    push(push_data, receive_flag)
+    push(push_data, 0.0)
+    push(push_data, 0.0)
+    push(push_data, 0.0)
     return push_data
 
 # ============================================================================
 # Draw mesh with PBR material
 # ============================================================================
 proc draw_pbr(cmd, pbr_renderer, mesh_gpu, mvp, model, scene_desc_set, mat_data):
-    draw_pbr_skinned(cmd, pbr_renderer, mesh_gpu, mvp, model, scene_desc_set, mat_data, nil)
+    draw_pbr_controlled(cmd, pbr_renderer, mesh_gpu, mvp, model, scene_desc_set, mat_data, true)
+
+proc draw_pbr_controlled(cmd, pbr_renderer, mesh_gpu, mvp, model, scene_desc_set, mat_data, receive_shadows):
+    draw_pbr_skinned_controlled(cmd, pbr_renderer, mesh_gpu, mvp, model, scene_desc_set, mat_data, nil, receive_shadows)
 
 proc draw_pbr_skinned(cmd, pbr_renderer, mesh_gpu, mvp, model, scene_desc_set, mat_data, skin_draw):
+    draw_pbr_skinned_controlled(cmd, pbr_renderer, mesh_gpu, mvp, model, scene_desc_set, mat_data, skin_draw, true)
+
+proc draw_pbr_skinned_controlled(cmd, pbr_renderer, mesh_gpu, mvp, model, scene_desc_set, mat_data, skin_draw, receive_shadows):
     gpu.cmd_bind_graphics_pipeline(cmd, pbr_renderer["pipeline"])
     let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
     let joint_palette = nil
@@ -297,7 +310,7 @@ proc draw_pbr_skinned(cmd, pbr_renderer, mesh_gpu, mvp, model, scene_desc_set, m
         gpu.cmd_bind_descriptor_set(cmd, pbr_renderer["pipe_layout"], 1, mat_data["desc_set"])
     gpu.cmd_bind_descriptor_set(cmd, pbr_renderer["pipe_layout"], 2, pbr_renderer["skin_desc_set"])
     gpu.cmd_bind_descriptor_set(cmd, pbr_renderer["pipe_layout"], 3, pbr_renderer["shadow_desc_set"])
-    let push_data = build_pbr_push_data(mvp, model, mat_data)
+    let push_data = build_pbr_push_data(mvp, model, mat_data, receive_shadows)
     gpu.cmd_push_constants(cmd, pbr_renderer["pipe_layout"], stage_flags, push_data)
     gpu.cmd_bind_vertex_buffer(cmd, mesh_gpu["vbuf"])
     gpu.cmd_bind_index_buffer(cmd, mesh_gpu["ibuf"])

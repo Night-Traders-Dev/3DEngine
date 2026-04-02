@@ -19,7 +19,8 @@ from launch_screen import run_launch_screen
 from ecs import create_world, spawn, add_component, get_component
 from ecs import has_component, query, tick_systems, flush_dead
 from ecs import entity_count, destroy, add_tag, has_tag, remove_component, register_system
-from components import TransformComponent, NameComponent, PointLightComponent, MaterialComponent
+from components import TransformComponent, NameComponent, PointLightComponent, DirectionalLightComponent, MaterialComponent
+from components import MeshRendererComponent
 from input import create_input, update_input, bind_action
 from input import action_held, action_just_pressed
 from input import mouse_delta, scroll_value, mouse_position
@@ -31,11 +32,12 @@ from lighting import create_light_scene, directional_light, point_light
 from lighting import add_light, set_ambient, set_view_position
 from lighting import init_light_gpu, update_light_ubo
 from render_system import create_lit_material, draw_mesh_lit, draw_mesh_lit_surface
-from render_system import draw_mesh_lit_surface_skinned
+from render_system import draw_mesh_lit_surface_skinned, draw_mesh_lit_controlled
+from render_system import draw_mesh_lit_surface_controlled, draw_mesh_lit_surface_skinned_controlled
 from render_system import set_lit_material_shadow_source
 from pbr_material import create_pbr_renderer, create_pbr_fallback_textures
 from pbr_material import create_pbr_material_from_imported, bind_pbr_material, draw_pbr
-from pbr_material import draw_pbr_skinned
+from pbr_material import draw_pbr_skinned, draw_pbr_controlled, draw_pbr_skinned_controlled
 from pbr_material import set_pbr_shadow_source
 from sky import create_sky, sky_preset_day, init_sky_gpu, draw_sky
 from editor_grid import create_editor_grid, draw_editor_grid
@@ -139,14 +141,6 @@ if _launch_action == "open":
 # ============================================================================
 let ls = create_light_scene()
 init_light_gpu(ls)
-# Three-point lighting for professional look
-add_light(ls, directional_light(-0.3, -0.8, -0.5, 1.0, 0.98, 0.92, 1.8))
-add_light(ls, point_light(8.0, 6.0, 5.0, 1.0, 0.95, 0.85, 4.5, 35.0))
-add_light(ls, point_light(-5.0, 4.0, -3.0, 0.7, 0.8, 1.0, 3.0, 25.0))
-# Fill light (softer, from opposite side)
-add_light(ls, point_light(-8.0, 3.0, 6.0, 0.6, 0.65, 0.8, 2.0, 30.0))
-# Rim/back light for edge definition
-add_light(ls, point_light(0.0, 8.0, -8.0, 0.9, 0.9, 1.0, 2.5, 40.0))
 set_ambient(ls, 0.25, 0.25, 0.3, 0.5)
 # Force initial UBO upload
 set_view_position(ls, vec3(0.0, 5.0, 10.0))
@@ -264,10 +258,16 @@ add_tag(world, ge, "editable")
 # A few starter objects
 let c1 = place_entity(editor, vec3(0.0, 0.5, 0.0), "Cube_1", cube_gpu)
 add_component(world, c1, "mesh_id", {"mesh": cube_gpu, "name": "cube"})
+_ensure_entity_mesh_renderer(world, c1, "cube")
 let c2 = place_entity(editor, vec3(3.0, 0.5, 0.0), "Cube_2", cube_gpu)
 add_component(world, c2, "mesh_id", {"mesh": cube_gpu, "name": "cube"})
+_ensure_entity_mesh_renderer(world, c2, "cube")
 let s1 = place_entity(editor, vec3(-2.0, 1.0, 2.0), "Sphere_1", sphere_gpu)
 add_component(world, s1, "mesh_id", {"mesh": sphere_gpu, "name": "sphere"})
+_ensure_entity_mesh_renderer(world, s1, "sphere")
+
+_sync_world_lights(ls, world)
+update_light_ubo(ls)
 
 deselect(editor)
 let entity_counter = 4
@@ -290,9 +290,11 @@ proc _rehydrate_mesh_refs(w):
             m["mesh"] = sphere_gpu
         else:
             if mname == "imported":
+                _ensure_entity_mesh_renderer(w, eid, "imported")
                 mi = mi + 1
                 continue
             m["mesh"] = cube_gpu
+        _ensure_entity_mesh_renderer(w, eid, mname)
         mi = mi + 1
 
 proc _rehydrate_imported_assets(w):
@@ -318,6 +320,7 @@ proc _rehydrate_imported_assets(w):
                 add_component(w, eid, "imported_asset", asset)
                 if len(asset["gpu_meshes"]) > 0:
                     add_component(w, eid, "mesh_id", {"mesh": asset["gpu_meshes"][0]["gpu_mesh"], "name": "imported"})
+                    _ensure_entity_mesh_renderer(w, eid, "imported")
         ii = ii + 1
 
 # Scan for importable assets
@@ -408,6 +411,104 @@ proc _ensure_imported_pbr_materials(asset):
     asset["pbr_materials"] = built
     return built
 
+proc _ensure_entity_mesh_renderer(w, eid, material_id):
+    let mesh_handle = nil
+    if has_component(w, eid, "mesh_id"):
+        let mi = get_component(w, eid, "mesh_id")
+        if mi != nil and dict_has(mi, "mesh"):
+            mesh_handle = mi["mesh"]
+    if has_component(w, eid, "mesh_renderer"):
+        let mr = get_component(w, eid, "mesh_renderer")
+        mr["mesh"] = mesh_handle
+        if dict_has(mr, "material") == false or mr["material"] == nil or mr["material"] == "":
+            mr["material"] = material_id
+        if dict_has(mr, "visible") == false:
+            mr["visible"] = true
+        if dict_has(mr, "cast_shadows") == false:
+            mr["cast_shadows"] = true
+        if dict_has(mr, "receive_shadows") == false:
+            mr["receive_shadows"] = true
+        return mr
+    let mr = MeshRendererComponent(mesh_handle, material_id)
+    add_component(w, eid, "mesh_renderer", mr)
+    return mr
+
+proc _mesh_visible(w, eid):
+    if has_component(w, eid, "mesh_renderer"):
+        let mr = get_component(w, eid, "mesh_renderer")
+        if mr != nil and dict_has(mr, "visible"):
+            return mr["visible"]
+    return true
+
+proc _mesh_casts_shadows(w, eid):
+    if _mesh_visible(w, eid) == false:
+        return false
+    if has_component(w, eid, "mesh_renderer"):
+        let mr = get_component(w, eid, "mesh_renderer")
+        if mr != nil and dict_has(mr, "cast_shadows"):
+            return mr["cast_shadows"]
+    return true
+
+proc _mesh_receives_shadows(w, eid):
+    if _mesh_visible(w, eid) == false:
+        return false
+    if has_component(w, eid, "mesh_renderer"):
+        let mr = get_component(w, eid, "mesh_renderer")
+        if mr != nil and dict_has(mr, "receive_shadows"):
+            return mr["receive_shadows"]
+    return true
+
+proc _directional_light_dir_from_transform(transform):
+    let rot = transform["rotation"]
+    let has_rotation = math.abs(rot[0]) > 0.0001 or math.abs(rot[1]) > 0.0001 or math.abs(rot[2]) > 0.0001
+    if has_rotation == false:
+        return vec3(-0.3, -0.8, -0.5)
+    let pitch = rot[0]
+    let yaw = rot[1]
+    let cp = math.cos(pitch)
+    let sp = math.sin(pitch)
+    let cy = math.cos(yaw)
+    let sy = math.sin(yaw)
+    return vec3(0.0 - sy * cp, 0.0 - sp, 0.0 - cy * cp)
+
+proc _add_default_editor_lights(light_scene):
+    light_scene["lights"] = []
+    add_light(light_scene, directional_light(-0.3, -0.8, -0.5, 1.0, 0.98, 0.92, 1.8))
+    add_light(light_scene, point_light(8.0, 6.0, 5.0, 1.0, 0.95, 0.85, 4.5, 35.0))
+    add_light(light_scene, point_light(-5.0, 4.0, -3.0, 0.7, 0.8, 1.0, 3.0, 25.0))
+    add_light(light_scene, point_light(-8.0, 3.0, 6.0, 0.6, 0.65, 0.8, 2.0, 30.0))
+    add_light(light_scene, point_light(0.0, 8.0, -8.0, 0.9, 0.9, 1.0, 2.5, 40.0))
+
+proc _sync_world_lights(light_scene, w):
+    let authored = query(w, ["transform", "light"])
+    light_scene["lights"] = []
+    if len(authored) == 0:
+        _add_default_editor_lights(light_scene)
+        return 5
+    let i = 0
+    while i < len(authored):
+        let eid = authored[i]
+        let t = get_component(w, eid, "transform")
+        let light = get_component(w, eid, "light")
+        if t != nil and light != nil:
+            if light["type"] == "directional":
+                let dir = _directional_light_dir_from_transform(t)
+                let l = directional_light(dir[0], dir[1], dir[2], light["color"][0], light["color"][1], light["color"][2], light["intensity"])
+                if dict_has(light, "cast_shadows"):
+                    l["cast_shadows"] = light["cast_shadows"]
+                add_light(light_scene, l)
+            else:
+                let pos = t["position"]
+                let radius = 20.0
+                if dict_has(light, "radius"):
+                    radius = light["radius"]
+                let l = point_light(pos[0], pos[1], pos[2], light["color"][0], light["color"][1], light["color"][2], light["intensity"], radius)
+                if dict_has(light, "cast_shadows"):
+                    l["cast_shadows"] = light["cast_shadows"]
+                add_light(light_scene, l)
+        i = i + 1
+    return len(light_scene["lights"])
+
 proc _update_imported_animation_states(w, dt):
     let animated = query(w, ["imported_asset", "animation_state"])
     let i = 0
@@ -432,7 +533,7 @@ proc _render_shadow_world(sr, w, light_scene, focus_point, radius):
     while i < len(renderers):
         let eid = renderers[i]
         let t = get_component(w, eid, "transform")
-        if t != nil:
+        if t != nil and _mesh_casts_shadows(w, eid):
             let model = transform_to_matrix(t)
             if has_component(w, eid, "imported_asset"):
                 let asset = get_component(w, eid, "imported_asset")
@@ -746,7 +847,7 @@ while running:
                 if clicked_menu == 2:
                     menu_items_list = ["Outliner", "Details", "Content Browser", "---", "Reset Layout"]
                 if clicked_menu == 3:
-                    menu_items_list = ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Light", "---", "Apply Metal", "Apply Wood", "Apply Glass", "Apply Gold", "---", "Toggle Physics", "Save as Prefab", "---", "Generate Code"]
+                    menu_items_list = ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Light", "Add Directional Light", "---", "Apply Metal", "Apply Wood", "Apply Glass", "Apply Gold", "---", "Toggle Physics", "Save as Prefab", "---", "Generate Code"]
                 if clicked_menu == 4:
                     menu_items_list = ["Controls", "---", "About Forge Engine"]
                 open_menu(menu_x_positions[clicked_menu] - 4.0, layout["menubar_h"], menu_items_list)
@@ -793,7 +894,7 @@ while running:
         if is_menu_open():
             close_menu()
         else:
-            open_menu(mx, my, ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Light", "---", "Place Selected Asset", "Browse Assets", "Browse Textures", "Browse Sprites", "Browse Animations", "---", "Select All", "Delete Selected"])
+            open_menu(mx, my, ["Add Cube", "Add Sphere", "Add Physics Cube", "Add Light", "Add Directional Light", "---", "Place Selected Asset", "Browse Assets", "Browse Textures", "Browse Sprites", "Browse Animations", "---", "Select All", "Delete Selected"])
 
     # Menu click (handles both context menu and menu bar dropdowns)
     if left_pressed and is_menu_open():
@@ -801,7 +902,7 @@ while running:
         if menu_idx >= 0:
             let items = get_menu_items()
             let item = items[menu_idx]
-            if play_mode and (item == "Add Cube" or item == "Add Sphere" or item == "Add Physics Cube" or item == "Add Light" or item == "Place Selected Asset" or item == "Delete" or item == "Delete Selected" or item == "Duplicate" or item == "Toggle Physics" or item == "New Scene" or item == "Open Scene..."):
+            if play_mode and (item == "Add Cube" or item == "Add Sphere" or item == "Add Physics Cube" or item == "Add Light" or item == "Add Directional Light" or item == "Place Selected Asset" or item == "Delete" or item == "Delete Selected" or item == "Duplicate" or item == "Toggle Physics" or item == "New Scene" or item == "Open Scene..."):
                 print "Stop Play mode before editing the scene"
                 close_menu()
                 menubar_active = -1
@@ -832,6 +933,13 @@ while running:
                 let eid = place_entity(editor, pos, "Light_" + str(entity_counter), sphere_gpu)
                 add_component(world, eid, "mesh_id", {"mesh": sphere_gpu, "name": "sphere"})
                 add_component(world, eid, "light", PointLightComponent(1.0, 0.95, 0.85, 3.0, 18.0))
+            if item == "Add Directional Light":
+                entity_counter = entity_counter + 1
+                let pos = vec3(cam["target"][0], 6.0, cam["target"][2] + 4.0)
+                let eid = place_entity(editor, pos, "SunLight_" + str(entity_counter), sphere_gpu)
+                add_component(world, eid, "mesh_id", {"mesh": sphere_gpu, "name": "sphere"})
+                let sun = DirectionalLightComponent(1.0, 0.95, 0.9, 1.6)
+                add_component(world, eid, "light", sun)
             if item == "Browse Assets":
                 _set_content_filter("all")
                 print "Content filter: all assets (" + str(len(content_assets_all)) + ")"
@@ -1330,6 +1438,7 @@ while running:
 
     # --- Lighting ---
     let cam_pos = editor_camera_position(cam)
+    _sync_world_lights(ls, world)
     set_view_position(ls, cam_pos)
     update_light_ubo(ls)
     _update_imported_animation_states(world, ts["dt"])
@@ -1369,11 +1478,12 @@ while running:
         let pos = t["position"]
         # Frustum cull + LOD
         let half_ext = vec3(2.0, 2.0, 2.0)
-        if aabb_in_frustum(frustum_planes, pos, half_ext):
+        if _mesh_visible(world, eid) and aabb_in_frustum(frustum_planes, pos, half_ext):
             let lod_level = compute_lod(editor_lod, cam_pos, pos)
             if lod_level < 5:
                 let model = transform_to_matrix(t)
                 let mvp = mat4_mul(vp, model)
+                let receive_shadows = _mesh_receives_shadows(world, eid)
                 if has_component(world, eid, "imported_asset"):
                     let asset = get_component(world, eid, "imported_asset")
                     let pbr_materials = _ensure_imported_pbr_materials(asset)
@@ -1390,21 +1500,21 @@ while running:
                         let imported_model = mat4_mul(model, gm["model"])
                         let imported_mvp = mat4_mul(vp, imported_model)
                         if pbr_renderer != nil and material_index >= 0 and material_index < len(pbr_materials):
-                            draw_pbr_skinned(cmd, pbr_renderer, gm["gpu_mesh"], imported_mvp, imported_model, ls["desc_set"], pbr_materials[material_index], gm)
+                            draw_pbr_skinned_controlled(cmd, pbr_renderer, gm["gpu_mesh"], imported_mvp, imported_model, ls["desc_set"], pbr_materials[material_index], gm, receive_shadows)
                         else:
                             let surface = nil
                             if material_index >= 0 and material_index < len(asset["materials"]):
                                 surface = _surface_from_imported_material(asset["materials"][material_index])
-                            draw_mesh_lit_surface_skinned(cmd, lit_mat, gm["gpu_mesh"], imported_mvp, imported_model, ls["desc_set"], surface, gm)
+                            draw_mesh_lit_surface_skinned_controlled(cmd, lit_mat, gm["gpu_mesh"], imported_mvp, imported_model, ls["desc_set"], surface, gm, receive_shadows)
                         draw_count = draw_count + 1
                         gi = gi + 1
                 else:
                     let mi = get_component(world, eid, "mesh_id")
                     if has_component(world, eid, "material"):
                         let surface = get_component(world, eid, "material")
-                        draw_mesh_lit_surface(cmd, lit_mat, mi["mesh"], mvp, model, ls["desc_set"], surface)
+                        draw_mesh_lit_surface_controlled(cmd, lit_mat, mi["mesh"], mvp, model, ls["desc_set"], surface, receive_shadows)
                     else:
-                        draw_mesh_lit(cmd, lit_mat, mi["mesh"], mvp, model, ls["desc_set"])
+                        draw_mesh_lit_controlled(cmd, lit_mat, mi["mesh"], mvp, model, ls["desc_set"], receive_shadows)
                     draw_count = draw_count + 1
         ri = ri + 1
 

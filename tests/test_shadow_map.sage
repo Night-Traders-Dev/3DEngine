@@ -26,6 +26,9 @@ add_light(empty_ls, directional_light(-0.4, -0.9, -0.1, 1.0, 0.95, 0.9, 1.2))
 let primary = primary_shadow_light(empty_ls)
 check("primary light index finds directional", primary["index"] == 1)
 check("primary light keeps directional vector", primary["direction"][0] < 0.0 and primary["direction"][1] < 0.0)
+empty_ls["lights"][1]["cast_shadows"] = false
+let disabled_primary = primary_shadow_light(empty_ls)
+check("shadow selector skips disabled directional light", disabled_primary["index"] == -1)
 
 let light_vp = compute_light_vp(vec3(-0.3, -0.8, -0.5), vec3(2.0, 1.0, -3.0), 40.0)
 check("light vp has 16 floats", len(light_vp) == 16)
