@@ -70,7 +70,7 @@ forge-engine/
 ├── shaders/             # GLSL + SPIR-V shaders
 ├── assets/              # Fonts, textures, saved scenes
 ├── examples/            # 9 demo programs
-├── tests/               # 54 test suites, 1,598 checks
+├── tests/               # 54 test suites, 1,611 checks
 └── build/               # Distribution output
     └── dist/            # Self-contained distributable
 ```
@@ -98,7 +98,7 @@ When you launch the editor, a **Project Browser** screen appears before the edit
 | **FPS** | First Person Shooter | Player controller, weapons, health/damage HUD, AI enemies |
 | **RPG** | Role-Playing Game | Third-person camera, inventory, quests, stats/leveling |
 | **Top-Down** | Top-Down Action | Overhead camera, twin-stick controls, projectiles, spawner |
-| **Voxel** | Voxel World | Shared voxel sandbox module, starter editor scene, place/break tools, block palette |
+| **Voxel** | Voxel World | Shared voxel sandbox module, starter editor scene, place/break tools, block palette, inventory/crafting/save-load loop |
 | **Racing** | Racing Game | Vehicle physics, chase camera, lap timer, speed HUD |
 | **Survival** | Survival | Crafting, hunger/thirst, day-night cycle, buildable shelters |
 | **Sandbox** | Sandbox / Empty | Empty scene with grid, basic lighting, full creative freedom |
@@ -120,7 +120,7 @@ The Forge Editor is a UE5-inspired visual scene editor with floating windows, a 
 
 Press **F1** at any time to see the full keyboard shortcuts overlay.
 
-Choosing the `Voxel` launcher template now seeds a starter surface-block scene in the editor using the same shared voxel generation rules as the playable sandbox demo.
+Choosing the `Voxel` launcher template now seeds a starter surface-block scene in the editor using the same shared voxel generation rules as the playable sandbox demo. The playable voxel sandbox now also supports inventory-backed mining/placement, a first plank-crafting loop, plus JSON save/load controls, so the template path is starting to function like a real game loop instead of a render-only scene.
 
 ### Editor Layout
 

@@ -6,7 +6,17 @@ gc_disable()
 # -----------------------------------------
 
 import math
+import io
 from math3d import vec3
+from json import cJSON_Parse, cJSON_Print, cJSON_Delete, cJSON_FromSage, cJSON_ToSage
+
+proc _clone_sage(value):
+    let node = cJSON_FromSage(value)
+    if node == nil:
+        return value
+    let out = cJSON_ToSage(node)
+    cJSON_Delete(node)
+    return out
 
 proc _palette_key(block_id):
     return str(block_id)
@@ -39,12 +49,89 @@ proc create_voxel_world(size_x, size_y, size_z):
     _register_block(vw, 3, "Stone", vec3(0.56, 0.58, 0.62))
     _register_block(vw, 4, "Wood", vec3(0.63, 0.45, 0.24))
     _register_block(vw, 5, "Leaf", vec3(0.28, 0.63, 0.26))
+    _register_block(vw, 6, "Plank", vec3(0.74, 0.58, 0.31))
     vw["mesh_data"] = {}
     vw["gpu_meshes"] = {}
     vw["draws"] = []
     vw["dirty"] = true
     vw["solid_count"] = 0
+    vw["template_seed"] = 0.0
     return vw
+
+proc create_voxel_inventory():
+    let inv = {}
+    inv["counts"] = {}
+    return inv
+
+proc voxel_inventory_count(inv, block_id):
+    if inv == nil or block_id == 0:
+        return 0
+    let key = _palette_key(block_id)
+    if dict_has(inv["counts"], key):
+        return inv["counts"][key]
+    return 0
+
+proc voxel_inventory_add(inv, block_id, amount):
+    if inv == nil or block_id == 0 or amount <= 0:
+        return voxel_inventory_count(inv, block_id)
+    let key = _palette_key(block_id)
+    let count = voxel_inventory_count(inv, block_id)
+    inv["counts"][key] = count + amount
+    return inv["counts"][key]
+
+proc voxel_inventory_remove(inv, block_id, amount):
+    if inv == nil or block_id == 0 or amount <= 0:
+        return false
+    let key = _palette_key(block_id)
+    let count = voxel_inventory_count(inv, block_id)
+    if count < amount:
+        return false
+    inv["counts"][key] = count - amount
+    return true
+
+proc voxel_inventory_to_sage(inv):
+    let out = create_voxel_inventory()
+    if inv == nil or dict_has(inv, "counts") == false:
+        return out
+    let keys = dict_keys(inv["counts"])
+    let i = 0
+    while i < len(keys):
+        out["counts"][keys[i]] = inv["counts"][keys[i]]
+        i = i + 1
+    return out
+
+proc voxel_inventory_from_sage(data):
+    let inv = create_voxel_inventory()
+    if data == nil or dict_has(data, "counts") == false:
+        return inv
+    let keys = dict_keys(data["counts"])
+    let i = 0
+    while i < len(keys):
+        inv["counts"][keys[i]] = data["counts"][keys[i]]
+        i = i + 1
+    return inv
+
+proc create_voxel_recipe(name, input_block, input_count, output_block, output_count):
+    let recipe = {}
+    recipe["name"] = name
+    recipe["input_block"] = input_block
+    recipe["input_count"] = input_count
+    recipe["output_block"] = output_block
+    recipe["output_count"] = output_count
+    return recipe
+
+proc default_voxel_recipes():
+    let recipes = []
+    push(recipes, create_voxel_recipe("Planks", 4, 1, 6, 4))
+    return recipes
+
+proc try_craft_voxel_recipe(inv, recipe):
+    if inv == nil or recipe == nil:
+        return false
+    if voxel_inventory_remove(inv, recipe["input_block"], recipe["input_count"]) == false:
+        return false
+    voxel_inventory_add(inv, recipe["output_block"], recipe["output_count"])
+    return true
 
 proc voxel_palette_ids(vw):
     return vw["palette_ids"]
@@ -196,6 +283,7 @@ proc _add_template_tree(vw, gx, gz):
 
 proc generate_voxel_template_world(vw, seed):
     clear_voxel_world(vw)
+    vw["template_seed"] = seed
     let gx = 0
     while gx < vw["size_x"]:
         let gz = 0
@@ -217,6 +305,85 @@ proc generate_voxel_template_world(vw, seed):
     _add_template_tree(vw, 3, 4)
     _add_template_tree(vw, vw["size_x"] - 4, vw["size_z"] - 5)
     _add_template_tree(vw, vw["size_x"] / 2, vw["size_z"] / 2 + 3)
+
+proc voxel_world_to_sage(vw):
+    let data = {}
+    data["size_x"] = vw["size_x"]
+    data["size_y"] = vw["size_y"]
+    data["size_z"] = vw["size_z"]
+    data["origin_x"] = vw["origin_x"]
+    data["origin_z"] = vw["origin_z"]
+    data["solid_count"] = vw["solid_count"]
+    data["template_seed"] = vw["template_seed"]
+    data["blocks"] = _clone_sage(vw["blocks"])
+    data["palette"] = _clone_sage(vw["palette"])
+    data["palette_ids"] = _clone_sage(vw["palette_ids"])
+    return data
+
+proc voxel_world_from_sage(data):
+    if data == nil:
+        return nil
+    if dict_has(data, "size_x") == false or dict_has(data, "size_y") == false or dict_has(data, "size_z") == false:
+        return nil
+    let vw = create_voxel_world(data["size_x"], data["size_y"], data["size_z"])
+    if dict_has(data, "origin_x"):
+        vw["origin_x"] = data["origin_x"]
+    if dict_has(data, "origin_z"):
+        vw["origin_z"] = data["origin_z"]
+    if dict_has(data, "template_seed"):
+        vw["template_seed"] = data["template_seed"]
+    if dict_has(data, "palette") and data["palette"] != nil:
+        vw["palette"] = _clone_sage(data["palette"])
+    if dict_has(data, "palette_ids") and data["palette_ids"] != nil:
+        vw["palette_ids"] = _clone_sage(data["palette_ids"])
+    let blocks = nil
+    if dict_has(data, "blocks"):
+        blocks = data["blocks"]
+    let solid_count = 0
+    if blocks != nil and len(blocks) == len(vw["blocks"]):
+        let i = 0
+        while i < len(blocks):
+            vw["blocks"][i] = blocks[i]
+            if blocks[i] != 0:
+                solid_count = solid_count + 1
+            i = i + 1
+    vw["solid_count"] = solid_count
+    vw["mesh_data"] = {}
+    vw["gpu_meshes"] = {}
+    vw["draws"] = []
+    vw["dirty"] = true
+    return vw
+
+proc serialize_voxel_world(vw):
+    let node = cJSON_FromSage(voxel_world_to_sage(vw))
+    if node == nil:
+        return nil
+    let json_str = cJSON_Print(node)
+    cJSON_Delete(node)
+    return json_str
+
+proc deserialize_voxel_world(json_str):
+    let root = cJSON_Parse(json_str)
+    if root == nil:
+        return nil
+    let data = cJSON_ToSage(root)
+    cJSON_Delete(root)
+    return voxel_world_from_sage(data)
+
+proc save_voxel_world(vw, file_path):
+    let json_str = serialize_voxel_world(vw)
+    if json_str == nil:
+        return false
+    io.writefile(file_path, json_str)
+    return true
+
+proc load_voxel_world(file_path):
+    if io.exists(file_path) == false:
+        return nil
+    let content = io.readfile(file_path)
+    if content == nil or content == "":
+        return nil
+    return deserialize_voxel_world(content)
 
 proc _mesh_bucket(meshes, block_id):
     let key = _palette_key(block_id)
