@@ -237,6 +237,153 @@ proc _normalized_clip_name(clip_name):
         i = i + 1
     return out
 
+proc imported_animation_clip_names(asset):
+    let clip_names = []
+    if asset == nil or dict_has(asset, "animations") == false:
+        return clip_names
+    let i = 0
+    while i < len(asset["animations"]):
+        let anim = asset["animations"][i]
+        let name = "Animation_" + str(i)
+        if dict_has(anim, "name") and anim["name"] != "":
+            name = anim["name"]
+        push(clip_names, name)
+        i = i + 1
+    return clip_names
+
+proc imported_animation_index(asset, clip_name):
+    let clip_names = imported_animation_clip_names(asset)
+    if len(clip_names) == 0:
+        return -1
+    let requested = _normalized_clip_name(clip_name)
+    if requested == "":
+        return 0
+    let i = 0
+    while i < len(clip_names):
+        if clip_names[i] == requested:
+            return i
+        i = i + 1
+    return -1
+
+proc imported_animation_duration(asset, clip_name):
+    let anim = resolve_imported_animation(asset, clip_name)
+    if anim == nil or dict_has(anim, "duration") == false:
+        return 0.0
+    return anim["duration"]
+
+proc create_imported_animation_state(asset, clip_name):
+    let state = {}
+    state["clip"] = ""
+    state["playing"] = true
+    state["time"] = 0.0
+    state["speed"] = 1.0
+    state["looping"] = true
+    let clip_names = imported_animation_clip_names(asset)
+    if len(clip_names) == 0:
+        return state
+    let idx = imported_animation_index(asset, clip_name)
+    if idx < 0:
+        idx = 0
+    state["clip"] = clip_names[idx]
+    let anim = asset["animations"][idx]
+    if dict_has(anim, "looping"):
+        state["looping"] = anim["looping"]
+    return state
+
+proc sync_imported_animation_state(asset, animation_state):
+    if animation_state == nil:
+        return nil
+    let clip_names = imported_animation_clip_names(asset)
+    if len(clip_names) == 0:
+        if dict_has(animation_state, "clip") == false:
+            animation_state["clip"] = ""
+        if dict_has(animation_state, "playing") == false:
+            animation_state["playing"] = true
+        if dict_has(animation_state, "time") == false:
+            animation_state["time"] = 0.0
+        if dict_has(animation_state, "speed") == false:
+            animation_state["speed"] = 1.0
+        if dict_has(animation_state, "looping") == false:
+            animation_state["looping"] = true
+        return animation_state
+    let idx = 0
+    if dict_has(animation_state, "clip"):
+        idx = imported_animation_index(asset, animation_state["clip"])
+        if idx < 0:
+            idx = 0
+    animation_state["clip"] = clip_names[idx]
+    if dict_has(animation_state, "playing") == false:
+        animation_state["playing"] = true
+    if dict_has(animation_state, "time") == false:
+        animation_state["time"] = 0.0
+    if dict_has(animation_state, "speed") == false:
+        animation_state["speed"] = 1.0
+    if dict_has(animation_state, "looping") == false:
+        let anim = asset["animations"][idx]
+        if dict_has(anim, "looping"):
+            animation_state["looping"] = anim["looping"]
+        else:
+            animation_state["looping"] = true
+    return animation_state
+
+proc cycle_imported_animation_clip(asset, animation_state, direction):
+    if animation_state == nil:
+        return false
+    let clip_names = imported_animation_clip_names(asset)
+    if len(clip_names) == 0:
+        return false
+    sync_imported_animation_state(asset, animation_state)
+    let idx = imported_animation_index(asset, animation_state["clip"])
+    if idx < 0:
+        idx = 0
+    let next_idx = idx + direction
+    if next_idx < 0:
+        next_idx = len(clip_names) - 1
+    if next_idx >= len(clip_names):
+        next_idx = 0
+    animation_state["clip"] = clip_names[next_idx]
+    animation_state["time"] = 0.0
+    let anim = asset["animations"][next_idx]
+    if dict_has(anim, "looping"):
+        animation_state["looping"] = anim["looping"]
+    return true
+
+proc step_imported_animation_time(asset, animation_state, delta_time):
+    if animation_state == nil:
+        return 0.0
+    sync_imported_animation_state(asset, animation_state)
+    let time_value = animation_state["time"] + delta_time
+    let duration = imported_animation_duration(asset, animation_state["clip"])
+    let looping = true
+    if dict_has(animation_state, "looping"):
+        looping = animation_state["looping"]
+    if duration > 0.0001:
+        if looping:
+            time_value = time_value - math.floor(time_value / duration) * duration
+        else:
+            if time_value < 0.0:
+                time_value = 0.0
+            if time_value > duration:
+                time_value = duration
+    else:
+        if time_value < 0.0:
+            time_value = 0.0
+    animation_state["time"] = time_value
+    return time_value
+
+proc advance_imported_animation_state(asset, animation_state, dt):
+    if animation_state == nil:
+        return nil
+    sync_imported_animation_state(asset, animation_state)
+    let delta_time = 0.0
+    if dict_has(animation_state, "playing") and animation_state["playing"]:
+        let speed = 1.0
+        if dict_has(animation_state, "speed"):
+            speed = animation_state["speed"]
+        delta_time = dt * speed
+    step_imported_animation_time(asset, animation_state, delta_time)
+    return animation_state
+
 proc resolve_imported_animation(asset, clip_name):
     if asset == nil or dict_has(asset, "animations") == false or len(asset["animations"]) == 0:
         return nil
@@ -311,6 +458,7 @@ proc _sample_imported_animation_overrides(asset, animation_state):
     let overrides = {}
     if asset == nil or animation_state == nil:
         return overrides
+    sync_imported_animation_state(asset, animation_state)
     let clip_name = ""
     if dict_has(animation_state, "clip"):
         clip_name = animation_state["clip"]

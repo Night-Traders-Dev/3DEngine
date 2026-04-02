@@ -82,6 +82,9 @@ from shadow_map import create_shadow_renderer, compute_light_vp
 from post_fx import create_postfx, pfx_cinematic, build_vignette_quads
 from lod import create_lod_config, compute_lod
 from asset_import import import_gltf, scan_importable_assets, imported_asset_draws
+from asset_import import imported_animation_clip_names, imported_animation_index
+from asset_import import imported_animation_duration, create_imported_animation_state
+from asset_import import advance_imported_animation_state, cycle_imported_animation_clip, step_imported_animation_time
 import io
 
 print "=== Forge Engine Editor ==="
@@ -841,7 +844,7 @@ while running:
                             if dict_has(selected_asset, "clip"):
                                 clip_name = selected_asset["clip"]
                             add_component(world, eid, "imported_asset", model_asset)
-                            add_component(world, eid, "animation_state", {"clip": clip_name, "playing": true, "time": 0.0, "speed": 1.0})
+                            add_component(world, eid, "animation_state", create_imported_animation_state(model_asset, clip_name))
                             if len(model_asset["gpu_meshes"]) > 0:
                                 add_component(world, eid, "mesh_id", {"mesh": model_asset["gpu_meshes"][0]["gpu_mesh"], "name": "imported"})
                         else:
@@ -1150,8 +1153,70 @@ while running:
             print "Play mode stopped"
             gpu.set_title("Forge Engine Editor")
 
+    # Imported animation controls on selected asset
+    if play_mode == false and text_editing == false and editor["selected"] >= 0 and has_component(world, editor["selected"], "imported_asset"):
+        let sel = editor["selected"]
+        let imported = get_component(world, sel, "imported_asset")
+        let clip_names = imported_animation_clip_names(imported)
+        if len(clip_names) > 0:
+            let wants_anim_control = gpu.key_just_pressed(gpu.KEY_SPACE) or gpu.key_just_pressed(gpu.KEY_MINUS) or gpu.key_just_pressed(gpu.KEY_EQUAL)
+            if gpu.key_pressed(gpu.KEY_CTRL) and (gpu.key_just_pressed(gpu.KEY_LEFT) or gpu.key_just_pressed(gpu.KEY_RIGHT) or gpu.key_just_pressed(gpu.KEY_UP) or gpu.key_just_pressed(gpu.KEY_DOWN)):
+                wants_anim_control = true
+            if has_component(world, sel, "animation_state") == false and wants_anim_control:
+                add_component(world, sel, "animation_state", create_imported_animation_state(imported, clip_names[0]))
+            if has_component(world, sel, "animation_state"):
+                let anim_state = get_component(world, sel, "animation_state")
+                advance_imported_animation_state(imported, anim_state, 0.0)
+                if gpu.key_pressed(gpu.KEY_SHIFT) and gpu.key_just_pressed(gpu.KEY_SPACE):
+                    let looping = true
+                    if dict_has(anim_state, "looping"):
+                        looping = anim_state["looping"]
+                    anim_state["looping"] = looping == false
+                    if anim_state["looping"]:
+                        print "Animation loop enabled"
+                    else:
+                        print "Animation loop disabled"
+                else:
+                    if gpu.key_just_pressed(gpu.KEY_SPACE):
+                        let playing = true
+                        if dict_has(anim_state, "playing"):
+                            playing = anim_state["playing"]
+                        anim_state["playing"] = playing == false
+                        if anim_state["playing"]:
+                            print "Animation playing"
+                        else:
+                            print "Animation paused"
+                if gpu.key_pressed(gpu.KEY_CTRL) and gpu.key_just_pressed(gpu.KEY_LEFT):
+                    if cycle_imported_animation_clip(imported, anim_state, -1):
+                        print "Animation clip: " + anim_state["clip"]
+                if gpu.key_pressed(gpu.KEY_CTRL) and gpu.key_just_pressed(gpu.KEY_RIGHT):
+                    if cycle_imported_animation_clip(imported, anim_state, 1):
+                        print "Animation clip: " + anim_state["clip"]
+                if gpu.key_pressed(gpu.KEY_CTRL) and gpu.key_just_pressed(gpu.KEY_UP):
+                    let t_scrub = step_imported_animation_time(imported, anim_state, 0.1)
+                    print "Animation time: " + _fmt_num(t_scrub)
+                if gpu.key_pressed(gpu.KEY_CTRL) and gpu.key_just_pressed(gpu.KEY_DOWN):
+                    let t_scrub = step_imported_animation_time(imported, anim_state, -0.1)
+                    print "Animation time: " + _fmt_num(t_scrub)
+                if gpu.key_just_pressed(gpu.KEY_MINUS):
+                    let speed = 1.0
+                    if dict_has(anim_state, "speed"):
+                        speed = anim_state["speed"]
+                    speed = speed - 0.25
+                    if speed < 0.1:
+                        speed = 0.1
+                    anim_state["speed"] = speed
+                    print "Animation speed: " + _fmt_num(speed)
+                if gpu.key_just_pressed(gpu.KEY_EQUAL):
+                    let speed = 1.0
+                    if dict_has(anim_state, "speed"):
+                        speed = anim_state["speed"]
+                    speed = speed + 0.25
+                    anim_state["speed"] = speed
+                    print "Animation speed: " + _fmt_num(speed)
+
     # --- Keyboard nudge for selected entity (arrow keys) ---
-    if play_mode == false and editor["selected"] >= 0 and has_component(world, editor["selected"], "transform"):
+    if play_mode == false and gpu.key_pressed(gpu.KEY_CTRL) == false and editor["selected"] >= 0 and has_component(world, editor["selected"], "transform"):
         let nudge_speed = 3.0 * dt
         let nudge_targets = selected_entities(editor)
         if len(nudge_targets) == 0:
@@ -1258,14 +1323,7 @@ while running:
                     let anim_state = nil
                     if has_component(world, eid, "animation_state"):
                         anim_state = get_component(world, eid, "animation_state")
-                        let anim_speed = 1.0
-                        if dict_has(anim_state, "speed"):
-                            anim_speed = anim_state["speed"]
-                        if dict_has(anim_state, "playing") and anim_state["playing"]:
-                            let anim_time = 0.0
-                            if dict_has(anim_state, "time"):
-                                anim_time = anim_state["time"]
-                            anim_state["time"] = anim_time + ts["dt"] * anim_speed
+                        advance_imported_animation_state(asset, anim_state, ts["dt"])
                     let draws = imported_asset_draws(asset, anim_state)
                     let gi = 0
                     while gi < len(draws):
@@ -1646,12 +1704,51 @@ while running:
                     iy = iy + 16.0
                     add_text(font_r, "ui", "Roughness: " + _fmt_num(mat["roughness"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
                     iy = iy + 16.0
-                if has_component(world, cur_sel, "animation_state"):
-                    let anim = get_component(world, cur_sel, "animation_state")
-                    let clip_name = ""
-                    if dict_has(anim, "clip"):
-                        clip_name = anim["clip"]
+                let clip_names = imported_animation_clip_names(ia)
+                if len(clip_names) > 0:
+                    let clip_name = clip_names[0]
+                    let clip_idx = 0
+                    let anim_time = 0.0
+                    let anim_speed = 1.0
+                    let anim_playing = false
+                    let anim_looping = true
+                    if has_component(world, cur_sel, "animation_state"):
+                        let anim = get_component(world, cur_sel, "animation_state")
+                        advance_imported_animation_state(ia, anim, 0.0)
+                        if dict_has(anim, "clip"):
+                            clip_name = anim["clip"]
+                        clip_idx = imported_animation_index(ia, clip_name)
+                        if clip_idx < 0:
+                            clip_idx = 0
+                            clip_name = clip_names[0]
+                        if dict_has(anim, "time"):
+                            anim_time = anim["time"]
+                        if dict_has(anim, "speed"):
+                            anim_speed = anim["speed"]
+                        if dict_has(anim, "playing"):
+                            anim_playing = anim["playing"]
+                        if dict_has(anim, "looping"):
+                            anim_looping = anim["looping"]
+                    let clip_duration = imported_animation_duration(ia, clip_name)
+                    add_text(font_r, "ui", "Clips: " + str(len(clip_names)) + "  Active: " + str(clip_idx + 1) + "/" + str(len(clip_names)), dx + 8.0, iy, 0.65, 0.65, 0.65, 1.0)
+                    iy = iy + 18.0
                     add_text(font_r, "ui", "Clip: " + clip_name, dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                    iy = iy + 16.0
+                    let state_text = "Paused"
+                    if anim_playing:
+                        state_text = "Playing"
+                    let loop_text = "On"
+                    if anim_looping == false:
+                        loop_text = "Off"
+                    add_text(font_r, "ui", "State: " + state_text + "  Loop: " + loop_text, dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                    iy = iy + 16.0
+                    add_text(font_r, "ui", "Time: " + _fmt_num(anim_time) + " / " + _fmt_num(clip_duration), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                    iy = iy + 16.0
+                    add_text(font_r, "ui", "Speed: " + _fmt_num(anim_speed), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                    iy = iy + 16.0
+                    add_text(font_r, "ui", "SPACE play  SHIFT+SPACE loop", dx + 8.0, iy, 0.357, 0.627, 0.914, 1.0)
+                    iy = iy + 16.0
+                    add_text(font_r, "ui", "CTRL+LEFT/RIGHT clip  CTRL+UP/DOWN scrub  -/= speed", dx + 8.0, iy, 0.357, 0.627, 0.914, 1.0)
             # MaterialComponent (if present)
             if has_component(world, cur_sel, "material"):
                 let mc = get_component(world, cur_sel, "material")

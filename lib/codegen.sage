@@ -82,7 +82,7 @@ proc generate_game_script(world, scene_name, settings):
     push(L, "from lighting import init_light_gpu, update_light_ubo")
     push(L, "from render_system import create_lit_material, draw_mesh_lit, draw_mesh_lit_surface")
     if has_imported_assets:
-        push(L, "from asset_import import import_gltf, imported_asset_draws")
+        push(L, "from asset_import import import_gltf, imported_asset_draws, advance_imported_animation_state")
         push(L, "from pbr_material import create_pbr_renderer, create_pbr_fallback_textures")
         push(L, "from pbr_material import create_pbr_material_from_imported, bind_pbr_material, draw_pbr")
     push(L, "from sky import create_sky, sky_preset_day, init_sky_gpu, draw_sky")
@@ -291,7 +291,10 @@ proc generate_game_script(world, scene_name, settings):
             let anim_speed = "1.0"
             if dict_has(anim, "speed"):
                 anim_speed = _fmt(anim["speed"])
-            push(L, "add_component(world, " + v + ", " + q + "animation_state" + q + ", {" + q + "clip" + q + ": " + q + clip_name + q + ", " + q + "playing" + q + ": " + playing + ", " + q + "time" + q + ": " + anim_time + ", " + q + "speed" + q + ": " + anim_speed + "})")
+            let anim_looping = "true"
+            if dict_has(anim, "looping") and anim["looping"] == false:
+                anim_looping = "false"
+            push(L, "add_component(world, " + v + ", " + q + "animation_state" + q + ", {" + q + "clip" + q + ": " + q + clip_name + q + ", " + q + "playing" + q + ": " + playing + ", " + q + "time" + q + ": " + anim_time + ", " + q + "speed" + q + ": " + anim_speed + ", " + q + "looping" + q + ": " + anim_looping + "})")
         push(L, "")
         ei = ei + 1
 
@@ -363,14 +366,7 @@ proc generate_game_script(world, scene_name, settings):
         push(L, "        let anim_state = nil")
         push(L, "        if has_component(world, eid, " + q + "animation_state" + q + "):")
         push(L, "            anim_state = get_component(world, eid, " + q + "animation_state" + q + ")")
-        push(L, "            let anim_speed = 1.0")
-        push(L, "            if dict_has(anim_state, " + q + "speed" + q + "):")
-        push(L, "                anim_speed = anim_state[" + q + "speed" + q + "]")
-        push(L, "            if dict_has(anim_state, " + q + "playing" + q + ") and anim_state[" + q + "playing" + q + "]:")
-        push(L, "                let anim_time = 0.0")
-        push(L, "                if dict_has(anim_state, " + q + "time" + q + "):")
-        push(L, "                    anim_time = anim_state[" + q + "time" + q + "]")
-        push(L, "                anim_state[" + q + "time" + q + "] = anim_time + dt * anim_speed")
+        push(L, "            advance_imported_animation_state(asset, anim_state, dt)")
         push(L, "        let draws = imported_asset_draws(asset, anim_state)")
         push(L, "        let gi = 0")
         push(L, "        while gi < len(draws):")

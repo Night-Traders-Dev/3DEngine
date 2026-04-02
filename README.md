@@ -16,7 +16,7 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 # Run a game demo
 ./run.sh examples/demo_world.sage
 
-# Run tests (49 suites, 1,443 checks)
+# Run tests (49 suites, 1,457 checks)
 ./tests/run_all.sh
 
 # Build distributable package
@@ -46,6 +46,7 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 - **Editable properties** — Click transform values in Details panel to type new numbers (with blinking cursor, undo support)
 - **Scrollable panels** — Mouse wheel scrolls all floating window content with visible scrollbars
 - **Material presets** — Apply Metal, Wood, Glass, Gold materials from Tools menu
+- **Imported animation controls** — Preview imported glTF clips in the editor, switch clips, scrub time, toggle looping, and tune playback speed on the selected entity
 - **Prefab system** — Save entities as reusable .prefab.json templates
 - **Undo/Redo** — CTRL+Z / CTRL+Y with full command history (100 levels)
 - **Modal dialogs** — Quit confirmation, About dialog
@@ -67,6 +68,10 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 | R / F / E | Place Cube / Sphere / Model |
 | D / Q | Delete / Duplicate selected |
 | TAB | Toggle physics on selected |
+| SPACE / SHIFT+SPACE | Play-pause / toggle looping on selected imported animation |
+| CTRL+LEFT / CTRL+RIGHT | Previous / next clip on selected imported animation |
+| CTRL+UP / CTRL+DOWN | Scrub selected imported animation |
+| `-` / `=` | Decrease / increase selected imported animation speed |
 | ENTER | Play-in-Editor |
 | Arrow Keys | Nudge selected entity |
 | CTRL+S / CTRL+N / CTRL+O | Save / New / Open scene |
@@ -86,7 +91,7 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 
 ### Code Generation
 
-Press **ENTER** or use File > Export Game to generate `assets/generated_game.sage` — a complete, runnable game with renderer, physics, HUD, FPS controls, and game loop. Export now preserves authored scene lights, uses the primary scene camera to seed the generated runtime player transform, yaw/pitch, and FOV, and re-imports authored glTF assets at runtime with node hierarchy transforms and transform-animation clip playback so imported models do not collapse back to primitive-only draws.
+Press **ENTER** or use File > Export Game to generate `assets/generated_game.sage` — a complete, runnable game with renderer, physics, HUD, FPS controls, and game loop. Export now preserves authored scene lights, uses the primary scene camera to seed the generated runtime player transform, yaw/pitch, and FOV, and re-imports authored glTF assets at runtime with node hierarchy transforms and transform-animation clip playback, including clip selection, current time, speed, and looping state.
 
 ```bash
 ./run.sh assets/generated_game.sage
@@ -116,7 +121,7 @@ forge-engine/
 │   └── ...                  # 80+ more engine modules
 ├── shaders/                 # GLSL shader pairs + SPIR-V
 ├── examples/                # 8 demo programs
-├── tests/                   # 49 suites, 1,443 checks
+├── tests/                   # 49 suites, 1,457 checks
 ├── assets/                  # Fonts, models, scenes, prefabs
 │   └── prefabs/             # Saved entity templates
 └── build/                   # Distribution output
@@ -142,7 +147,7 @@ forge-engine/
 `player_controller` (FPS, ground check, step climbing, slope limits) · `gameplay` (health, damage/heal, timers, state machines, spawners, scoring with combos)
 
 ### Content
-`asset_manager` (caching) · `asset_cache` · `scene_serial` (JSON save/load, prefab save/load, **imported asset references**) · `asset_import` (glTF 2.0, **async loading queue**, **HTTP download**, imported material metadata + textures, **node hierarchy draws**, **transform-animation clip sampling**) · `asset_browser` (search, filter, categories) · `audio` (OpenAL FFI) · `hot_reload` (directory watching) · `codegen` (game script generation, **scene light/camera export**, **runtime glTF re-import**, **hierarchical imported draws**, **imported transform-animation playback**, **LLVM native compilation**) · `material` (8 PBR presets) · `mesh` (**device-local uploads**, **struct vertex packing**)
+`asset_manager` (caching) · `asset_cache` · `scene_serial` (JSON save/load, prefab save/load, **imported asset references**) · `asset_import` (glTF 2.0, **async loading queue**, **HTTP download**, imported material metadata + textures, **node hierarchy draws**, **transform-animation clip sampling**, **clip/state helpers**) · `asset_browser` (search, filter, categories) · `audio` (OpenAL FFI) · `hot_reload` (directory watching) · `codegen` (game script generation, **scene light/camera export**, **runtime glTF re-import**, **hierarchical imported draws**, **imported transform-animation playback**, **animation state export parity**, **LLVM native compilation**) · `material` (8 PBR presets) · `mesh` (**device-local uploads**, **struct vertex packing**)
 
 ### Animation & AI
 `tween` (18 easings) · `animation` (skeletal, keyframes, blend trees, state machine, two-bone IK solver, animation events) · `navigation` (A* pathfinding, steering: seek/flee/arrive/wander/avoid) · `behavior_tree` (action/condition/sequence/selector/inverter/repeater/wait)
@@ -196,7 +201,7 @@ forge-engine/
 ## Testing
 
 ```bash
-./tests/run_all.sh            # 49 suites, 1,443 individual checks
+./tests/run_all.sh            # 49 suites, 1,457 individual checks
 ./run.sh tests/test_ecs.sage  # Run individual suite
 ```
 

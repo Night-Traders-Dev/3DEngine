@@ -69,7 +69,7 @@ forge-engine/
 ├── shaders/             # GLSL + SPIR-V shaders
 ├── assets/              # Fonts, textures, saved scenes
 ├── examples/            # 8 demo programs
-├── tests/               # 49 test suites, 1,443 checks
+├── tests/               # 49 test suites, 1,457 checks
 └── build/               # Distribution output
     └── dist/            # Self-contained distributable
 ```
@@ -141,6 +141,10 @@ Press **F1** at any time to see the full keyboard shortcuts overlay.
 | R / F / E | Place Cube / Sphere / Model |
 | D / Q | Delete / Duplicate selected |
 | TAB | Toggle physics on selected entity |
+| Space / Shift+Space | Play-pause / toggle looping on selected imported animation |
+| Ctrl+Left / Ctrl+Right | Previous / next clip on selected imported animation |
+| Ctrl+Up / Ctrl+Down | Scrub selected imported animation time |
+| `-` / `=` | Decrease / increase selected imported animation speed |
 | ENTER | Play-in-Editor (generates game, toggles play mode) |
 | Arrow Keys | Nudge selected entity |
 | ESC | Deselect / cancel edit / close modal |
@@ -775,7 +779,7 @@ let model = import_gltf("assets/character.gltf")
 # model["gpu_meshes"], model["materials"], model["animations"]
 ```
 
-Imported glTF assets keep their per-material albedo, metallic, roughness, and texture references. In the editor, imported meshes now prefer the PBR render path when material data is available, with a lit-material fallback for meshes that only provide partial surface data. Imported node transforms are also preserved, so multi-node glTF assets render with their authored hierarchy instead of flattening every mesh to the parent entity transform. When a glTF includes transform animation clips, the importer also keeps the clip channels so authored node translation/rotation/scale animation can play back in the editor and in generated games.
+Imported glTF assets keep their per-material albedo, metallic, roughness, and texture references. In the editor, imported meshes now prefer the PBR render path when material data is available, with a lit-material fallback for meshes that only provide partial surface data. Imported node transforms are also preserved, so multi-node glTF assets render with their authored hierarchy instead of flattening every mesh to the parent entity transform. When a glTF includes transform animation clips, the importer also keeps the clip channels so authored node translation/rotation/scale animation can play back in the editor and in generated games. Selected imported assets expose clip switching, scrubbing, speed adjustment, and looping controls directly in the editor.
 
 Scene save/load and Play-In-Editor snapshots preserve imported asset references by storing the stable source path and rehydrating the full GPU-ready asset on load. That keeps imported content alive across open/save/play cycles instead of limiting it to the original live editor session.
 
@@ -851,7 +855,7 @@ Generated scripts now carry more of the authored scene intent across the editor/
 
 - Authored point and directional light entities are emitted into the generated lighting setup.
 - The primary scene camera seeds the runtime player controller position, yaw, pitch, FOV, near plane, and far plane.
-- Imported glTF entities are re-imported on startup, rendered through the generated PBR path when material data is available, keep their authored node hierarchy transforms, and preserve transform-animation clip playback through `animation_state`.
+- Imported glTF entities are re-imported on startup, rendered through the generated PBR path when material data is available, keep their authored node hierarchy transforms, and preserve transform-animation clip playback through `animation_state`, including clip, time, speed, and looping state.
 - Material-bearing entities continue to use the material-aware lit draw path after export.
 
 ### GPU-Driven Rendering

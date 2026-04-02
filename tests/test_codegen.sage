@@ -83,7 +83,7 @@ add_component(w, e6, "transform", TransformComponent(-3.0, 0.0, 1.0))
 add_component(w, e6, "name", NameComponent("ImportedCrate"))
 add_component(w, e6, "imported_asset", {"source": "assets/Box.gltf", "name": "Box.gltf", "gpu_meshes": [{"gpu_mesh": 1, "material_index": 0}], "materials": [{"name": "Default"}]})
 add_component(w, e6, "mesh_id", {"mesh": nil, "name": "imported"})
-add_component(w, e6, "animation_state", {"clip": "Spin", "playing": true, "time": 1.25, "speed": 1.5})
+add_component(w, e6, "animation_state", {"clip": "Spin", "playing": true, "time": 1.25, "speed": 1.5, "looping": false})
 
 let code = generate_game_script(w, "TestScene", {"width": 800, "height": 600})
 check("code generated", code != nil)
@@ -124,8 +124,9 @@ check("contains imported hierarchy draw import", contains(code, "imported_asset_
 check("contains pbr draw import", contains(code, "draw_pbr"))
 check("contains imported asset helper", contains(code, "_import_runtime_asset(\"assets/Box.gltf\""))
 check("contains imported render query", contains(code, "query(world, [\"transform\", \"imported_asset\"])"))
-check("contains imported animation state", contains(code, "\"animation_state\", {\"clip\": \"Spin\", \"playing\": true, \"time\": 1.25, \"speed\": 1.5}"))
-check("contains imported animation advance", contains(code, "anim_state[\"time\"] = anim_time + dt * anim_speed"))
+check("contains imported animation state", contains(code, "\"animation_state\", {\"clip\": \"Spin\", \"playing\": true, \"time\": 1.25, \"speed\": 1.5, \"looping\": false}"))
+check("contains imported animation helper import", contains(code, "advance_imported_animation_state"))
+check("contains imported animation advance", contains(code, "advance_imported_animation_state(asset, anim_state, dt)"))
 check("contains animated imported draws", contains(code, "imported_asset_draws(asset, anim_state)"))
 
 # Save and verify

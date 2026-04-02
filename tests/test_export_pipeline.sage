@@ -3,7 +3,10 @@
 from scene_editor import create_scene_editor, place_entity
 from scene_serial import serialize_scene, load_scene_string
 from codegen import generate_game_script
-from asset_import import imported_asset_draws
+from asset_import import imported_asset_draws, imported_animation_clip_names
+from asset_import import create_imported_animation_state, cycle_imported_animation_clip
+from asset_import import advance_imported_animation_state, step_imported_animation_time
+from asset_import import imported_animation_duration
 from ecs import create_world, add_component
 from components import MaterialComponent, CameraComponent, PointLightComponent
 from math3d import vec3
@@ -86,9 +89,26 @@ let animated_asset = {
     "animations": [
         {"name": "Bounce", "duration": 1.0, "looping": true, "channels": [
             {"node": 0, "path": "translation", "interpolation": "LINEAR", "times": [0.0, 1.0], "values": [vec3(0.0, 0.0, 0.0), vec3(0.0, 3.0, 0.0)]}
+        ]},
+        {"name": "Drop", "duration": 2.0, "looping": false, "channels": [
+            {"node": 0, "path": "translation", "interpolation": "LINEAR", "times": [0.0, 2.0], "values": [vec3(0.0, 4.0, 0.0), vec3(0.0, 0.0, 0.0)]}
         ]}
     ]
 }
+let clip_names = imported_animation_clip_names(animated_asset)
+check("clip names parsed", len(clip_names) == 2)
+check("clip name bounce", clip_names[0] == "Bounce")
+let anim_state = create_imported_animation_state(animated_asset, "Drop")
+check("animation state uses requested clip", anim_state["clip"] == "Drop")
+check("animation state keeps clip looping", anim_state["looping"] == false)
+check("animation duration lookup", imported_animation_duration(animated_asset, "Drop") > 1.9)
+let cycled = cycle_imported_animation_clip(animated_asset, anim_state, 1)
+check("clip cycle succeeds", cycled == true)
+check("clip cycle wraps to bounce", anim_state["clip"] == "Bounce")
+advance_imported_animation_state(animated_asset, anim_state, 0.5)
+check("animation advance updates time", anim_state["time"] > 0.49)
+let clamped = step_imported_animation_time(animated_asset, {"clip": "Drop", "playing": false, "time": 1.8, "speed": 1.0, "looping": false}, 0.5)
+check("non-looping scrub clamps to duration", clamped > 1.9 and clamped <= 2.0)
 let animated_draws = imported_asset_draws(animated_asset, {"clip": "Bounce", "playing": true, "time": 0.5, "speed": 1.0})
 check("animated draw entry built", len(animated_draws) == 1)
 check("animated draw samples translation", animated_draws[0]["model"][13] > 1.4)

@@ -56,6 +56,7 @@ let mat_comp = MaterialComponent(0.4, 0.5, 0.9)
 mat_comp["metallic"] = 0.7
 add_component(w, eid, "material", mat_comp)
 add_component(w, eid, "imported_asset", {"name": "MockImport", "materials": [{"name": "Blue"}], "gpu_meshes": [{"gpu_mesh": 7, "material_index": 0}]})
+add_component(w, eid, "animation_state", {"clip": "Idle", "playing": true, "time": 0.75, "speed": 1.25, "looping": false})
 
 # --- Select/deselect ---
 deselect(ed)
@@ -103,6 +104,7 @@ check("duplicate has name", has_component(w, eid2, "name"))
 check("duplicate has camera", has_component(w, eid2, "camera"))
 check("duplicate has material", has_component(w, eid2, "material"))
 check("duplicate has imported asset", has_component(w, eid2, "imported_asset"))
+check("duplicate has animation state", has_component(w, eid2, "animation_state"))
 let t6 = get_component(w, eid2, "transform")
 let t_orig = get_component(w, eid, "transform")
 check("duplicate offset x", t6["position"][0] > t_orig["position"][0])
@@ -112,6 +114,9 @@ let dup_mat = get_component(w, eid2, "material")
 check("duplicate material metallic", approx(dup_mat["metallic"], 0.7))
 let dup_asset = get_component(w, eid2, "imported_asset")
 check("duplicate imported asset name", dup_asset["name"] == "MockImport")
+let dup_anim = get_component(w, eid2, "animation_state")
+check("duplicate animation clip", dup_anim["clip"] == "Idle")
+check("duplicate animation time", approx(dup_anim["time"], 0.75))
 
 # --- Delete ---
 let before_count = entity_count(w)
