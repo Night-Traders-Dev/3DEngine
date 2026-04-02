@@ -10,7 +10,7 @@ import gpu
 from json import cJSON_Parse, cJSON_Delete, cJSON_GetObjectItem, cJSON_GetArrayItem
 from json import cJSON_GetArraySize, cJSON_GetStringValue, cJSON_GetNumberValue
 from json import cJSON_IsArray, cJSON_IsString
-from math3d import vec3
+from math3d import vec3, mat4_identity
 from mesh import upload_mesh
 
 # ============================================================================
@@ -22,6 +22,8 @@ proc create_gltf_result():
     r["materials"] = []
     r["textures"] = []
     r["nodes"] = []
+    r["skins"] = []
+    r["skin_count"] = 0
     r["animations"] = []
     r["animation_count"] = 0
     r["name"] = ""
@@ -42,6 +44,10 @@ proc load_gltf(path):
     let result = create_gltf_result()
     # Extract base directory for relative paths
     let base_dir = _extract_dir(path)
+    let buffers_node = cJSON_GetObjectItem(root, "buffers")
+    let buffer_views_node = cJSON_GetObjectItem(root, "bufferViews")
+    let accessors_node = cJSON_GetObjectItem(root, "accessors")
+    let buffers = _load_gltf_buffers(buffers_node, base_dir)
     # Parse asset info
     let asset = cJSON_GetObjectItem(root, "asset")
     if asset != nil:
@@ -105,10 +111,21 @@ proc load_gltf(path):
             let node_info = _parse_node(n)
             push(result["nodes"], node_info)
             ni = ni + 1
+    # Parse skins
+    let skins_node = cJSON_GetObjectItem(root, "skins")
+    if skins_node != nil:
+        let sc = cJSON_GetArraySize(skins_node)
+        let si = 0
+        while si < sc:
+            let skin_node = cJSON_GetArrayItem(skins_node, si)
+            let skin_info = _parse_skin_node(skin_node, si, result["nodes"], accessors_node, buffer_views_node, buffers)
+            push(result["skins"], skin_info)
+            si = si + 1
+    result["skin_count"] = len(result["skins"])
     result["animations"] = _parse_animations(path)
     result["animation_count"] = len(result["animations"])
     cJSON_Delete(root)
-    print "glTF loaded: " + str(len(result["meshes"])) + " meshes, " + str(len(result["materials"])) + " materials, " + str(result["animation_count"]) + " animations"
+    print "glTF loaded: " + str(len(result["meshes"])) + " meshes, " + str(len(result["materials"])) + " materials, " + str(result["skin_count"]) + " skins, " + str(result["animation_count"]) + " animations"
     return result
 
 # ============================================================================
@@ -194,6 +211,10 @@ proc _parse_node(node):
     let mesh_node = cJSON_GetObjectItem(node, "mesh")
     if mesh_node != nil:
         info["mesh"] = cJSON_GetNumberValue(mesh_node)
+    info["skin"] = -1
+    let skin_node = cJSON_GetObjectItem(node, "skin")
+    if skin_node != nil:
+        info["skin"] = cJSON_GetNumberValue(skin_node)
     info["matrix"] = nil
     let matrix_node = cJSON_GetObjectItem(node, "matrix")
     if matrix_node != nil:
@@ -234,6 +255,46 @@ proc _parse_node(node):
             push(info["children"], cJSON_GetNumberValue(cJSON_GetArrayItem(ch, ci)))
             ci = ci + 1
     return info
+
+proc _parse_skin_node(node, skin_index, nodes, accessors_node, buffer_views_node, buffers):
+    let skin = {}
+    skin["name"] = "Skin_" + str(skin_index)
+    let name_node = cJSON_GetObjectItem(node, "name")
+    if name_node != nil:
+        skin["name"] = cJSON_GetStringValue(name_node)
+    skin["skeleton"] = -1
+    let skeleton_node = cJSON_GetObjectItem(node, "skeleton")
+    if skeleton_node != nil:
+        skin["skeleton"] = cJSON_GetNumberValue(skeleton_node)
+    skin["joints"] = []
+    skin["joint_names"] = []
+    let joints_node = cJSON_GetObjectItem(node, "joints")
+    if joints_node != nil:
+        let jc = cJSON_GetArraySize(joints_node)
+        let ji = 0
+        while ji < jc:
+            let joint_idx = cJSON_GetNumberValue(cJSON_GetArrayItem(joints_node, ji))
+            push(skin["joints"], joint_idx)
+            let joint_name = "Joint_" + str(joint_idx)
+            if joint_idx >= 0 and joint_idx < len(nodes):
+                if dict_has(nodes[joint_idx], "name"):
+                    joint_name = nodes[joint_idx]["name"]
+            push(skin["joint_names"], joint_name)
+            ji = ji + 1
+    skin["inverse_bind_matrices"] = []
+    let ibm_node = cJSON_GetObjectItem(node, "inverseBindMatrices")
+    if ibm_node != nil and accessors_node != nil and buffer_views_node != nil:
+        let ibm_accessor = cJSON_GetNumberValue(ibm_node)
+        let raw_mats = _decode_accessor_values(accessors_node, buffer_views_node, buffers, ibm_accessor)
+        let mi = 0
+        while mi < len(raw_mats):
+            if len(raw_mats[mi]) == 16:
+                push(skin["inverse_bind_matrices"], raw_mats[mi])
+            mi = mi + 1
+    while len(skin["inverse_bind_matrices"]) < len(skin["joints"]):
+        push(skin["inverse_bind_matrices"], mat4_identity())
+    skin["joint_count"] = len(skin["joints"])
+    return skin
 
 proc _parse_animations(path):
     let animations = []

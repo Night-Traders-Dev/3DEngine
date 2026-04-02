@@ -1697,6 +1697,9 @@ while running:
                 iy = iy + 24.0
                 add_text(font_r, "ui", "Meshes: " + str(len(ia["gpu_meshes"])) + "  Nodes: " + str(len(ia["nodes"])), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
                 iy = iy + 18.0
+                if dict_has(ia, "skin_count") and ia["skin_count"] > 0:
+                    add_text(font_r, "ui", "Skins: " + str(ia["skin_count"]) + "  Joints: " + str(ia["joint_count"]), dx + 8.0, iy, 0.439, 0.439, 0.439, 1.0)
+                    iy = iy + 18.0
                 if len(ia["materials"]) > 0:
                     let mat = ia["materials"][0]
                     add_text(font_r, "ui", mat["name"], dx + 8.0, iy, 0.65, 0.65, 0.65, 1.0)

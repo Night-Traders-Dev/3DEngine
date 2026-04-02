@@ -1,5 +1,6 @@
 # test_gltf_import.sage - Sanity checks for glTF importer (parsing only)
 import io
+import math
 from gltf_import import load_gltf, create_gltf_result
 
 let p = 0
@@ -19,6 +20,7 @@ check("result created", r != nil)
 check("meshes empty", len(r["meshes"]) == 0)
 check("materials empty", len(r["materials"]) == 0)
 check("animations empty", len(r["animations"]) == 0)
+check("skins empty", len(r["skins"]) == 0)
 
 # --- Parse minimal glTF JSON ---
 from json import cJSON_CreateObject, cJSON_CreateArray, cJSON_CreateNumber, cJSON_CreateString
@@ -137,6 +139,77 @@ if animated != nil:
     let qw = animated["animations"][0]["channels"][0]["values"][0][0]
     check("animated gltf quaternion converted to wxyz", qw > 0.9 or qw < -0.9)
 
+# --- Parse skinned glTF JSON ---
+let sk_root = cJSON_CreateObject()
+let sk_asset = cJSON_CreateObject()
+cJSON_AddStringToObject(sk_asset, "version", "2.0")
+cJSON_AddItemToObject(sk_root, "asset", sk_asset)
+let sk_nodes = cJSON_CreateArray()
+let sk_mesh_node = cJSON_CreateObject()
+cJSON_AddStringToObject(sk_mesh_node, "name", "SkinnedMesh")
+cJSON_AddNumberToObject(sk_mesh_node, "mesh", 0)
+cJSON_AddNumberToObject(sk_mesh_node, "skin", 0)
+let sk_mesh_translation = cJSON_CreateArray()
+cJSON_AddItemToArray(sk_mesh_translation, cJSON_CreateNumber(5.0))
+cJSON_AddItemToArray(sk_mesh_translation, cJSON_CreateNumber(0.0))
+cJSON_AddItemToArray(sk_mesh_translation, cJSON_CreateNumber(0.0))
+cJSON_AddItemToObject(sk_mesh_node, "translation", sk_mesh_translation)
+cJSON_AddItemToArray(sk_nodes, sk_mesh_node)
+let sk_joint_root = cJSON_CreateObject()
+cJSON_AddStringToObject(sk_joint_root, "name", "Hip")
+let sk_joint_root_translation = cJSON_CreateArray()
+cJSON_AddItemToArray(sk_joint_root_translation, cJSON_CreateNumber(0.0))
+cJSON_AddItemToArray(sk_joint_root_translation, cJSON_CreateNumber(1.0))
+cJSON_AddItemToArray(sk_joint_root_translation, cJSON_CreateNumber(0.0))
+cJSON_AddItemToObject(sk_joint_root, "translation", sk_joint_root_translation)
+let sk_joint_root_children = cJSON_CreateArray()
+cJSON_AddItemToArray(sk_joint_root_children, cJSON_CreateNumber(2))
+cJSON_AddItemToObject(sk_joint_root, "children", sk_joint_root_children)
+cJSON_AddItemToArray(sk_nodes, sk_joint_root)
+let sk_joint_child = cJSON_CreateObject()
+cJSON_AddStringToObject(sk_joint_child, "name", "Hand")
+let sk_joint_child_translation = cJSON_CreateArray()
+cJSON_AddItemToArray(sk_joint_child_translation, cJSON_CreateNumber(0.0))
+cJSON_AddItemToArray(sk_joint_child_translation, cJSON_CreateNumber(1.0))
+cJSON_AddItemToArray(sk_joint_child_translation, cJSON_CreateNumber(0.0))
+cJSON_AddItemToObject(sk_joint_child, "translation", sk_joint_child_translation)
+cJSON_AddItemToArray(sk_nodes, sk_joint_child)
+cJSON_AddItemToObject(sk_root, "nodes", sk_nodes)
+let sk_meshes = cJSON_CreateArray()
+let sk_mesh = cJSON_CreateObject()
+cJSON_AddStringToObject(sk_mesh, "name", "Body")
+let sk_prims = cJSON_CreateArray()
+let sk_prim = cJSON_CreateObject()
+cJSON_AddItemToArray(sk_prims, sk_prim)
+cJSON_AddItemToObject(sk_mesh, "primitives", sk_prims)
+cJSON_AddItemToArray(sk_meshes, sk_mesh)
+cJSON_AddItemToObject(sk_root, "meshes", sk_meshes)
+let sk_skins = cJSON_CreateArray()
+let sk_skin = cJSON_CreateObject()
+cJSON_AddStringToObject(sk_skin, "name", "Rig")
+cJSON_AddNumberToObject(sk_skin, "skeleton", 1)
+let sk_joints = cJSON_CreateArray()
+cJSON_AddItemToArray(sk_joints, cJSON_CreateNumber(1))
+cJSON_AddItemToArray(sk_joints, cJSON_CreateNumber(2))
+cJSON_AddItemToObject(sk_skin, "joints", sk_joints)
+cJSON_AddItemToArray(sk_skins, sk_skin)
+cJSON_AddItemToObject(sk_root, "skins", sk_skins)
+let skinned_json = cJSON_Print(sk_root)
+cJSON_Delete(sk_root)
+io.writefile("/tmp/sage_skinned.gltf", skinned_json)
+
+let skinned = load_gltf("/tmp/sage_skinned.gltf")
+check("skinned gltf loaded", skinned != nil)
+if skinned != nil:
+    check("skinned gltf has skin", skinned["skin_count"] == 1)
+    check("skinned gltf node skin ref", skinned["nodes"][0]["skin"] == 0)
+    check("skinned gltf skin name", skinned["skins"][0]["name"] == "Rig")
+    check("skinned gltf skeleton root", skinned["skins"][0]["skeleton"] == 1)
+    check("skinned gltf joint count", skinned["skins"][0]["joint_count"] == 2)
+    check("skinned gltf joint name root", skinned["skins"][0]["joint_names"][0] == "Hip")
+    check("skinned gltf inverse bind matrices defaulted", len(skinned["skins"][0]["inverse_bind_matrices"]) == 2)
+    check("skinned gltf inverse bind identity", skinned["skins"][0]["inverse_bind_matrices"][0][0] > 0.9 and skinned["skins"][0]["inverse_bind_matrices"][0][15] > 0.9)
+
 # --- Bad file ---
 let bad = load_gltf("/tmp/nonexistent.gltf")
 check("bad file returns nil", bad == nil)
@@ -149,6 +222,7 @@ check("invalid json returns nil", bad2 == nil)
 # Cleanup
 io.remove("/tmp/sage_test.gltf")
 io.remove("/tmp/sage_bad.gltf")
+io.remove("/tmp/sage_skinned.gltf")
 
 print ""
 print "Results: " + str(p) + " passed, " + str(f) + " failed"

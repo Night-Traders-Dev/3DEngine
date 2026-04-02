@@ -10,7 +10,7 @@ import math
 import gltf_import
 from mesh import upload_mesh
 from math3d import vec3, v3_lerp, quat_to_matrix, quat_slerp
-from math3d import mat4_identity, mat4_translate, mat4_scale, mat4_mul
+from math3d import mat4_identity, mat4_translate, mat4_scale, mat4_mul, mat4_inverse_safe
 
 # ============================================================================
 # Import a glTF file (mesh + materials + animations)
@@ -123,6 +123,9 @@ proc import_gltf(path):
             node_info["scale"] = node["scale"]
             node_info["children"] = node["children"]
             node_info["parent"] = -1
+            node_info["skin_index"] = -1
+            if dict_has(node, "skin"):
+                node_info["skin_index"] = node["skin"]
             let sid = str(ni)
             if dict_has(parent_map, sid):
                 node_info["parent"] = parent_map[sid]
@@ -143,9 +146,17 @@ proc import_gltf(path):
             node_info["scale"] = vec3(1.0, 1.0, 1.0)
             node_info["children"] = []
             node_info["parent"] = -1
+            node_info["skin_index"] = -1
             push(node_list, node_info)
             ni = ni + 1
     asset["nodes"] = node_list
+
+    # Skins / skeleton metadata
+    asset["skins"] = []
+    asset["skin_count"] = 0
+    if scene_gltf != nil and dict_has(scene_gltf, "skins"):
+        asset["skins"] = scene_gltf["skins"]
+        asset["skin_count"] = len(asset["skins"])
 
     # Animations
     asset["animations"] = []
@@ -161,8 +172,17 @@ proc import_gltf(path):
     asset["mesh_count"] = len(gpu_meshes)
     asset["material_count"] = len(mat_list)
     asset["node_count"] = len(node_list)
+    let total_joint_count = 0
+    let si = 0
+    while si < len(asset["skins"]):
+        if dict_has(asset["skins"][si], "joint_count"):
+            total_joint_count = total_joint_count + asset["skins"][si]["joint_count"]
+        else:
+            total_joint_count = total_joint_count + len(asset["skins"][si]["joints"])
+        si = si + 1
+    asset["joint_count"] = total_joint_count
 
-    print "Imported: " + path + " (" + str(len(gpu_meshes)) + " meshes, " + str(len(mat_list)) + " materials)"
+    print "Imported: " + path + " (" + str(len(gpu_meshes)) + " meshes, " + str(len(mat_list)) + " materials, " + str(asset["skin_count"]) + " skins)"
     return asset
 
 proc _imported_node_pose(node, override_pose):
@@ -397,6 +417,42 @@ proc resolve_imported_animation(asset, clip_name):
             i = i + 1
     return asset["animations"][0]
 
+proc resolve_imported_skin(asset, skin_index):
+    if asset == nil or dict_has(asset, "skins") == false:
+        return nil
+    if skin_index < 0 or skin_index >= len(asset["skins"]):
+        return nil
+    return asset["skins"][skin_index]
+
+proc imported_skin_joint_matrices(asset, skin_index, node_index, animation_state):
+    let cache = {}
+    let overrides = _sample_imported_animation_overrides(asset, animation_state)
+    return _imported_skin_joint_matrices_cached(asset, skin_index, node_index, cache, overrides)
+
+proc _imported_skin_joint_matrices_cached(asset, skin_index, node_index, cache, overrides):
+    let palette = []
+    let skin = resolve_imported_skin(asset, skin_index)
+    if skin == nil or dict_has(skin, "joints") == false:
+        return palette
+    let mesh_inverse = mat4_identity()
+    if asset != nil and dict_has(asset, "nodes") and node_index >= 0 and node_index < len(asset["nodes"]):
+        mesh_inverse = mat4_inverse_safe(_imported_node_world(asset, node_index, cache, overrides))
+    let inverse_binds = []
+    if dict_has(skin, "inverse_bind_matrices"):
+        inverse_binds = skin["inverse_bind_matrices"]
+    let ji = 0
+    while ji < len(skin["joints"]):
+        let joint_index = skin["joints"][ji]
+        let joint_world = mat4_identity()
+        if joint_index >= 0 and joint_index < len(asset["nodes"]):
+            joint_world = _imported_node_world(asset, joint_index, cache, overrides)
+        let inverse_bind = mat4_identity()
+        if ji < len(inverse_binds) and len(inverse_binds[ji]) == 16:
+            inverse_bind = inverse_binds[ji]
+        push(palette, mat4_mul(mesh_inverse, mat4_mul(joint_world, inverse_bind)))
+        ji = ji + 1
+    return palette
+
 proc _animation_sample_time(anim, animation_state):
     let sample_time = 0.0
     if animation_state != nil and dict_has(animation_state, "time"):
@@ -498,6 +554,7 @@ proc imported_asset_draws(asset, animation_state):
         return draws
     let cache = {}
     let overrides = _sample_imported_animation_overrides(asset, animation_state)
+    let skin_palette_cache = {}
     let ni = 0
     while ni < len(asset["nodes"]):
         let node = asset["nodes"][ni]
@@ -507,7 +564,23 @@ proc imported_asset_draws(asset, animation_state):
             while gi < len(asset["gpu_meshes"]):
                 let gm = asset["gpu_meshes"][gi]
                 if dict_has(gm, "mesh_index") and gm["mesh_index"] == node["mesh_index"]:
-                    push(draws, {"gpu_mesh": gm["gpu_mesh"], "material_index": gm["material_index"], "model": node_model, "node_index": ni, "node_name": node["name"]})
+                    let draw = {"gpu_mesh": gm["gpu_mesh"], "material_index": gm["material_index"], "model": node_model, "node_index": ni, "node_name": node["name"]}
+                    let skin_index = -1
+                    if dict_has(node, "skin_index"):
+                        skin_index = node["skin_index"]
+                    if skin_index >= 0:
+                        let palette_key = str(skin_index) + ":" + str(ni)
+                        let palette = []
+                        if dict_has(skin_palette_cache, palette_key):
+                            palette = skin_palette_cache[palette_key]
+                        else:
+                            palette = _imported_skin_joint_matrices_cached(asset, skin_index, ni, cache, overrides)
+                            skin_palette_cache[palette_key] = palette
+                        draw["skin_index"] = skin_index
+                        draw["joint_palette"] = palette
+                        draw["joint_count"] = len(palette)
+                        draw["skinned"] = len(palette) > 0
+                    push(draws, draw)
                 gi = gi + 1
         ni = ni + 1
     if len(draws) == 0:

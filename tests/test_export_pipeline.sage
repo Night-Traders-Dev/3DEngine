@@ -6,10 +6,10 @@ from codegen import generate_game_script
 from asset_import import imported_asset_draws, imported_animation_clip_names
 from asset_import import create_imported_animation_state, cycle_imported_animation_clip
 from asset_import import advance_imported_animation_state, step_imported_animation_time
-from asset_import import imported_animation_duration
+from asset_import import imported_animation_duration, imported_skin_joint_matrices
 from ecs import create_world, add_component
 from components import MaterialComponent, CameraComponent, PointLightComponent
-from math3d import vec3
+from math3d import vec3, mat4_identity
 
 import math
 
@@ -112,6 +112,33 @@ check("non-looping scrub clamps to duration", clamped > 1.9 and clamped <= 2.0)
 let animated_draws = imported_asset_draws(animated_asset, {"clip": "Bounce", "playing": true, "time": 0.5, "speed": 1.0})
 check("animated draw entry built", len(animated_draws) == 1)
 check("animated draw samples translation", animated_draws[0]["model"][13] > 1.4)
+
+let skinned_asset = {
+    "gpu_meshes": [{"gpu_mesh": 31, "material_index": 0, "mesh_index": 0}],
+    "nodes": [
+        {"name": "SkinnedMesh", "mesh_index": 0, "skin_index": 0, "position": vec3(5.0, 0.0, 0.0), "rotation": [1.0, 0.0, 0.0, 0.0], "scale": vec3(1.0, 1.0, 1.0), "children": [1], "parent": -1},
+        {"name": "Hip", "mesh_index": -1, "position": vec3(0.0, 1.0, 0.0), "rotation": [1.0, 0.0, 0.0, 0.0], "scale": vec3(1.0, 1.0, 1.0), "children": [2], "parent": 0},
+        {"name": "Hand", "mesh_index": -1, "position": vec3(0.0, 1.0, 0.0), "rotation": [1.0, 0.0, 0.0, 0.0], "scale": vec3(1.0, 1.0, 1.0), "children": [], "parent": 1}
+    ],
+    "skins": [
+        {"name": "Rig", "skeleton": 1, "joints": [1, 2], "joint_names": ["Hip", "Hand"], "inverse_bind_matrices": [mat4_identity(), mat4_identity()], "joint_count": 2}
+    ],
+    "skin_count": 1,
+    "animations": [
+        {"name": "Wave", "duration": 1.0, "looping": true, "channels": [
+            {"node": 2, "path": "translation", "interpolation": "LINEAR", "times": [0.0, 1.0], "values": [vec3(0.0, 1.0, 0.0), vec3(0.0, 4.0, 0.0)]}
+        ]}
+    ]
+}
+let skin_palette = imported_skin_joint_matrices(skinned_asset, 0, 0, nil)
+check("skin palette count", len(skin_palette) == 2)
+check("skin palette root relative x", math.abs(skin_palette[0][12]) < 0.01)
+check("skin palette root relative y", skin_palette[0][13] > 0.9 and skin_palette[0][13] < 1.1)
+let skinned_draws = imported_asset_draws(skinned_asset, {"clip": "Wave", "playing": true, "time": 0.5, "speed": 1.0})
+check("skinned draw entry built", len(skinned_draws) == 1)
+check("skinned draw flagged", skinned_draws[0]["skinned"] == true)
+check("skinned draw keeps joint palette", len(skinned_draws[0]["joint_palette"]) == 2)
+check("skinned draw animated joint relative y", skinned_draws[0]["joint_palette"][1][13] > 3.4 and skinned_draws[0]["joint_palette"][1][13] < 3.6)
 
 print ""
 print "Results: " + str(p) + " passed, " + str(f) + " failed"
