@@ -21,11 +21,49 @@ layout(set = 0, binding = 0) uniform SceneUBO {
     vec4 fogColor;       // rgb = fog color, w = unused
 } scene;
 
+layout(set = 2, binding = 0) uniform sampler2D shadowMap;
+
+layout(set = 2, binding = 1) uniform ShadowUBO {
+    mat4 lightVP;
+    vec4 shadowParams;   // x=enabled, y=texel_size, z=bias, w=primary directional light index
+} shadow_data;
+
 layout(push_constant) uniform PushConstants {
     mat4 mvp;
     mat4 model;
     vec4 baseColor;
 } pc;
+
+float sample_shadow(vec3 normal, vec3 lightDir) {
+    if (shadow_data.shadowParams.x < 0.5) {
+        return 1.0;
+    }
+
+    vec4 lightClip = shadow_data.lightVP * vec4(fragWorldPos, 1.0);
+    vec3 proj = lightClip.xyz / max(lightClip.w, 0.0001);
+    vec2 uv = proj.xy * 0.5 + 0.5;
+    float currentDepth = proj.z * 0.5 + 0.5;
+    if (currentDepth <= 0.0 || currentDepth >= 1.0 ||
+        uv.x <= 0.0 || uv.x >= 1.0 || uv.y <= 0.0 || uv.y >= 1.0) {
+        return 1.0;
+    }
+
+    float texel = shadow_data.shadowParams.y;
+    float biasBase = shadow_data.shadowParams.z;
+    float ndotl = max(dot(normal, lightDir), 0.0);
+    float bias = max(biasBase * (1.0 - ndotl), biasBase * 0.25);
+
+    float shadow = 0.0;
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+            float closestDepth = texture(shadowMap, uv + vec2(x, y) * texel).r;
+            if (currentDepth - bias > closestDepth) {
+                shadow += 1.0;
+            }
+        }
+    }
+    return 1.0 - shadow / 9.0;
+}
 
 void main() {
     vec3 baseColor = pc.baseColor.rgb;
@@ -74,6 +112,10 @@ void main() {
         }
 
         atten *= intensity;
+        float visibility = 1.0;
+        if (lightType == 1 && i == int(shadow_data.shadowParams.w + 0.5)) {
+            visibility = sample_shadow(N, L);
+        }
 
         // Diffuse
         float diff = max(dot(N, L), 0.0);
@@ -82,8 +124,8 @@ void main() {
         vec3 H = normalize(L + V);
         float spec = pow(max(dot(N, H), 0.0), 64.0);
 
-        result += baseColor * lightColor * diff * atten;
-        result += lightColor * spec * atten * 0.3;
+        result += baseColor * lightColor * diff * atten * visibility;
+        result += lightColor * spec * atten * 0.3 * visibility;
     }
 
     // Fog

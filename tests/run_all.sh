@@ -17,16 +17,36 @@ PASS=0
 FAIL=0
 TOTAL=0
 
-for test in tests/test_*.sage; do
+run_test() {
+    local test="$1"
     TOTAL=$((TOTAL + 1))
     echo "--- Running: $test ---"
-    if "$SAGE" "$test" 2>&1; then
-        PASS=$((PASS + 1))
+    if [[ "$test" == *.sh ]]; then
+        if bash "$test" 2>&1; then
+            PASS=$((PASS + 1))
+        else
+            FAIL=$((FAIL + 1))
+            echo "^^^ FAILED ^^^"
+        fi
     else
-        FAIL=$((FAIL + 1))
-        echo "^^^ FAILED ^^^"
+        if "$SAGE" "$test" 2>&1; then
+            PASS=$((PASS + 1))
+        else
+            FAIL=$((FAIL + 1))
+            echo "^^^ FAILED ^^^"
+        fi
     fi
     echo ""
+}
+
+for test in tests/test_*.sage; do
+    run_test "$test"
+done
+
+for test in tests/test_*.sh; do
+    if [ -e "$test" ]; then
+        run_test "$test"
+    fi
 done
 
 echo "=============================="

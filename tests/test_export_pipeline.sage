@@ -68,6 +68,9 @@ check("imported asset pbr path present", contains(code, "draw_pbr"))
 check("material-aware draw remains enabled", contains(code, "draw_mesh_lit_surface"))
 check("imported asset skinned pbr path present", contains(code, "draw_pbr_skinned"))
 check("imported asset skinned lit path present", contains(code, "draw_mesh_lit_surface_skinned"))
+check("shadow helper emitted", contains(code, "proc _render_shadow_world"))
+check("shadow prepass emitted", contains(code, "_render_shadow_world(shadow_renderer, world, ls, player_eye_position(player))"))
+check("shadow renderer init emitted", contains(code, "shadow_renderer = create_shadow_renderer(2048)"))
 check("fallback generated point light omitted", contains(code, "point_light(5.0, 4.0, 3.0, 1.0, 0.8, 0.6, 3.0, 20.0)") == false)
 
 let synthetic_asset = {

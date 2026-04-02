@@ -8,9 +8,13 @@ import gpu
 from mesh import mesh_vertex_binding, mesh_vertex_attribs, build_skin_palette_uniform_data
 from mesh import MAX_SKIN_JOINTS
 from math3d import mat4_mul, mat4_identity
+from shadow_map import build_shadow_uniform_data, get_shadow_texture, get_shadow_sampler
+from shadow_map import get_light_vp, get_light_index
 
 let SKIN_UBO_FLOATS = MAX_SKIN_JOINTS * 16
 let SKIN_UBO_BYTES = SKIN_UBO_FLOATS * 4
+let SHADOW_UBO_FLOATS = 20
+let SHADOW_UBO_BYTES = SHADOW_UBO_FLOATS * 4
 
 proc _create_skin_binding():
     let b0 = {}
@@ -33,6 +37,55 @@ proc _update_skin_binding(binding, joint_palette):
     if binding == nil or dict_has(binding, "ubo") == false:
         return nil
     gpu.update_uniform(binding["ubo"], build_skin_palette_uniform_data(joint_palette))
+    return binding["ubo"]
+
+proc _create_shadow_binding():
+    let b0 = {}
+    b0["binding"] = 0
+    b0["type"] = gpu.DESC_COMBINED_SAMPLER
+    b0["stage"] = gpu.STAGE_FRAGMENT
+    b0["count"] = 1
+    let b1 = {}
+    b1["binding"] = 1
+    b1["type"] = gpu.DESC_UNIFORM_BUFFER
+    b1["stage"] = gpu.STAGE_FRAGMENT
+    b1["count"] = 1
+    let layout = gpu.create_descriptor_layout([b0, b1])
+    let ps0 = {}
+    ps0["type"] = gpu.DESC_COMBINED_SAMPLER
+    ps0["count"] = 1
+    let ps1 = {}
+    ps1["type"] = gpu.DESC_UNIFORM_BUFFER
+    ps1["count"] = 1
+    let pool = gpu.create_descriptor_pool(1, [ps0, ps1])
+    let desc_set = gpu.allocate_descriptor_set(pool, layout)
+    let ubo = gpu.create_uniform_buffer(SHADOW_UBO_BYTES)
+    let dummy_image = gpu.create_image(1, 1, 1, gpu.FORMAT_DEPTH32F, gpu.IMAGE_DEPTH_ATTACH | gpu.IMAGE_SAMPLED)
+    let dummy_sampler = gpu.create_sampler(gpu.FILTER_LINEAR, gpu.FILTER_LINEAR, gpu.ADDRESS_CLAMP_EDGE)
+    gpu.update_descriptor_image(desc_set, 0, dummy_image, dummy_sampler)
+    gpu.update_descriptor(desc_set, 1, gpu.DESC_UNIFORM_BUFFER, ubo)
+    gpu.update_uniform(ubo, build_shadow_uniform_data(nil, false, 1.0, -1))
+    return {"layout": layout, "pool": pool, "desc_set": desc_set, "ubo": ubo, "dummy_image": dummy_image, "dummy_sampler": dummy_sampler, "source": nil}
+
+proc _update_shadow_binding(binding):
+    if binding == nil or dict_has(binding, "ubo") == false:
+        return nil
+    let image = binding["dummy_image"]
+    let sampler = binding["dummy_sampler"]
+    let light_vp = nil
+    let light_index = -1
+    let resolution = 1.0
+    let enabled = false
+    if dict_has(binding, "source") and binding["source"] != nil:
+        let source = binding["source"]
+        image = get_shadow_texture(source)
+        sampler = get_shadow_sampler(source)
+        light_vp = get_light_vp(source)
+        light_index = get_light_index(source)
+        resolution = source["resolution"] + 0.0
+        enabled = light_vp != nil and light_index >= 0
+    gpu.update_descriptor_image(binding["desc_set"], 0, image, sampler)
+    gpu.update_uniform(binding["ubo"], build_shadow_uniform_data(light_vp, enabled, resolution, light_index))
     return binding["ubo"]
 
 # ============================================================================
@@ -65,7 +118,8 @@ proc create_lit_material(render_pass, desc_layout, desc_set):
     # Pipeline layout: push = 144 bytes (MVP + Model + baseColor), 1 descriptor set (SceneUBO)
     let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
     let skin_binding = _create_skin_binding()
-    let pipe_layout = gpu.create_pipeline_layout([desc_layout, skin_binding["layout"]], 144, stage_flags)
+    let shadow_binding = _create_shadow_binding()
+    let pipe_layout = gpu.create_pipeline_layout([desc_layout, skin_binding["layout"], shadow_binding["layout"]], 144, stage_flags)
 
     let cfg = {}
     cfg["layout"] = pipe_layout
@@ -93,9 +147,22 @@ proc create_lit_material(render_pass, desc_layout, desc_set):
     mat["skin_pool"] = skin_binding["pool"]
     mat["skin_desc_set"] = skin_binding["desc_set"]
     mat["skin_ubo"] = skin_binding["ubo"]
+    mat["shadow_layout"] = shadow_binding["layout"]
+    mat["shadow_pool"] = shadow_binding["pool"]
+    mat["shadow_desc_set"] = shadow_binding["desc_set"]
+    mat["shadow_ubo"] = shadow_binding["ubo"]
+    mat["shadow_dummy_image"] = shadow_binding["dummy_image"]
+    mat["shadow_dummy_sampler"] = shadow_binding["dummy_sampler"]
+    mat["shadow_source"] = nil
     mat["vert"] = vert
     mat["frag"] = frag
+    _update_shadow_binding(mat)
     return mat
+
+proc set_lit_material_shadow_source(mat, shadow_renderer):
+    mat["shadow_source"] = shadow_renderer
+    _update_shadow_binding(mat)
+    return shadow_renderer
 
 # ============================================================================
 # Create an unlit material (flat color, no lighting)
@@ -167,8 +234,10 @@ proc draw_mesh_lit_skinned(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, s
     if skin_draw != nil and dict_has(skin_draw, "joint_palette"):
         joint_palette = skin_draw["joint_palette"]
     _update_skin_binding(mat, joint_palette)
+    _update_shadow_binding(mat)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 0, desc_set, 0)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 1, mat["skin_desc_set"], 0)
+    gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 2, mat["shadow_desc_set"], 0)
     let push_data = build_lit_push_data(mvp_data, model_data, nil)
     gpu.cmd_push_constants(cmd, mat["pipe_layout"], stage_flags, push_data)
     gpu.cmd_bind_vertex_buffer(cmd, mesh_gpu["vbuf"])
@@ -192,8 +261,10 @@ proc draw_mesh_lit_surface_skinned(cmd, mat, mesh_gpu, mvp_data, model_data, des
     if skin_draw != nil and dict_has(skin_draw, "joint_palette"):
         joint_palette = skin_draw["joint_palette"]
     _update_skin_binding(mat, joint_palette)
+    _update_shadow_binding(mat)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 0, desc_set, 0)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 1, mat["skin_desc_set"], 0)
+    gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 2, mat["shadow_desc_set"], 0)
     let push_data = build_lit_push_data(mvp_data, model_data, base_color)
     gpu.cmd_push_constants(cmd, mat["pipe_layout"], stage_flags, push_data)
     gpu.cmd_bind_vertex_buffer(cmd, mesh_gpu["vbuf"])

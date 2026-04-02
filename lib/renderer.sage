@@ -11,11 +11,15 @@ let MAX_FRAMES = 2
 # ============================================================================
 # Pipeline cache
 # ============================================================================
-let _pipeline_cache = [-1]
+let _pipeline_cache = [false]
+
+proc _store_pipeline_cache_result(result):
+    _pipeline_cache[0] = result == true
+    return _pipeline_cache[0]
 
 proc init_pipeline_cache():
-    _pipeline_cache[0] = gpu.create_pipeline_cache()
-    if _pipeline_cache[0] >= 0:
+    let ready = _store_pipeline_cache_result(gpu.create_pipeline_cache())
+    if ready:
         print "Pipeline cache initialized"
 
 proc get_pipeline_cache():

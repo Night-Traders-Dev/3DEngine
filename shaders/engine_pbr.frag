@@ -31,6 +31,13 @@ layout(set = 1, binding = 0) uniform sampler2D albedoMap;
 layout(set = 1, binding = 1) uniform sampler2D normalMap;
 layout(set = 1, binding = 2) uniform sampler2D metallicRoughnessMap;
 
+layout(set = 3, binding = 0) uniform sampler2D shadowMap;
+
+layout(set = 3, binding = 1) uniform ShadowUBO {
+    mat4 lightVP;
+    vec4 shadowParams;   // x=enabled, y=texel_size, z=bias, w=primary directional light index
+} shadow_data;
+
 const float PI = 3.14159265359;
 
 float DistributionGGX(vec3 N, vec3 H, float roughness) {
@@ -67,6 +74,37 @@ vec3 getNormalFromMap() {
     vec3 B = -normalize(cross(N, T));
     mat3 TBN = mat3(T, B, N);
     return normalize(TBN * tangentNormal);
+}
+
+float sample_shadow(vec3 normal, vec3 lightDir) {
+    if (shadow_data.shadowParams.x < 0.5) {
+        return 1.0;
+    }
+
+    vec4 lightClip = shadow_data.lightVP * vec4(fragWorldPos, 1.0);
+    vec3 proj = lightClip.xyz / max(lightClip.w, 0.0001);
+    vec2 uv = proj.xy * 0.5 + 0.5;
+    float currentDepth = proj.z * 0.5 + 0.5;
+    if (currentDepth <= 0.0 || currentDepth >= 1.0 ||
+        uv.x <= 0.0 || uv.x >= 1.0 || uv.y <= 0.0 || uv.y >= 1.0) {
+        return 1.0;
+    }
+
+    float texel = shadow_data.shadowParams.y;
+    float biasBase = shadow_data.shadowParams.z;
+    float ndotl = max(dot(normal, lightDir), 0.0);
+    float bias = max(biasBase * (1.0 - ndotl), biasBase * 0.25);
+
+    float shadow = 0.0;
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+            float closestDepth = texture(shadowMap, uv + vec2(x, y) * texel).r;
+            if (currentDepth - bias > closestDepth) {
+                shadow += 1.0;
+            }
+        }
+    }
+    return 1.0 - shadow / 9.0;
 }
 
 void main() {
@@ -114,6 +152,10 @@ void main() {
             atten *= atten;
         }
         atten *= intensity;
+        float visibility = 1.0;
+        if (lightType == 1 && i == int(shadow_data.shadowParams.w + 0.5)) {
+            visibility = sample_shadow(N, L);
+        }
 
         vec3 H = normalize(V + L);
         float NDF = DistributionGGX(N, H, roughness);
@@ -123,7 +165,7 @@ void main() {
         vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
         vec3 specular = (NDF * G * F) / (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001);
         float NdotL = max(dot(N, L), 0.0);
-        Lo += (kD * albedo / PI + specular) * lightColor * atten * NdotL;
+        Lo += (kD * albedo / PI + specular) * lightColor * atten * NdotL * visibility;
     }
 
     vec3 ambientColor = scene.ambient.rgb * scene.ambient.w * albedo;

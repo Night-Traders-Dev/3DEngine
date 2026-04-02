@@ -130,6 +130,12 @@ check("contains imported animation advance", contains(code, "advance_imported_an
 check("contains animated imported draws", contains(code, "imported_asset_draws(asset, anim_state)"))
 check("contains skinned pbr draw import", contains(code, "draw_pbr_skinned"))
 check("contains skinned lit draw import", contains(code, "draw_mesh_lit_surface_skinned"))
+check("contains shadow map import", contains(code, "from shadow_map import create_shadow_renderer"))
+check("contains shadow source setter", contains(code, "set_lit_material_shadow_source"))
+check("contains shadow renderer init", contains(code, "shadow_renderer = create_shadow_renderer(2048)"))
+check("contains shadow world helper", contains(code, "proc _render_shadow_world"))
+check("contains shadow prepass call", contains(code, "_render_shadow_world(shadow_renderer, world, ls, player_eye_position(player))"))
+check("contains shadow draw import", contains(code, "shadow_draw_mesh_skinned"))
 
 # Save and verify
 import io

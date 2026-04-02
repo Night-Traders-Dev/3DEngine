@@ -70,13 +70,14 @@ forge-engine/
 ├── shaders/             # GLSL + SPIR-V shaders
 ├── assets/              # Fonts, textures, saved scenes
 ├── examples/            # 8 demo programs
-├── tests/               # 50 test suites, 1,513 checks
+├── tests/               # 52 test suites, 1,526 checks
 └── build/               # Distribution output
     └── dist/            # Self-contained distributable
 ```
 
 Runtime/editor version strings and distribution packaging are sourced from the repo-root `VERSION` file through `lib/forge_version.sage`.
 Forge uses `x.y.z` semantic versioning and intentionally remains on `0.y.z` until the engine is functionally complete enough to justify `1.0.0`. See [VERSIONING.md](VERSIONING.md) for the repo policy.
+The automated suite now includes a dedicated renderer sanity check for startup helpers like pipeline cache state, plus a runtime startup smoke suite that boots the editor and asset demo under timeout alongside the broader import/export coverage.
 
 ---
 

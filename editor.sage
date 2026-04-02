@@ -32,9 +32,11 @@ from lighting import add_light, set_ambient, set_view_position
 from lighting import init_light_gpu, update_light_ubo
 from render_system import create_lit_material, draw_mesh_lit, draw_mesh_lit_surface
 from render_system import draw_mesh_lit_surface_skinned
+from render_system import set_lit_material_shadow_source
 from pbr_material import create_pbr_renderer, create_pbr_fallback_textures
 from pbr_material import create_pbr_material_from_imported, bind_pbr_material, draw_pbr
 from pbr_material import draw_pbr_skinned
+from pbr_material import set_pbr_shadow_source
 from sky import create_sky, sky_preset_day, init_sky_gpu, draw_sky
 from editor_grid import create_editor_grid, draw_editor_grid
 from ui_renderer import create_ui_renderer, draw_ui, build_ui_vertices
@@ -80,7 +82,8 @@ from gameplay import HealthComponent
 import sys
 from game_loop import create_time_state, update_time
 from frustum import extract_frustum_planes, aabb_in_frustum
-from shadow_map import create_shadow_renderer, compute_light_vp
+from shadow_map import create_shadow_renderer, compute_light_vp, primary_shadow_light
+from shadow_map import begin_shadow_frame, end_shadow_frame, shadow_draw_mesh, shadow_draw_mesh_skinned
 from post_fx import create_postfx, pfx_cinematic, build_vignette_quads
 from lod import create_lod_config, compute_lod
 from asset_import import import_gltf, scan_importable_assets, imported_asset_draws
@@ -175,6 +178,9 @@ let shadow_renderer = nil
 try:
     shadow_renderer = create_shadow_renderer(2048)
     if shadow_renderer != nil:
+        set_lit_material_shadow_source(lit_mat, shadow_renderer)
+        if pbr_renderer != nil:
+            set_pbr_shadow_source(pbr_renderer, shadow_renderer)
         let shadow_light_vp = compute_light_vp(vec3(-0.3, -0.8, -0.5), vec3(0.0, 0.0, 0.0), 50.0)
         shadow_renderer["light_vp"] = shadow_light_vp
         print "Shadow map initialized (2048x2048)"
@@ -401,6 +407,52 @@ proc _ensure_imported_pbr_materials(asset):
         i = i + 1
     asset["pbr_materials"] = built
     return built
+
+proc _update_imported_animation_states(w, dt):
+    let animated = query(w, ["imported_asset", "animation_state"])
+    let i = 0
+    while i < len(animated):
+        let eid = animated[i]
+        let asset = get_component(w, eid, "imported_asset")
+        let anim_state = get_component(w, eid, "animation_state")
+        if asset != nil and anim_state != nil:
+            advance_imported_animation_state(asset, anim_state, dt)
+        i = i + 1
+
+proc _render_shadow_world(sr, w, light_scene, focus_point, radius):
+    if sr == nil:
+        return false
+    let shadow_light = primary_shadow_light(light_scene)
+    if shadow_light["index"] < 0:
+        return false
+    let light_vp = compute_light_vp(shadow_light["direction"], focus_point, radius)
+    let cmd = begin_shadow_frame(sr, light_vp, shadow_light["index"])
+    let renderers = query(w, ["transform", "mesh_id"])
+    let i = 0
+    while i < len(renderers):
+        let eid = renderers[i]
+        let t = get_component(w, eid, "transform")
+        if t != nil:
+            let model = transform_to_matrix(t)
+            if has_component(w, eid, "imported_asset"):
+                let asset = get_component(w, eid, "imported_asset")
+                let anim_state = nil
+                if has_component(w, eid, "animation_state"):
+                    anim_state = get_component(w, eid, "animation_state")
+                let draws = imported_asset_draws(asset, anim_state)
+                let gi = 0
+                while gi < len(draws):
+                    let gm = draws[gi]
+                    let imported_model = mat4_mul(model, gm["model"])
+                    shadow_draw_mesh_skinned(sr, cmd, gm["gpu_mesh"], imported_model, gm)
+                    gi = gi + 1
+            else:
+                let mi = get_component(w, eid, "mesh_id")
+                if mi != nil and dict_has(mi, "mesh") and mi["mesh"] != nil:
+                    shadow_draw_mesh(sr, cmd, mi["mesh"], model)
+        i = i + 1
+    end_shadow_frame(sr, cmd)
+    return true
 
 print "Found " + str(len(importable_assets)) + " importable assets"
 
@@ -1280,11 +1332,13 @@ while running:
     let cam_pos = editor_camera_position(cam)
     set_view_position(ls, cam_pos)
     update_light_ubo(ls)
+    _update_imported_animation_states(world, ts["dt"])
 
     # --- Render ---
     if gpu.window_should_close():
         running = false
         continue
+    _render_shadow_world(shadow_renderer, world, ls, cam_pos, 45.0)
     let frame = begin_frame(r)
     if frame == nil:
         # Frame failed (resize/minimize) - skip but don't quit
@@ -1326,7 +1380,6 @@ while running:
                     let anim_state = nil
                     if has_component(world, eid, "animation_state"):
                         anim_state = get_component(world, eid, "animation_state")
-                        advance_imported_animation_state(asset, anim_state, ts["dt"])
                     let draws = imported_asset_draws(asset, anim_state)
                     let gi = 0
                     while gi < len(draws):

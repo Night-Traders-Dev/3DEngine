@@ -16,7 +16,7 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 # Run a game demo
 ./run.sh examples/demo_world.sage
 
-# Run tests (50 suites, 1,513 checks)
+# Run tests (52 suites, 1,526 checks)
 ./tests/run_all.sh
 
 # Build distributable package
@@ -126,7 +126,7 @@ forge-engine/
 │   └── ...                  # 80+ more engine modules
 ├── shaders/                 # GLSL shader pairs + SPIR-V
 ├── examples/                # 8 demo programs
-├── tests/                   # 50 suites, 1,513 checks
+├── tests/                   # 52 suites, 1,526 checks
 ├── assets/                  # Fonts, models, scenes, prefabs
 │   └── prefabs/             # Saved entity templates
 └── build/                   # Distribution output
@@ -206,9 +206,11 @@ forge-engine/
 ## Testing
 
 ```bash
-./tests/run_all.sh            # 50 suites, 1,513 individual checks
+./tests/run_all.sh            # 52 suites, 1,526 individual checks
 ./run.sh tests/test_ecs.sage  # Run individual suite
 ```
+
+The suite now includes dedicated renderer sanity checks for startup helpers such as pipeline cache state, plus a runtime startup smoke suite that boots the editor and asset demo under timeout and fails on startup regressions.
 
 ## Building for Distribution
 
