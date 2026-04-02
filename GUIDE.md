@@ -65,14 +65,17 @@ forge-engine/
 ├── editor.sage          # Visual editor application (~1,700 lines)
 ├── run.sh               # Script runner
 ├── build_dist.sh        # Distribution builder (sage runtime + engine bundle)
-├── lib/                 # Engine modules (89 files)
+├── VERSION              # Single source of truth for engine version
+├── lib/                 # Engine modules (90 files)
 ├── shaders/             # GLSL + SPIR-V shaders
 ├── assets/              # Fonts, textures, saved scenes
 ├── examples/            # 8 demo programs
-├── tests/               # 49 test suites, 1,457 checks
+├── tests/               # 50 test suites, 1,474 checks
 └── build/               # Distribution output
     └── dist/            # Self-contained distributable
 ```
+
+Runtime/editor version strings and distribution packaging are sourced from the repo-root `VERSION` file through `lib/forge_version.sage`.
 
 ---
 
@@ -883,15 +886,14 @@ barrier_compute_to_graphics(cmd)
 # Build a self-contained package
 ./build_dist.sh
 
-# Output: build/dist/ (~3.9MB, 132 .sage modules)
-# Contains: sage runtime binary + engine libs + stdlib + shaders + assets
+# Output: build/dist/ (~3.9MB, 108 .sage modules)
+# Contains: sage runtime binary + engine libs + stdlib + VERSION + shaders + assets
 
 # Run:
 cd build/dist && ./forge_engine
 
 # Package for sharing:
-tar -czf forge_engine.tar.gz -C build dist
-# Result: ~1.4MB compressed archive
+tar -czf forge_engine-$(cat VERSION).tar.gz -C build dist
 ```
 
 ### What's Included
@@ -899,7 +901,8 @@ tar -czf forge_engine.tar.gz -C build dist
 | Component | Description |
 | --- | --- |
 | `sage` | SageLang runtime binary (ELF x86-64, links Vulkan/GLFW/OpenGL) |
-| `lib/` | 89 engine .sage modules |
+| `VERSION` | Shared engine release version copied into the distributable |
+| `lib/` | 90 engine .sage modules |
 | `stdlib/` | 33 SageLang standard library modules |
 | `shaders/` | Compiled SPIR-V shaders |
 | `assets/` | Fonts (DejaVuSans), glTF models, textures, saved scenes |

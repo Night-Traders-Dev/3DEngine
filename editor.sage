@@ -85,6 +85,7 @@ from asset_import import import_gltf, scan_importable_assets, imported_asset_dra
 from asset_import import imported_animation_clip_names, imported_animation_index
 from asset_import import imported_animation_duration, create_imported_animation_state
 from asset_import import advance_imported_animation_state, cycle_imported_animation_clip, step_imported_animation_time
+from forge_version import engine_name, editor_title, editor_play_title, about_text
 import io
 
 print "=== Forge Engine Editor ==="
@@ -105,7 +106,7 @@ if _env_h != nil and _env_h != "":
 # ============================================================================
 # Renderer
 # ============================================================================
-let r = create_renderer(_init_w, _init_h, "Forge Engine Editor")
+let r = create_renderer(_init_w, _init_h, editor_title())
 if r == nil:
     raise "Failed to create renderer"
 # Very dark viewport so lit 3D objects stand out clearly
@@ -712,7 +713,7 @@ while running:
                 play_snapshot = serialize_scene(world, "PIE")
                 play_mode = true
                 print "Play mode started (ENTER or Play to stop)"
-                gpu.set_title("Forge Engine Editor | PLAYING")
+                gpu.set_title(editor_play_title())
             else:
                 if play_snapshot != nil:
                     let restored = load_scene_string(play_snapshot)
@@ -725,7 +726,7 @@ while running:
                         deselect(editor)
                 play_mode = false
                 print "Play mode stopped"
-                gpu.set_title("Forge Engine Editor")
+                gpu.set_title(editor_title())
             window_consumed = true
         # Save button
         if mx >= sw_f / 2.0 + 50.0 and mx < sw_f / 2.0 + 110.0:
@@ -959,7 +960,7 @@ while running:
             if item == "Controls":
                 show_shortcuts = show_shortcuts == false
             if item == "About Forge Engine":
-                let about_msg = "Forge Engine v0.1 | GPU: " + gpu.device_name() + " | SageLang + Vulkan"
+                let about_msg = about_text(gpu.device_name())
                 show_modal("About", about_msg, nil, nil)
             close_menu()
             menubar_active = -1
@@ -1138,7 +1139,7 @@ while running:
             play_snapshot = serialize_scene(world, "PIE")
             play_mode = true
             print "Play mode started (ENTER to stop)"
-            gpu.set_title("Forge Engine Editor | PLAYING")
+            gpu.set_title(editor_play_title())
         else:
             if play_snapshot != nil:
                 let restored_enter = load_scene_string(play_snapshot)
@@ -1151,7 +1152,7 @@ while running:
                     deselect(editor)
             play_mode = false
             print "Play mode stopped"
-            gpu.set_title("Forge Engine Editor")
+            gpu.set_title(editor_title())
 
     # Imported animation controls on selected asset
     if play_mode == false and text_editing == false and editor["selected"] >= 0 and has_component(world, editor["selected"], "imported_asset"):
@@ -1450,7 +1451,7 @@ while running:
         add_text(font_r, "ui", menu_labels[mti], menu_x_pos[mti], 4.0, mc[0], mc[1], mc[2], 1.0)
         mti = mti + 1
     # Project name on right side of menu bar
-    add_text(font_r, "ui", "Forge Engine", sw - 130.0, 4.0, 0.5, 0.5, 0.5, 1.0)
+    add_text(font_r, "ui", engine_name(), sw - 130.0, 4.0, 0.5, 0.5, 0.5, 1.0)
 
     # Toolbar text
     add_text(font_r, "ui", "Move", 22.0, mb_h + 8.0, 0.78, 0.78, 0.78, 1.0)
@@ -1932,7 +1933,7 @@ while running:
 
     end_frame(r, frame)
     gc_collect()
-    update_title_fps(r, "Forge Engine Editor")
+    update_title_fps(r, editor_title())
 
 try:
     gpu.device_wait_idle()

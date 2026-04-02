@@ -6,6 +6,7 @@ from ecs import has_component, add_tag, has_tag, entity_count
 from components import TransformComponent, VelocityComponent, NameComponent, CameraComponent
 from components import PointLightComponent, MeshRendererComponent
 from gameplay import HealthComponent
+from forge_version import engine_name, engine_version, scene_format_version
 from scene_serial import serialize_scene, load_scene_string
 from scene_serial import vec3_to_json, json_to_vec3
 from json import cJSON_GetArraySize, cJSON_GetArrayItem, cJSON_GetNumberValue
@@ -89,11 +90,16 @@ check("contains Box", contains(json_str, "Box"))
 check("contains Lamp", contains(json_str, "Lamp"))
 check("contains player tag", contains(json_str, "player"))
 check("contains enemy tag", contains(json_str, "enemy"))
+check("contains engine name", contains(json_str, engine_name()))
+check("contains engine version", contains(json_str, engine_version()))
 
 # --- Deserialize ---
 let result = load_scene_string(json_str)
 check("loaded result not nil", result != nil)
 check("scene name", result["name"] == "TestScene")
+check("scene engine name", result["engine"] == engine_name())
+check("scene engine version", result["engine_version"] == engine_version())
+check("scene format version", result["scene_version"] == scene_format_version())
 check("entity count", result["entity_count"] == 3)
 
 let w2 = result["world"]
@@ -195,6 +201,7 @@ check("save file exists", io.exists("/tmp/sage_test_scene.json"))
 let loaded = load_scene("/tmp/sage_test_scene.json")
 check("load from file works", loaded != nil)
 check("loaded name", loaded["name"] == "FileTest")
+check("loaded engine version", loaded["engine_version"] == engine_version())
 check("loaded entity count", loaded["entity_count"] == 3)
 io.remove("/tmp/sage_test_scene.json")
 
@@ -204,6 +211,7 @@ let empty_json = serialize_scene(empty_w, "Empty")
 check("empty scene serializes", empty_json != nil)
 let empty_result = load_scene_string(empty_json)
 check("empty scene loads", empty_result != nil)
+check("empty scene engine version", empty_result["engine_version"] == engine_version())
 check("empty scene 0 entities", empty_result["entity_count"] == 0)
 
 # --- Results ---

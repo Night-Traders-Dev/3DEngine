@@ -1,6 +1,6 @@
 # Forge Engine
 
-A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Features a project launcher with game templates, a visual editor with floating windows, TrueType font rendering, PBR lighting, quaternion math, a centralized UI theme system, and 89+ engine modules spanning rendering, physics, animation, AI, networking, and content pipelines.
+A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Features a project launcher with game templates, a visual editor with floating windows, TrueType font rendering, PBR lighting, quaternion math, a centralized UI theme system, and 90+ engine modules spanning rendering, physics, animation, AI, networking, and content pipelines.
 
 For the complete engine guide, see **[GUIDE.md](GUIDE.md)**.
 
@@ -16,12 +16,14 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 # Run a game demo
 ./run.sh examples/demo_world.sage
 
-# Run tests (49 suites, 1,457 checks)
+# Run tests (50 suites, 1,474 checks)
 ./tests/run_all.sh
 
 # Build distributable package
 ./build_dist.sh
 ```
+
+The engine release version is sourced from the repo-root `VERSION` file and exposed in runtime UI/build paths through `lib/forge_version.sage`.
 
 ## Project Browser
 
@@ -110,18 +112,20 @@ forge-engine/
 ├── editor.sage              # Visual editor (~1,700 lines)
 ├── run.sh                   # Script runner
 ├── build_dist.sh            # Distribution builder
-├── lib/                     # Engine modules (89 files)
+├── VERSION                  # Single source of truth for engine version
+├── lib/                     # Engine modules (90 files)
 │   ├── ui_core.sage         # Centralized theme + widget system
 │   ├── ui_widgets.sage      # Advanced widgets (sliders, checkboxes, dropdowns, text fields)
 │   ├── ui_window.sage       # Floating windows, menus, modals
 │   ├── ui_renderer.sage     # Batched GPU quad rendering
+│   ├── forge_version.sage   # Shared engine version + branding helpers
 │   ├── launch_screen.sage   # Project browser / template selector
 │   ├── hud.sage             # Game HUD (health, crosshair, minimap, score)
 │   ├── menu.sage            # Game menus (pause, main, game over)
 │   └── ...                  # 80+ more engine modules
 ├── shaders/                 # GLSL shader pairs + SPIR-V
 ├── examples/                # 8 demo programs
-├── tests/                   # 49 suites, 1,457 checks
+├── tests/                   # 50 suites, 1,474 checks
 ├── assets/                  # Fonts, models, scenes, prefabs
 │   └── prefabs/             # Saved entity templates
 └── build/                   # Distribution output
@@ -201,7 +205,7 @@ forge-engine/
 ## Testing
 
 ```bash
-./tests/run_all.sh            # 49 suites, 1,457 individual checks
+./tests/run_all.sh            # 50 suites, 1,474 individual checks
 ./run.sh tests/test_ecs.sage  # Run individual suite
 ```
 
@@ -211,17 +215,17 @@ forge-engine/
 # Build a self-contained distributable package
 ./build_dist.sh
 
-# Output: build/dist/ (1.4MB compressed, 3.9MB extracted)
-# Contains: sage runtime + 132 .sage modules + shaders + assets
+# Output: build/dist/ (3.9MB extracted)
+# Contains: sage runtime + 108 .sage modules + VERSION + shaders + assets
 
 # Run from dist:
 cd build/dist && ./forge_engine
 
 # Package for sharing:
-tar -czf forge_engine.tar.gz -C build dist
+tar -czf forge_engine-$(cat VERSION).tar.gz -C build dist
 ```
 
-The distribution build bundles the SageLang interpreter with all engine source, shaders, and assets into a portable directory. Native LLVM compilation is not yet supported for multi-module projects (the LLVM backend resolves GPU constants but not cross-module `from X import Y` imports).
+The distribution build bundles the SageLang interpreter with all engine source, shaders, assets, and the root `VERSION` file into a portable directory. Native LLVM compilation is not yet supported for multi-module projects (the LLVM backend resolves GPU constants but not cross-module `from X import Y` imports).
 
 ## SageLang Features Used
 

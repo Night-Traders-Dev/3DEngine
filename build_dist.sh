@@ -10,9 +10,16 @@ set -e
 SAGE_DIR="$(cd "$(dirname "$0")/../sagelang" && pwd)"
 ENGINE_DIR="$(cd "$(dirname "$0")" && pwd)"
 DIST="$ENGINE_DIR/build/dist"
+VERSION_FILE="$ENGINE_DIR/VERSION"
+ENGINE_VERSION="unknown"
+
+if [ -f "$VERSION_FILE" ]; then
+    ENGINE_VERSION="$(tr -d '\r\n' < "$VERSION_FILE")"
+fi
 
 echo "=== Forge Engine Build ==="
 echo "Engine: $ENGINE_DIR"
+echo "Version: $ENGINE_VERSION"
 echo "SageLang: $SAGE_DIR"
 
 # Ensure sage is built
@@ -34,7 +41,6 @@ cp "$SAGE_DIR/sage" "$DIST/sage"
 
 # Copy SageLang standard library (needed at runtime for imports)
 if [ -d "$SAGE_DIR/lib" ]; then
-    cp "$SAGE_DIR"/lib/*.sage "$DIST/stdlib/" 2>/dev/null || true
     mkdir -p "$DIST/stdlib"
     cp "$SAGE_DIR"/lib/*.sage "$DIST/stdlib/"
 fi
@@ -45,6 +51,7 @@ cp "$ENGINE_DIR"/lib/*.sage "$DIST/lib/"
 
 # Copy engine entry points
 cp "$ENGINE_DIR/editor.sage" "$DIST/"
+cp "$ENGINE_DIR/VERSION" "$DIST/"
 cp "$ENGINE_DIR"/examples/*.sage "$DIST/examples/" 2>/dev/null || true
 
 # Copy assets
@@ -92,4 +99,4 @@ echo "Files:   $TOTAL_SAGE .sage modules"
 echo "Size:    $TOTAL_SIZE"
 echo ""
 echo "Run:     cd build/dist && ./forge_engine"
-echo "Package: tar -czf forge_engine.tar.gz -C build dist"
+echo "Package: tar -czf forge_engine-$ENGINE_VERSION.tar.gz -C build dist"

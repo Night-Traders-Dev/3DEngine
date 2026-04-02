@@ -9,6 +9,7 @@ import ui_core
 from ui_core import create_widget, create_panel, create_rect, create_button, create_label
 from ui_core import add_child, rgba, color_with_alpha, color_brighten
 from ui_core import _push_border_quads, _push_shadow_quads
+from forge_version import engine_name, engine_banner
 
 let ANCHOR_CENTER = ui_core.ANCHOR_CENTER
 let ANCHOR_TOP_CENTER = ui_core.ANCHOR_TOP_CENTER
@@ -161,9 +162,9 @@ proc create_main_menu(on_play, on_quit):
     let title_accent = create_rect(0.0, 63.0, 420.0, 2.0, color_with_alpha(ui_core.THEME_ACCENT, 0.6))
     add_child(root, title_accent)
 
-    let title = create_label(0.0, 20.0, "SAGE ENGINE", ui_core.THEME_TEXT_BRIGHT)
+    let title = create_label(0.0, 20.0, engine_name(), ui_core.THEME_TEXT_BRIGHT)
     title["anchor"] = ANCHOR_TOP_CENTER
-    title["width"] = 120.0
+    title["width"] = 160.0
     title["font_size"] = 28.0
     add_child(root, title)
 
@@ -186,9 +187,9 @@ proc create_main_menu(on_play, on_quit):
     add_child(root, quit_btn)
 
     # Version/credit text
-    let ver = create_label(0.0, 340.0, "Forge Engine v0.6", ui_core.THEME_TEXT_DIM)
+    let ver = create_label(0.0, 340.0, engine_banner(), ui_core.THEME_TEXT_DIM)
     ver["anchor"] = ANCHOR_TOP_CENTER
-    ver["width"] = 120.0
+    ver["width"] = 160.0
     add_child(root, ver)
 
     return root

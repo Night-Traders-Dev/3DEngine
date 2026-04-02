@@ -1,10 +1,11 @@
 gc_disable()
 # -----------------------------------------
-# scene_serial.sage - Scene serialization for Sage Engine
+# scene_serial.sage - Scene serialization for Forge Engine
 # Save/load ECS scenes to/from JSON files
 # -----------------------------------------
 
 import io
+from forge_version import engine_name, engine_version, scene_format_version
 from json import cJSON_Parse, cJSON_Print, cJSON_Delete
 from json import cJSON_CreateObject, cJSON_CreateArray, cJSON_CreateNumber, cJSON_CreateString
 from json import cJSON_CreateBool, cJSON_CreateNull
@@ -174,8 +175,9 @@ proc register_serializer(comp_type, serialize_fn):
 proc serialize_scene(world, scene_name):
     let root = cJSON_CreateObject()
     cJSON_AddStringToObject(root, "name", scene_name)
-    cJSON_AddStringToObject(root, "engine", "Sage Engine")
-    cJSON_AddNumberToObject(root, "version", 1)
+    cJSON_AddStringToObject(root, "engine", engine_name())
+    cJSON_AddStringToObject(root, "engine_version", engine_version())
+    cJSON_AddNumberToObject(root, "version", scene_format_version())
 
     let entities_arr = cJSON_CreateArray()
 
@@ -502,11 +504,30 @@ proc load_scene_string(json_str):
     let scene_name = ""
     if name_node != nil:
         scene_name = cJSON_GetStringValue(name_node)
+    let scene_engine = ""
+    let engine_node = cJSON_GetObjectItem(root, "engine")
+    if engine_node != nil:
+        scene_engine = cJSON_GetStringValue(engine_node)
+    let scene_engine_version = ""
+    let engine_version_node = cJSON_GetObjectItem(root, "engine_version")
+    if engine_version_node != nil:
+        scene_engine_version = cJSON_GetStringValue(engine_version_node)
+    let scene_version = 0
+    let version_node = cJSON_GetObjectItem(root, "version")
+    if version_node != nil:
+        scene_version = cJSON_GetNumberValue(version_node)
 
     let entities_node = cJSON_GetObjectItem(root, "entities")
     if entities_node == nil:
         cJSON_Delete(root)
-        return world
+        let empty_result = {}
+        empty_result["world"] = world
+        empty_result["name"] = scene_name
+        empty_result["engine"] = scene_engine
+        empty_result["engine_version"] = scene_engine_version
+        empty_result["scene_version"] = scene_version
+        empty_result["entity_count"] = 0
+        return empty_result
 
     let count = cJSON_GetArraySize(entities_node)
     let i = 0
@@ -543,6 +564,9 @@ proc load_scene_string(json_str):
     let result = {}
     result["world"] = world
     result["name"] = scene_name
+    result["engine"] = scene_engine
+    result["engine_version"] = scene_engine_version
+    result["scene_version"] = scene_version
     result["entity_count"] = count
     return result
 

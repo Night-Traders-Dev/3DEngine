@@ -12,6 +12,7 @@ from ui_renderer import create_ui_renderer
 from font import create_font_renderer, load_font, begin_text, add_text, flush_text
 from renderer import begin_frame, end_frame, check_resize
 from game_loop import create_time_state, update_time
+from forge_version import engine_banner
 
 # ============================================================================
 # Template definitions
@@ -335,7 +336,7 @@ proc run_launch_screen(r):
                 di = di + 1
 
         add_text(font_r, "ui", "ENTER = Create  |  Up/Down = Navigate  |  ESC = Exit", cx + 16.0, sh - 20.0, 0.32, 0.34, 0.37, 1.0)
-        add_text(font_r, "ui", "Forge Engine v0.6", sw - 170.0, sh - 20.0, 0.28, 0.30, 0.33, 1.0)
+        add_text(font_r, "ui", engine_banner(), sw - 182.0, sh - 20.0, 0.28, 0.30, 0.33, 1.0)
 
         flush_text(font_r, cmd, sw, sh)
 
