@@ -48,8 +48,8 @@ cd ~/Devel/3DEngine
 # Launch the visual editor (opens project browser first)
 ./run.sh editor.sage
 
-# Run a demo
-./run.sh examples/demo_world.sage
+# Run the voxel sandbox demo
+./run.sh examples/demo_voxel.sage
 
 # Run all tests
 ./tests/run_all.sh
@@ -66,18 +66,18 @@ forge-engine/
 ├── run.sh               # Script runner
 ├── build_dist.sh        # Distribution builder (sage runtime + engine bundle)
 ├── VERSION              # Single source of truth for engine version
-├── lib/                 # Engine modules (90 files)
+├── lib/                 # Engine modules (91 files)
 ├── shaders/             # GLSL + SPIR-V shaders
 ├── assets/              # Fonts, textures, saved scenes
-├── examples/            # 8 demo programs
-├── tests/               # 53 test suites, 1,576 checks
+├── examples/            # 9 demo programs
+├── tests/               # 54 test suites, 1,598 checks
 └── build/               # Distribution output
     └── dist/            # Self-contained distributable
 ```
 
 Runtime/editor version strings and distribution packaging are sourced from the repo-root `VERSION` file through `lib/forge_version.sage`.
 Forge uses `x.y.z` semantic versioning and intentionally remains on `0.y.z` until the engine is functionally complete enough to justify `1.0.0`. See [VERSIONING.md](VERSIONING.md) for the repo policy.
-The automated suite now includes a dedicated renderer sanity check for startup helpers like pipeline cache state, a focused shadow-map helper suite, plus a runtime startup smoke suite that boots the editor and asset demo under timeout alongside the broader import/export coverage.
+The automated suite now includes a dedicated renderer sanity check for startup helpers like pipeline cache state, a focused shadow-map helper suite, the new voxel world suite, plus a runtime startup smoke suite that boots the editor, asset demo, and voxel sandbox under timeout alongside the broader import/export coverage.
 
 ---
 
@@ -98,7 +98,7 @@ When you launch the editor, a **Project Browser** screen appears before the edit
 | **FPS** | First Person Shooter | Player controller, weapons, health/damage HUD, AI enemies |
 | **RPG** | Role-Playing Game | Third-person camera, inventory, quests, stats/leveling |
 | **Top-Down** | Top-Down Action | Overhead camera, twin-stick controls, projectiles, spawner |
-| **Voxel** | Voxel World | Block terrain, place/break tools, block palette |
+| **Voxel** | Voxel World | Shared voxel sandbox module, starter editor scene, place/break tools, block palette |
 | **Racing** | Racing Game | Vehicle physics, chase camera, lap timer, speed HUD |
 | **Survival** | Survival | Crafting, hunger/thirst, day-night cycle, buildable shelters |
 | **Sandbox** | Sandbox / Empty | Empty scene with grid, basic lighting, full creative freedom |
@@ -119,6 +119,8 @@ When you launch the editor, a **Project Browser** screen appears before the edit
 The Forge Editor is a UE5-inspired visual scene editor with floating windows, a menu bar, and inline property editing. Build scenes by placing and transforming objects, edit properties directly, then generate a complete SageLang game script.
 
 Press **F1** at any time to see the full keyboard shortcuts overlay.
+
+Choosing the `Voxel` launcher template now seeds a starter surface-block scene in the editor using the same shared voxel generation rules as the playable sandbox demo.
 
 ### Editor Layout
 
@@ -895,7 +897,7 @@ barrier_compute_to_graphics(cmd)
 # Build a self-contained package
 ./build_dist.sh
 
-# Output: build/dist/ (~3.9MB, 108 .sage modules)
+# Output: build/dist/ (~4.0MB, 110 .sage modules)
 # Contains: sage runtime binary + engine libs + stdlib + VERSION + shaders + assets
 
 # Run:
@@ -911,12 +913,12 @@ tar -czf forge_engine-$(cat VERSION).tar.gz -C build dist
 | --- | --- |
 | `sage` | SageLang runtime binary (ELF x86-64, links Vulkan/GLFW/OpenGL) |
 | `VERSION` | Shared engine release version copied into the distributable |
-| `lib/` | 90 engine .sage modules |
+| `lib/` | 91 engine .sage modules |
 | `stdlib/` | 33 SageLang standard library modules |
 | `shaders/` | Compiled SPIR-V shaders |
 | `assets/` | Fonts (DejaVuSans), glTF models, textures, saved scenes |
 | `editor.sage` | Editor entry point |
-| `examples/` | 8 demo programs |
+| `examples/` | 9 demo programs |
 | `forge_engine` | Launch script |
 
 ### Native Compilation Status

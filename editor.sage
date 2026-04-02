@@ -93,6 +93,8 @@ from asset_import import imported_animation_clip_names, imported_animation_index
 from asset_import import imported_animation_duration, create_imported_animation_state
 from asset_import import advance_imported_animation_state, cycle_imported_animation_clip, step_imported_animation_time
 from forge_version import engine_name, editor_title, editor_play_title, about_text
+from voxel_world import create_voxel_world, generate_voxel_template_world, get_voxel
+from voxel_world import voxel_block_surface, voxel_block_name, voxel_is_surface_block, voxel_block_world_center
 import io
 
 print "=== Forge Engine Editor ==="
@@ -237,6 +239,60 @@ proc reset_layout_windows():
 
 reset_layout_windows()
 
+proc _spawn_template_cube(editor_ctx, w, pos, name, material_id, surface):
+    let e = place_entity(editor_ctx, pos, name, cube_gpu)
+    add_component(w, e, "mesh_id", {"mesh": cube_gpu, "name": "cube"})
+    let mr = MeshRendererComponent(cube_gpu, material_id)
+    add_component(w, e, "mesh_renderer", mr)
+    if surface != nil:
+        let mat = MaterialComponent(surface["albedo"][0], surface["albedo"][1], surface["albedo"][2])
+        mat["roughness"] = 1.0
+        add_component(w, e, "material", mat)
+    return e
+
+proc _populate_voxel_template_scene(editor_ctx, w):
+    let ground = spawn(w)
+    add_component(w, ground, "transform", TransformComponent(0.0, 0.0, 0.0))
+    add_component(w, ground, "name", NameComponent("Ground"))
+    add_tag(w, ground, "editable")
+
+    let template_world = create_voxel_world(10, 10, 10)
+    generate_voxel_template_world(template_world, 5.0)
+    let spawned = 1
+
+    let gx = 0
+    while gx < template_world["size_x"]:
+        let gy = 0
+        while gy < template_world["size_y"]:
+            let gz = 0
+            while gz < template_world["size_z"]:
+                let block_id = get_voxel(template_world, gx, gy, gz)
+                if block_id != 0 and voxel_is_surface_block(template_world, gx, gy, gz):
+                    let center = voxel_block_world_center(template_world, gx, gy, gz)
+                    let surface = voxel_block_surface(template_world, block_id)
+                    let name = "Voxel_" + voxel_block_name(template_world, block_id) + "_" + str(gx) + "_" + str(gy) + "_" + str(gz)
+                    _spawn_template_cube(editor_ctx, w, center, name, "voxel_" + str(block_id), surface)
+                    spawned = spawned + 1
+                gz = gz + 1
+            gy = gy + 1
+        gx = gx + 1
+
+    let sun = spawn(w)
+    let sun_t = TransformComponent(0.0, 8.0, 0.0)
+    sun_t["rotation"] = vec3(0.85, -0.65, 0.0)
+    add_component(w, sun, "transform", sun_t)
+    add_component(w, sun, "name", NameComponent("VoxelSun"))
+    add_component(w, sun, "light", DirectionalLightComponent(1.0, 0.97, 0.92, 1.8))
+    spawned = spawned + 1
+
+    let lamp = spawn(w)
+    add_component(w, lamp, "transform", TransformComponent(3.0, 5.0, 3.0))
+    add_component(w, lamp, "name", NameComponent("VoxelLamp"))
+    add_component(w, lamp, "light", PointLightComponent(1.0, 0.78, 0.52, 3.2, 18.0))
+    spawned = spawned + 1
+
+    return spawned
+
 # Menu bar state
 let menubar_active = -1
 
@@ -248,29 +304,33 @@ let editor = create_scene_editor(world)
 let physics_world = create_physics_world()
 register_system(world, "physics", ["rigidbody", "transform"], create_physics_system(physics_world))
 
-# Default scene: ground plane
-let ge = spawn(world)
-add_component(world, ge, "transform", TransformComponent(0.0, 0.0, 0.0))
-add_component(world, ge, "name", NameComponent("Ground"))
-# No mesh - grid replaces ground plane visually
-add_tag(world, ge, "editable")
+if _launch_action == "new" and _launch_template == "voxel":
+    let template_entities = _populate_voxel_template_scene(editor, world)
+    print "Applied voxel template scene with " + str(template_entities) + " entities"
+else:
+    # Default scene: ground plane
+    let ge = spawn(world)
+    add_component(world, ge, "transform", TransformComponent(0.0, 0.0, 0.0))
+    add_component(world, ge, "name", NameComponent("Ground"))
+    # No mesh - grid replaces ground plane visually
+    add_tag(world, ge, "editable")
 
-# A few starter objects
-let c1 = place_entity(editor, vec3(0.0, 0.5, 0.0), "Cube_1", cube_gpu)
-add_component(world, c1, "mesh_id", {"mesh": cube_gpu, "name": "cube"})
-_ensure_entity_mesh_renderer(world, c1, "cube")
-let c2 = place_entity(editor, vec3(3.0, 0.5, 0.0), "Cube_2", cube_gpu)
-add_component(world, c2, "mesh_id", {"mesh": cube_gpu, "name": "cube"})
-_ensure_entity_mesh_renderer(world, c2, "cube")
-let s1 = place_entity(editor, vec3(-2.0, 1.0, 2.0), "Sphere_1", sphere_gpu)
-add_component(world, s1, "mesh_id", {"mesh": sphere_gpu, "name": "sphere"})
-_ensure_entity_mesh_renderer(world, s1, "sphere")
+    # A few starter objects
+    let c1 = place_entity(editor, vec3(0.0, 0.5, 0.0), "Cube_1", cube_gpu)
+    add_component(world, c1, "mesh_id", {"mesh": cube_gpu, "name": "cube"})
+    _ensure_entity_mesh_renderer(world, c1, "cube")
+    let c2 = place_entity(editor, vec3(3.0, 0.5, 0.0), "Cube_2", cube_gpu)
+    add_component(world, c2, "mesh_id", {"mesh": cube_gpu, "name": "cube"})
+    _ensure_entity_mesh_renderer(world, c2, "cube")
+    let s1 = place_entity(editor, vec3(-2.0, 1.0, 2.0), "Sphere_1", sphere_gpu)
+    add_component(world, s1, "mesh_id", {"mesh": sphere_gpu, "name": "sphere"})
+    _ensure_entity_mesh_renderer(world, s1, "sphere")
 
 _sync_world_lights(ls, world)
 update_light_ubo(ls)
 
 deselect(editor)
-let entity_counter = 4
+let entity_counter = entity_count(world)
 let play_mode = false
 let play_snapshot = nil
 let active_details_field = nil
