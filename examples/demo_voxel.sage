@@ -5,7 +5,7 @@
 # Controls:
 #   WASD = Move | Mouse = Look | ESC = Capture mouse
 #   SPACE = Jump | SHIFT = Sprint | TAB = Noclip | Q = Quit
-#   Left Mouse = Break block | Right Mouse = Place selected block
+#   Left Mouse = Break block / hit mob | Right Mouse = Place selected block
 #   1-5 = Select block palette | Z = Select planks | X = Craft planks from wood
 
 import gpu
@@ -33,6 +33,7 @@ from game_loop import create_time_state, update_time
 from font import create_font_renderer, load_font, begin_text, add_text, flush_text
 from ui_renderer import create_ui_renderer, draw_ui
 from json import cJSON_Parse, cJSON_Print, cJSON_Delete, cJSON_FromSage, cJSON_ToSage
+from gameplay import HealthComponent, damage, health_percent, revive, update_health_regen
 from voxel_world import create_voxel_world
 from voxel_world import voxel_block_name, voxel_block_surface, voxel_block_world_center, raycast_voxel_world
 from voxel_world import set_voxel, sample_voxel_ground_radius, voxel_collides_player
@@ -45,6 +46,12 @@ from voxel_world import save_voxel_world_chunks, load_voxel_world_chunks, voxel_
 from voxel_world import voxel_chunk_coords_world, voxel_chunk_size
 from voxel_world import ensure_voxel_generated_radius, voxel_generated_chunk_count
 from voxel_hud import create_voxel_hud, update_voxel_hud
+from voxel_gameplay import create_voxel_gameplay_state, spawn_voxel_pickup
+from voxel_gameplay import update_voxel_pickups, pickup_draw_position
+from voxel_gameplay import spawn_voxel_mob, ensure_voxel_mob_population, update_voxel_mobs
+from voxel_gameplay import find_target_voxel_mob, collect_dead_voxel_mobs
+from voxel_gameplay import voxel_pickup_count, voxel_alive_mob_count, mob_draw_position
+from voxel_gameplay import voxel_gameplay_to_sage, voxel_gameplay_from_sage
 
 print "=== Forge Engine - Voxel Template Sandbox ==="
 
@@ -113,6 +120,7 @@ voxel_inventory_add(inventory, 6, 0)
 let recipes = default_voxel_recipes()
 let voxel_hud = create_voxel_hud()
 let inventory_open = [false]
+let gameplay_state = create_voxel_gameplay_state()
 
 # ============================================================================
 # Input
@@ -139,12 +147,17 @@ let start_ground = sample_voxel_ground_radius(voxel, player["position"][0], play
 player["position"][1] = start_ground
 player["ground_y"] = start_ground
 player["grounded"] = true
+let player_health = HealthComponent(100.0)
+player_health["regen_rate"] = 2.5
+player_health["regen_delay"] = 5.0
+ensure_voxel_mob_population(gameplay_state, voxel, player["position"], 3, world_seed)
 
 # ============================================================================
 # Palette / targeting
 # ============================================================================
 let selected_block = [1]
 let target_hit = nil
+let mob_target = nil
 let status_line = ["O inventory  C save  V load  Mine blocks to refill inventory"]
 let status_timer = [4.0]
 
@@ -183,6 +196,8 @@ proc _make_save_state(vw, inv, selected_id, player):
     let state = {}
     state["world_manifest_path"] = save_world_file
     state["inventory"] = voxel_inventory_to_sage(inv)
+    state["gameplay"] = voxel_gameplay_to_sage(gameplay_state)
+    state["player_health"] = player_health
     state["selected_block"] = selected_id
     let player_state = {}
     player_state["position"] = player["position"]
@@ -201,7 +216,7 @@ let running = true
 print ""
 print "Controls:"
 print "  WASD = Move  Mouse = Look  ESC = Capture mouse  TAB = Noclip"
-print "  Left Mouse = Break block  Right Mouse = Place block  1-5 = Palette  Z = Planks  X = Craft planks  O = Inventory"
+print "  Left Mouse = Break block / hit slime  Right Mouse = Place block  1-5 = Palette  Z = Planks  X = Craft planks  O = Inventory"
 print ""
 
 while running:
@@ -268,9 +283,14 @@ while running:
                     _set_status("Load failed: world data was invalid")
                 else:
                     voxel = loaded_world
+                    gameplay_state = create_voxel_gameplay_state()
                     draws = voxel_visible_draws(voxel, player["position"][0], player["position"][1], player["position"][2], stream_chunk_radius)
                     if dict_has(state, "inventory"):
                         inventory = voxel_inventory_from_sage(state["inventory"])
+                    if dict_has(state, "gameplay"):
+                        gameplay_state = voxel_gameplay_from_sage(state["gameplay"])
+                    if dict_has(state, "player_health"):
+                        player_health = state["player_health"]
                     if dict_has(state, "selected_block") and state["selected_block"] > 0:
                         selected_block[0] = state["selected_block"]
                     if dict_has(state, "player"):
@@ -291,12 +311,14 @@ while running:
                         player["position"][1] = load_ground
                     if voxel_collides_player(voxel, player["position"], player["radius"], player["height"]):
                         player["position"][1] = sample_voxel_ground_radius(voxel, player["position"][0], player["position"][2], player["radius"])
+                    ensure_voxel_mob_population(gameplay_state, voxel, player["position"], 3, world_seed)
                     _set_status("Loaded sandbox from " + save_state_file)
 
     ensure_voxel_generated_radius(voxel, player["position"][0], player["position"][1], player["position"][2], generation_chunk_radius, world_seed)
     let prev_pos = vec3(player["position"][0], player["position"][1], player["position"][2])
     player["ground_y"] = sample_voxel_ground_radius(voxel, player["position"][0], player["position"][2], player["radius"])
     update_player(player, inp, dt)
+    update_health_regen(player_health, dt, ts["total"])
     let resolved = resolve_player_voxel_collision(voxel, prev_pos, player["position"], player["radius"], player["height"])
     player["position"] = resolved
     let ground_y = sample_voxel_ground_radius(voxel, player["position"][0], player["position"][2], player["radius"])
@@ -307,15 +329,41 @@ while running:
             player["velocity"][1] = 0.0
         player["grounded"] = true
 
+    let mob_events = update_voxel_mobs(gameplay_state, voxel, player["position"], player_health, dt, ts["total"])
+    if len(mob_events) > 0:
+        let evt = mob_events[0]
+        _set_status(evt["mob_name"] + " hit you for " + str(evt["damage"]) + " | Health: " + str(math.floor(player_health["current"] + 0.5)))
+    if player_health["alive"] == false:
+        revive(player_health, player_health["max"])
+        player["position"] = vec3(0.0, sample_voxel_ground_radius(voxel, 0.0, 0.0, player["radius"]), 0.0)
+        player["velocity"] = vec3(0.0, 0.0, 0.0)
+        player["ground_y"] = player["position"][1]
+        _set_status("You were slimed. Respawned at world origin")
+
+    let collected_items = update_voxel_pickups(gameplay_state, inventory, player["position"], dt)
+    if len(collected_items) > 0:
+        let collected = collected_items[0]
+        _set_status("Picked up " + str(collected["count"]) + " " + voxel_block_name(voxel, collected["block_id"]))
+
     let eye = player_eye_position(player)
     target_hit = raycast_voxel_world(voxel, eye, player_forward(player), 8.0)
+    mob_target = find_target_voxel_mob(gameplay_state, eye, player_forward(player), 4.25)
 
-    if player["captured"] and target_hit != nil and gpu.mouse_just_pressed(gpu.MOUSE_LEFT):
-        if target_hit["y"] > 0:
+    if player["captured"] and gpu.mouse_just_pressed(gpu.MOUSE_LEFT):
+        let attacked_mob = false
+        if mob_target != nil and (target_hit == nil or mob_target["distance"] <= target_hit["distance"]):
+            let dealt = damage(mob_target["mob"]["health"], 10.0, ts["total"])
+            if dealt > 0.0:
+                attacked_mob = true
+                if mob_target["mob"]["health"]["alive"]:
+                    _set_status("Hit " + mob_target["mob"]["name"] + " for " + str(dealt) + " | Mob HP: " + str(math.floor(mob_target["mob"]["health"]["current"] + 0.5)))
+                else:
+                    _set_status("Defeated " + mob_target["mob"]["name"])
+        if attacked_mob == false and target_hit != nil and target_hit["y"] > 0:
             let mined_id = target_hit["block_id"]
             if set_voxel(voxel, target_hit["x"], target_hit["y"], target_hit["z"], 0):
-                voxel_inventory_add(inventory, mined_id, 1)
-                _set_status("Mined " + voxel_block_name(voxel, mined_id) + " | Count: " + str(voxel_inventory_count(inventory, mined_id)))
+                spawn_voxel_pickup(gameplay_state, mined_id, 1, voxel_block_world_center(voxel, target_hit["x"], target_hit["y"], target_hit["z"]))
+                _set_status("Mined " + voxel_block_name(voxel, mined_id) + " | Drop spawned")
                 target_hit = nil
 
     if player["captured"] and target_hit != nil and dict_has(target_hit, "place_x") and gpu.mouse_just_pressed(gpu.MOUSE_RIGHT):
@@ -332,6 +380,16 @@ while running:
         else:
             _set_status("No " + voxel_block_name(voxel, selected_block[0]) + " left in inventory")
 
+    let dead_mobs = collect_dead_voxel_mobs(gameplay_state)
+    let dmi = 0
+    while dmi < len(dead_mobs):
+        let dead_mob = dead_mobs[dmi]
+        if dead_mob["drop_spawned"] == false:
+            spawn_voxel_pickup(gameplay_state, dead_mob["drop_block"], dead_mob["drop_count"], dead_mob["position"])
+        dmi = dmi + 1
+
+    ensure_voxel_mob_population(gameplay_state, voxel, player["position"], 3, world_seed)
+
     draws = voxel_visible_draws(voxel, player["position"][0], player["position"][1], player["position"][2], stream_chunk_radius)
     set_view_position(ls, eye)
     update_light_ubo(ls)
@@ -344,6 +402,15 @@ while running:
         while di < len(draws):
             shadow_draw_mesh(shadow_renderer, shadow_cmd, draws[di]["gpu_mesh"], mat4_identity())
             di = di + 1
+        let mi = 0
+        while mi < len(gameplay_state["mobs"]):
+            let mob = gameplay_state["mobs"][mi]
+            if mob["health"]["alive"]:
+                let mob_center = mob_draw_position(mob, ts["total"])
+                let mob_scale_y = 0.74 + math.sin(ts["total"] * 3.5 + mob["id"] * 0.8) * 0.08
+                let mob_t = make_transform(mob_center, vec3(0.0, ts["total"] * 0.4, 0.0), vec3(0.85, mob_scale_y, 0.85))
+                shadow_draw_mesh(shadow_renderer, shadow_cmd, cube_gpu, transform_to_matrix(mob_t))
+            mi = mi + 1
         end_shadow_frame(shadow_renderer, shadow_cmd)
 
     if gpu.window_should_close():
@@ -373,9 +440,37 @@ while running:
         draw_mesh_lit_surface_controlled(cmd, lit_mat, draw["gpu_mesh"], world_mvp, identity, ls["desc_set"], draw["surface"], true)
         ri = ri + 1
 
+    let pi = 0
+    while pi < len(gameplay_state["pickups"]):
+        let pickup = gameplay_state["pickups"][pi]
+        let pickup_center = pickup_draw_position(pickup, ts["total"])
+        let pickup_t = make_transform(pickup_center, vec3(0.0, ts["total"] * 1.9 + pickup["id"], 0.0), vec3(0.26, 0.26, 0.26))
+        let pickup_model = transform_to_matrix(pickup_t)
+        let pickup_mvp = mat4_mul(vp, pickup_model)
+        draw_mesh_lit_surface_controlled(cmd, lit_mat, cube_gpu, pickup_mvp, pickup_model, ls["desc_set"], voxel_block_surface(voxel, pickup["block_id"]), true)
+        pi = pi + 1
+
+    let mi = 0
+    while mi < len(gameplay_state["mobs"]):
+        let mob = gameplay_state["mobs"][mi]
+        if mob["health"]["alive"]:
+            let mob_center = mob_draw_position(mob, ts["total"])
+            let mob_scale_y = 0.74 + math.sin(ts["total"] * 3.5 + mob["id"] * 0.8) * 0.08
+            let mob_t = make_transform(mob_center, vec3(0.0, ts["total"] * 0.4, 0.0), vec3(0.85, mob_scale_y, 0.85))
+            let mob_model = transform_to_matrix(mob_t)
+            let mob_mvp = mat4_mul(vp, mob_model)
+            draw_mesh_lit_surface_controlled(cmd, lit_mat, cube_gpu, mob_mvp, mob_model, ls["desc_set"], mob["surface"], true)
+        mi = mi + 1
+
     if target_hit != nil:
         let center = voxel_block_world_center(voxel, target_hit["x"], target_hit["y"], target_hit["z"])
         let highlight_t = make_transform(center, vec3(0.0, ts["total"] * 0.8, 0.0), vec3(1.04, 1.04, 1.04))
+        let highlight_model = transform_to_matrix(highlight_t)
+        let highlight_mvp = mat4_mul(vp, highlight_model)
+        draw_mesh_lit_surface_controlled(cmd, lit_mat, cube_gpu, highlight_mvp, highlight_model, ls["desc_set"], _highlight_surface(), false)
+    if mob_target != nil and (target_hit == nil or mob_target["distance"] <= target_hit["distance"]):
+        let mob_center = mob_draw_position(mob_target["mob"], ts["total"])
+        let highlight_t = make_transform(mob_center, vec3(0.0, ts["total"] * 0.8, 0.0), vec3(1.08, 0.96, 1.08))
         let highlight_model = transform_to_matrix(highlight_t)
         let highlight_mvp = mat4_mul(vp, highlight_model)
         draw_mesh_lit_surface_controlled(cmd, lit_mat, cube_gpu, highlight_mvp, highlight_model, ls["desc_set"], _highlight_surface(), false)
@@ -384,15 +479,22 @@ while running:
     draw_ui(ui_renderer, cmd, voxel_hud["root"], sw, sh)
     begin_text(font_r)
     add_text(font_r, "ui", "VOXEL TEMPLATE SANDBOX", 18.0, 18.0, 0.94, 0.96, 0.98, 1.0)
-    add_text(font_r, "ui", "LMB break  RMB place  1-5 palette  Z planks  X craft  O inventory  C save  V load  TAB noclip  ESC mouse", 18.0, 42.0, 0.70, 0.74, 0.80, 1.0)
-    add_text(font_r, "ui", "Selected: [" + str(selected_block[0]) + "] " + voxel_block_name(voxel, selected_block[0]) + " x" + str(voxel_inventory_count(inventory, selected_block[0])) + " | Solid blocks: " + str(voxel["solid_count"]), 18.0, 66.0, 0.90, 0.92, 0.95, 1.0)
+    add_text(font_r, "ui", "LMB break / hit  RMB place  1-5 palette  Z planks  X craft  O inventory  C save  V load  TAB noclip  ESC mouse", 18.0, 42.0, 0.70, 0.74, 0.80, 1.0)
+    add_text(font_r, "ui", "Selected: [" + str(selected_block[0]) + "] " + voxel_block_name(voxel, selected_block[0]) + " x" + str(voxel_inventory_count(inventory, selected_block[0])) + " | Health: " + str(math.floor(player_health["current"] + 0.5)) + "/" + str(player_health["max"]) + " | Slimes: " + str(voxel_alive_mob_count(gameplay_state)) + " | Drops: " + str(voxel_pickup_count(gameplay_state)), 18.0, 66.0, 0.90, 0.92, 0.95, 1.0)
     add_text(font_r, "ui", "Chunk: " + str(player_chunk["x"]) + ", " + str(player_chunk["y"]) + ", " + str(player_chunk["z"]) + " | Chunk size: " + str(voxel_chunk_size(voxel)) + " | Generated chunks: " + str(voxel_generated_chunk_count(voxel)) + " | Visible chunk draws: " + str(len(draws)), 18.0, 90.0, 0.72, 0.84, 0.92, 1.0)
-    if target_hit != nil:
-        add_text(font_r, "ui", "Target: " + voxel_block_name(voxel, target_hit["block_id"]) + " @ " + str(target_hit["x"]) + ", " + str(target_hit["y"]) + ", " + str(target_hit["z"]), 18.0, 114.0, 0.86, 0.84, 0.72, 1.0)
+    if mob_target != nil and (target_hit == nil or mob_target["distance"] <= target_hit["distance"]):
+        add_text(font_r, "ui", "Target Mob: " + mob_target["mob"]["name"] + " | HP " + str(math.floor(mob_target["mob"]["health"]["current"] + 0.5)) + " | Range " + str(math.floor(mob_target["distance"] * 10.0) / 10.0), 18.0, 114.0, 0.78, 0.94, 0.76, 1.0)
     else:
-        add_text(font_r, "ui", "Target: none", 18.0, 114.0, 0.55, 0.58, 0.63, 1.0)
+        if target_hit != nil:
+            add_text(font_r, "ui", "Target Block: " + voxel_block_name(voxel, target_hit["block_id"]) + " @ " + str(target_hit["x"]) + ", " + str(target_hit["y"]) + ", " + str(target_hit["z"]), 18.0, 114.0, 0.86, 0.84, 0.72, 1.0)
+        else:
+            add_text(font_r, "ui", "Target: none", 18.0, 114.0, 0.55, 0.58, 0.63, 1.0)
+    if target_hit != nil and (mob_target == nil or mob_target["distance"] > target_hit["distance"]):
+        add_text(font_r, "ui", "Break to spawn pickup, then walk over it to collect.", 18.0, 138.0, 0.72, 0.84, 0.76, 1.0)
+    else:
+        add_text(font_r, "ui", "Slimes drop wood when defeated. Use X to craft planks.", 18.0, 138.0, 0.72, 0.84, 0.76, 1.0)
     if status_timer[0] > 0.0 and status_line[0] != "":
-        add_text(font_r, "ui", status_line[0], 18.0, 138.0, 0.76, 0.90, 0.74, 1.0)
+        add_text(font_r, "ui", status_line[0], 18.0, 162.0, 0.76, 0.90, 0.74, 1.0)
 
     let hs = voxel_hud["hotbar_slots"]
     let hi = 0

@@ -1,6 +1,6 @@
 # Forge Engine
 
-A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Features a project launcher with game templates, a visual editor with floating windows, TrueType font rendering, PBR lighting, quaternion math, a centralized UI theme system, and 92 engine modules spanning rendering, physics, animation, AI, networking, and content pipelines.
+A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Features a project launcher with game templates, a visual editor with floating windows, TrueType font rendering, PBR lighting, quaternion math, a centralized UI theme system, and 93 engine modules spanning rendering, physics, animation, AI, networking, and content pipelines.
 
 For the complete engine guide, see **[GUIDE.md](GUIDE.md)**. For release numbering rules, see **[VERSIONING.md](VERSIONING.md)**.
 
@@ -16,7 +16,7 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 # Run the voxel sandbox demo
 ./run.sh examples/demo_voxel.sage
 
-# Run tests (56 suites, 1,673 checks)
+# Run tests (57 suites, 1,688 checks)
 ./tests/run_all.sh
 
 # Build distributable package
@@ -36,7 +36,7 @@ When you launch the editor, a **Project Browser** appears first:
 - **Preview area** — Shows selected template details and included features
 - **Keyboard** — Arrow keys to navigate, Enter to create, ESC to exit
 
-The voxel template is now backed by a real starter path: the editor seeds a first-class voxel world actor when you choose `Voxel`, and the shared sandbox gameplay loop lives in [examples/demo_voxel.sage](/home/kraken/Devel/3DEngine/examples/demo_voxel.sage) with inventory-backed mining/placement, a first crafting step for planks, streamed chunk draws around the player, textured voxel block faces instead of flat grayscale batches, a real hotbar/backpack/crafting overlay, chunked sandbox save/load, and longer runtime stability coverage so transient frame-loss events do not get treated like hard exits.
+The voxel template is now backed by a real starter path: the editor seeds a first-class voxel world actor when you choose `Voxel`, and the shared sandbox gameplay loop lives in [examples/demo_voxel.sage](/home/kraken/Devel/3DEngine/examples/demo_voxel.sage) with inventory-backed mining/placement, world drops and magnetic pickup collection, a first crafting step for planks, hostile slime mobs with combat and wood drops, streamed chunk draws around the player, textured voxel block faces instead of flat grayscale batches, a real hotbar/backpack/crafting overlay, chunked sandbox save/load, and longer runtime stability coverage so transient frame-loss events do not get treated like hard exits.
 
 ## Editor
 
@@ -56,7 +56,7 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 - **Directional shadows** — Dedicated sun shadow prepass in the editor, with texel-snapped light matrices to reduce shimmer and imported skinned meshes participating in the same shadow depth path as static meshes
 - **Render flags** — Mesh visibility plus `cast_shadows` / `receive_shadows` now affect the live editor viewport, shadow prepass, and exported runtime, with quick toggles in the Tools/context menus
 - **Voxel world actor** — The `Voxel` launcher path now seeds a first-class voxel world entity in the editor, and selected voxel worlds support inline brush inspection plus `SHIFT+LMB/RMB` block edits with `SHIFT+Z/X` brush cycling
-- **Voxel sandbox loop** — The shared voxel template now supports inventory-backed mining/placement, a first crafted plank block, lazy chunk generation, incremental streamed chunk uploads, textured top/side/bottom voxel faces with per-block procedural detail, a reusable Minecraft-style hotbar/backpack/crafting HUD, and chunked JSON save/load in the playable sandbox path
+- **Voxel sandbox loop** — The shared voxel template now supports inventory-backed mining/placement, world drops with magnetic pickup collection, a first crafted plank block, hostile slime mobs with simple chase/attack behavior, lazy chunk generation, incremental streamed chunk uploads, textured top/side/bottom voxel faces with per-block procedural detail, a reusable Minecraft-style hotbar/backpack/crafting HUD, and chunked JSON save/load in the playable sandbox path
 - **Prefab system** — Save entities as reusable .prefab.json templates
 - **Undo/Redo** — CTRL+Z / CTRL+Y with full command history (100 levels)
 - **Modal dialogs** — Quit confirmation, About dialog
@@ -124,7 +124,7 @@ forge-engine/
 ├── run.sh                   # Script runner
 ├── build_dist.sh            # Distribution builder
 ├── VERSION                  # Single source of truth for engine version
-├── lib/                     # Engine modules (92 files)
+├── lib/                     # Engine modules (93 files)
 │   ├── ui_core.sage         # Centralized theme + widget system
 │   ├── ui_widgets.sage      # Advanced widgets (sliders, checkboxes, dropdowns, text fields)
 │   ├── ui_window.sage       # Floating windows, menus, modals
@@ -136,7 +136,7 @@ forge-engine/
 │   └── ...                  # 80+ more engine modules
 ├── shaders/                 # GLSL shader pairs + SPIR-V
 ├── examples/                # 9 demo programs
-├── tests/                   # 56 suites, 1,673 checks
+├── tests/                   # 57 suites, 1,688 checks
 ├── assets/                  # Fonts, models, scenes, prefabs
 │   └── prefabs/             # Saved entity templates
 └── build/                   # Distribution output
@@ -162,7 +162,7 @@ forge-engine/
 `player_controller` (FPS, ground check, step climbing, slope limits) · `gameplay` (health, damage/heal, timers, state machines, spawners, scoring with combos)
 
 ### Content
-`asset_manager` (caching) · `asset_cache` · `scene_serial` (JSON save/load, prefab save/load, **imported asset references**) · `asset_import` (glTF 2.0, **async loading queue**, **HTTP download**, imported material metadata + textures, **node hierarchy draws**, **transform-animation clip sampling**, **skinned vertex decode**, **skin/joint palette generation**, **clip/state helpers**) · `asset_browser` (search, filter, categories) · `audio` (OpenAL FFI) · `hot_reload` (directory watching) · `codegen` (game script generation, **scene light/camera export**, **runtime glTF re-import**, **hierarchical imported draws**, **imported transform-animation playback**, **imported GPU skinning parity**, **runtime shadow prepass parity**, **animation state export parity**, **LLVM native compilation**) · `material` (8 PBR presets) · `mesh` (**device-local uploads**, **skinnable vertex expansion**, **struct vertex packing**)
+`asset_manager` (caching) · `asset_cache` · `scene_serial` (JSON save/load, prefab save/load, **imported asset references**) · `asset_import` (glTF 2.0, **async loading queue**, **HTTP download**, imported material metadata + textures, **node hierarchy draws**, **transform-animation clip sampling**, **skinned vertex decode**, **skin/joint palette generation**, **clip/state helpers**) · `asset_browser` (search, filter, categories) · `audio` (OpenAL FFI) · `hot_reload` (directory watching) · `codegen` (game script generation, **scene light/camera export**, **runtime glTF re-import**, **hierarchical imported draws**, **imported transform-animation playback**, **imported GPU skinning parity**, **runtime shadow prepass parity**, **animation state export parity**, **LLVM native compilation**) · `material` (8 PBR presets) · `mesh` (**device-local uploads**, **skinnable vertex expansion**, **struct vertex packing**) · `voxel_gameplay` (**shared drops, pickups, hostile slime loop, save/load state**)
 
 ### Animation & AI
 `tween` (18 easings) · `animation` (skeletal, keyframes, blend trees, state machine, two-bone IK solver, animation events) · `navigation` (A* pathfinding, steering: seek/flee/arrive/wander/avoid) · `behavior_tree` (action/condition/sequence/selector/inverter/repeater/wait)
@@ -210,14 +210,14 @@ forge-engine/
 ./run.sh examples/demo_ai.sage           # AI pathfinding + behavior trees
 ./run.sh examples/demo_ui.sage           # HUD + menus
 ./run.sh examples/demo_world.sage        # Terrain + water + day/night
-./run.sh examples/demo_voxel.sage        # Minecraft-style voxel sandbox slice with hotbar/backpack HUD + inventory + crafting + textured block faces + streamed chunk bootstrap + chunked save/load
+./run.sh examples/demo_voxel.sage        # Minecraft-style voxel sandbox slice with hotbar/backpack HUD + inventory + crafting + drops + slimes + textured block faces + streamed chunk bootstrap + chunked save/load
 ./run.sh examples/demo_particles.sage    # Particles + VFX
 ```
 
 ## Testing
 
 ```bash
-./tests/run_all.sh            # 56 suites, 1,673 individual checks
+./tests/run_all.sh            # 57 suites, 1,688 individual checks
 ./run.sh tests/test_ecs.sage  # Run individual suite
 ```
 
@@ -230,7 +230,7 @@ The suite now includes dedicated renderer sanity checks for startup helpers such
 ./build_dist.sh
 
 # Output: build/dist/ (4.1MB extracted)
-# Contains: sage runtime + 111 .sage modules + VERSION + shaders + assets
+# Contains: sage runtime + 112 .sage modules + VERSION + shaders + assets
 
 # Run from dist:
 cd build/dist && ./forge_engine
