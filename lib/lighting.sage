@@ -35,6 +35,7 @@ proc create_light_scene():
     ls["fog_end"] = 200.0
     ls["fog_density"] = 0.01
     ls["fog_color"] = vec3(0.6, 0.65, 0.7)
+    ls["scene_time"] = 0.0
     ls["view_pos"] = vec3(0.0, 0.0, 0.0)
     ls["ubo"] = -1
     ls["desc_layout"] = -1
@@ -142,6 +143,10 @@ proc set_view_position(ls, pos):
     ls["view_pos"] = pos
     ls["dirty"] = true
 
+proc set_scene_time(ls, time):
+    ls["scene_time"] = time
+    ls["dirty"] = true
+
 # ============================================================================
 # GPU setup - create UBO, descriptor layout, pool, set
 # ============================================================================
@@ -229,11 +234,11 @@ proc update_light_ubo(ls):
     else:
         push(data, 0.0)
 
-    # fogColor (rgb + pad)
+    # fogColor (rgb + scene time)
     push(data, ls["fog_color"][0])
     push(data, ls["fog_color"][1])
     push(data, ls["fog_color"][2])
-    push(data, 0.0)
+    push(data, ls["scene_time"])
 
     # Upload to UBO
     gpu.buffer_upload(ls["ubo"], data)

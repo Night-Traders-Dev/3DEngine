@@ -18,7 +18,7 @@ from input import action_just_pressed, default_fps_bindings, scroll_value
 from math3d import vec3, mat4_identity, mat4_mul, radians
 from engine_math import make_transform, transform_to_matrix
 from lighting import create_light_scene, directional_light
-from lighting import add_light, set_ambient, set_fog, set_view_position
+from lighting import add_light, set_ambient, set_fog, set_view_position, set_scene_time
 from lighting import init_light_gpu, update_light_ubo
 from render_system import create_lit_material, create_lit_material_transparent, draw_mesh_lit_surface_controlled
 from render_system import set_lit_material_shadow_source
@@ -466,6 +466,7 @@ while running:
 
     draws = voxel_visible_draws(voxel, player["position"][0], player["position"][1], player["position"][2], stream_chunk_radius)
     set_view_position(ls, eye)
+    set_scene_time(ls, ts["total"])
     update_light_ubo(ls)
 
     if shadow_renderer != nil:

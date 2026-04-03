@@ -16,7 +16,7 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 # Run the voxel sandbox demo
 ./run.sh examples/demo_voxel.sage
 
-# Run tests (59 suites, 1,738 checks)
+# Run tests (59 suites, 1,742 checks)
 ./tests/run_all.sh
 
 # Build distributable package
@@ -36,7 +36,7 @@ When you launch the editor, a **Project Browser** appears first:
 - **Preview area** — Shows selected template details and included features
 - **Keyboard** — Arrow keys to navigate, Enter to create, ESC to exit
 
-The voxel template is now backed by a real starter path: the editor seeds a first-class voxel world actor when you choose `Voxel`, and the shared sandbox gameplay loop lives in [examples/demo_voxel.sage](/home/kraken/Devel/3DEngine/examples/demo_voxel.sage) with inventory-backed mining/placement, world drops and magnetic pickup collection, a first crafting step for planks, hostile slime mobs with combat and wood drops, streamed chunk draws around the player, a cached current-chunk visibility window so stationary simulation stops rebuilding voxel visibility every frame, a grounded ten-block palette with natural grass/dirt/sand/stone tones plus real water and rare bloom/crystal accents, procedural voxel detail instead of flat grayscale batches, stable per-material lit bindings so voxel buckets keep their own authored colors, water-aware terrain/collision helpers, and a real HDR offscreen bloom + tone-map composite with retuned sky/fog grading for the voxel/editor path, plus mouse-wheel palette cycling, a real hotbar/backpack/crafting overlay, chunked sandbox save/load, frame-boundary manual GC in the standalone voxel runtime, and longer runtime stability coverage so transient frame-loss events do not get treated like hard exits.
+The voxel template is now backed by a real starter path: the editor seeds a first-class voxel world actor when you choose `Voxel`, and the shared sandbox gameplay loop lives in [examples/demo_voxel.sage](/home/kraken/Devel/3DEngine/examples/demo_voxel.sage) with inventory-backed mining/placement, world drops and magnetic pickup collection, a first crafting step for planks, hostile slime mobs with combat and wood drops, streamed chunk draws around the player, a cached current-chunk visibility window so stationary simulation stops rebuilding voxel visibility every frame, a grounded ten-block palette with natural grass/dirt/sand/stone tones plus real water and rare bloom/crystal accents, procedural voxel detail instead of flat grayscale batches, stable per-material lit bindings so voxel buckets keep their own authored colors, water-aware terrain/collision helpers, animated scene-time-driven water highlights and ripples, and a real HDR offscreen bloom + tone-map composite with retuned sky/fog grading for the voxel/editor path, plus mouse-wheel palette cycling, a real hotbar/backpack/crafting overlay, chunked sandbox save/load, frame-boundary manual GC in the standalone voxel runtime, and longer runtime stability coverage so transient frame-loss events do not get treated like hard exits.
 
 ## Editor
 
@@ -56,7 +56,7 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 - **Directional shadows** — Dedicated sun shadow prepass in the editor, with texel-snapped light matrices to reduce shimmer and imported skinned meshes participating in the same shadow depth path as static meshes
 - **Render flags** — Mesh visibility plus `cast_shadows` / `receive_shadows` now affect the live editor viewport, shadow prepass, and exported runtime, with quick toggles in the Tools/context menus
 - **Voxel world actor** — The `Voxel` launcher path now seeds a first-class voxel world entity in the editor, and selected voxel worlds support inline brush inspection plus `SHIFT+LMB/RMB` block edits with `SHIFT+Z/X` brush cycling
-- **Voxel sandbox loop** — The shared voxel template now supports inventory-backed mining/placement, world drops with magnetic pickup collection, a first crafted plank block, hostile slime mobs with simple chase/attack behavior, lazy chunk generation, incremental streamed chunk uploads, cached current-chunk visibility reuse when the player is stationary, a ten-block textured voxel palette with grounded natural terrain colors plus water and rare accent blocks, stable per-material lit color bindings, water-aware ground/collision logic, reflective water-biased lit shading, a real HDR scene buffer with bloom/tonemap grading for the voxel/editor path, mouse-wheel palette cycling, a reusable Minecraft-style hotbar/backpack/crafting HUD, chunked JSON save/load in the playable sandbox path, and frame-boundary `gc_collect()` in the standalone voxel runtime
+- **Voxel sandbox loop** — The shared voxel template now supports inventory-backed mining/placement, world drops with magnetic pickup collection, a first crafted plank block, hostile slime mobs with simple chase/attack behavior, lazy chunk generation, incremental streamed chunk uploads, cached current-chunk visibility reuse when the player is stationary, a ten-block textured voxel palette with grounded natural terrain colors plus water and rare accent blocks, stable per-material lit color bindings, water-aware ground/collision logic, animated scene-time-driven reflective water shading, a real HDR scene buffer with bloom/tonemap grading for the voxel/editor path, mouse-wheel palette cycling, a reusable Minecraft-style hotbar/backpack/crafting HUD, chunked JSON save/load in the playable sandbox path, and frame-boundary `gc_collect()` in the standalone voxel runtime
 - **Prefab system** — Save entities as reusable .prefab.json templates
 - **Undo/Redo** — CTRL+Z / CTRL+Y with full command history (100 levels)
 - **Modal dialogs** — Quit confirmation, About dialog
@@ -136,7 +136,7 @@ forge-engine/
 │   └── ...                  # 80+ more engine modules
 ├── shaders/                 # GLSL shader pairs + SPIR-V
 ├── examples/                # 9 demo programs
-├── tests/                   # 59 suites, 1,738 checks
+├── tests/                   # 59 suites, 1,742 checks
 ├── assets/                  # Fonts, models, scenes, prefabs
 │   └── prefabs/             # Saved entity templates
 └── build/                   # Distribution output
@@ -153,7 +153,7 @@ forge-engine/
 `math3d` — vec2/3/4, mat4 (multiply, translate, scale, rotate, perspective, look_at, ortho, inverse), quaternions (mul, slerp, from_euler, to_matrix, rotate_vec3)
 
 ### Rendering
-`renderer` (Vulkan swapchain, frame sync, **pipeline cache**, **secondary command buffers**, **manual frame-begin path for offscreen composites**) · `render_system` (**indirect draw**, **compute dispatch**, **anisotropic samplers**, **pipeline barriers**, **directional shadow binding**, **stable lit material bindings**) · `lighting` (16 lights, fog, UBO) · `sky` (procedural presets, **cubemap skybox**, **vibrant-day atmospheric variant**) · `pbr_material` (Cook-Torrance BRDF, **shadowed forward PBR**) · `textures` · `shadow_map` (depth pass, PCF, **dedicated prepass submission**, **texel-snapped directional stability**, **skinned shadow depth**) · `deferred` (G-buffer MRT) · `frustum` (culling) · `lod` (5 distance levels) · `taa` (temporal anti-aliasing) · `frame_graph` (pass dependencies, **GPU barrier integration**) · `editor_grid` · `post_fx` (vignette, color grading, fade) · `postprocess` (**HDR scene target**, bloom extract/blur, tone-map composite, fullscreen passes, **offscreen targets**)
+`renderer` (Vulkan swapchain, frame sync, **pipeline cache**, **secondary command buffers**, **manual frame-begin path for offscreen composites**) · `render_system` (**indirect draw**, **compute dispatch**, **anisotropic samplers**, **pipeline barriers**, **directional shadow binding**, **stable lit material bindings**) · `lighting` (16 lights, fog, UBO, **scene-time shader feed**) · `sky` (procedural presets, **cubemap skybox**, **vibrant-day atmospheric variant**) · `pbr_material` (Cook-Torrance BRDF, **shadowed forward PBR**) · `textures` · `shadow_map` (depth pass, PCF, **dedicated prepass submission**, **texel-snapped directional stability**, **skinned shadow depth**) · `deferred` (G-buffer MRT) · `frustum` (culling) · `lod` (5 distance levels) · `taa` (temporal anti-aliasing) · `frame_graph` (pass dependencies, **GPU barrier integration**) · `editor_grid` · `post_fx` (vignette, color grading, fade) · `postprocess` (**HDR scene target**, bloom extract/blur, tone-map composite, fullscreen passes, **offscreen targets**)
 
 ### Physics
 `collision` (AABB/sphere/ray/capsule, collision callbacks/events) · `physics` (rigidbody, gravity, restitution, fixed/distance/hinge constraints, constraint solver) · `spatial_grid` (broadphase, **octree** for large scenes)
@@ -217,7 +217,7 @@ forge-engine/
 ## Testing
 
 ```bash
-./tests/run_all.sh            # 59 suites, 1,738 individual checks
+./tests/run_all.sh            # 59 suites, 1,742 individual checks
 ./run.sh tests/test_ecs.sage  # Run individual suite
 ```
 
@@ -243,7 +243,7 @@ FORGE_TEMPLATE=voxel FORGE_AUTOPLAY=1 ./forge_engine
 tar -czf forge_engine-$(cat VERSION).tar.gz -C build dist
 ```
 
-The distribution build bundles the SageLang interpreter with all engine source, shaders, assets, and the root `VERSION` file into a portable directory. `build_dist.sh` now recompiles GLSL shaders before packaging so the dist build stays in sync with the current voxel/material shader logic, including the HDR voxel/editor scene buffer, bloom/tonemap composite, reflective-water voxel shading, and the retuned outdoor sky/fog palette. `FORGE_TEMPLATE` can bypass the launcher for deterministic QA boots, and `FORGE_AUTOPLAY=1` enters Play-In-Editor automatically using the same in-memory snapshot path the editor uses at runtime. Native LLVM compilation is not yet supported for multi-module projects (the LLVM backend resolves GPU constants but not cross-module `from X import Y` imports).
+The distribution build bundles the SageLang interpreter with all engine source, shaders, assets, and the root `VERSION` file into a portable directory. `build_dist.sh` now recompiles GLSL shaders before packaging so the dist build stays in sync with the current voxel/material shader logic, including the HDR voxel/editor scene buffer, bloom/tonemap composite, animated reflective-water shading, and the retuned outdoor sky/fog palette. `FORGE_TEMPLATE` can bypass the launcher for deterministic QA boots, and `FORGE_AUTOPLAY=1` enters Play-In-Editor automatically using the same in-memory snapshot path the editor uses at runtime. Native LLVM compilation is not yet supported for multi-module projects (the LLVM backend resolves GPU constants but not cross-module `from X import Y` imports).
 
 ## SageLang Features Used
 

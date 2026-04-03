@@ -40,11 +40,11 @@ proc sky_preset_day(s):
 
 proc sky_preset_vibrant_day(s):
     s["sun_dir"] = v3_normalize(vec3(0.34, 0.72, 0.46))
-    s["sun_intensity"] = 1.14
-    s["sun_size"] = 3.9
-    s["sky_top"] = vec3(0.11, 0.30, 0.78)
-    s["sky_horizon"] = vec3(0.44, 0.68, 0.96)
-    s["ground_color"] = vec3(0.14, 0.11, 0.09)
+    s["sun_intensity"] = 1.24
+    s["sun_size"] = 4.8
+    s["sky_top"] = vec3(0.10, 0.28, 0.74)
+    s["sky_horizon"] = vec3(0.68, 0.76, 0.98)
+    s["ground_color"] = vec3(0.16, 0.12, 0.10)
 
 proc sky_preset_sunset(s):
     s["sun_dir"] = v3_normalize(vec3(0.8, 0.15, 0.3))

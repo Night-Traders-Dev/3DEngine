@@ -50,10 +50,12 @@ void main() {
     float sunDot = max(dot(rd, sunDir), 0.0);
     float sunHeight = clamp(sunDir.y * 0.5 + 0.5, 0.0, 1.0);
     float sunScatter = pow(max(dot(normalize(vec3(rd.x, max(rd.y, -0.06), rd.z)), sunDir), 0.0), 6.0);
+    float solarBloom = pow(sunDot, 24.0);
+    float aerialPerspective = exp(-max(rd.y, -0.18) * 4.8);
 
-    vec3 zenith = mix(sky.skyColorTop.rgb * 0.62 + vec3(0.02, 0.03, 0.06), sky.skyColorTop.rgb, sunHeight);
-    vec3 horizonBase = mix(sky.skyColorHoriz.rgb * vec3(0.95, 0.98, 1.03), sky.skyColorHoriz.rgb, sunHeight);
-    vec3 warmHorizon = mix(horizonBase, vec3(1.00, 0.74, 0.50), clamp((1.0 - sunHeight) * 0.08 + sunScatter * 0.24, 0.0, 1.0));
+    vec3 zenith = mix(sky.skyColorTop.rgb * 0.58 + vec3(0.02, 0.03, 0.06), sky.skyColorTop.rgb, sunHeight);
+    vec3 horizonBase = mix(sky.skyColorHoriz.rgb * vec3(0.97, 1.00, 1.04), sky.skyColorHoriz.rgb, sunHeight);
+    vec3 warmHorizon = mix(horizonBase, vec3(1.00, 0.72, 0.55), clamp((1.0 - sunHeight) * 0.10 + sunScatter * 0.30, 0.0, 1.0));
 
     vec3 skyCol;
     if (horizon >= 0.0) {
@@ -66,14 +68,20 @@ void main() {
 
     float haze = exp(-abs(horizon) * 5.8);
     skyCol += vec3(0.56, 0.66, 0.88) * haze * 0.020;
+    skyCol += vec3(1.00, 0.64, 0.44) * sunScatter * 0.05;
+    skyCol += vec3(0.22, 0.31, 0.48) * aerialPerspective * 0.02;
 
     if (horizon > -0.02) {
         vec2 cloudUv = rd.xz / max(rd.y + 0.24, 0.18);
         cloudUv = cloudUv * 0.18 + vec2(sky.params.z * 0.005, sky.params.z * 0.003);
         float cloudField = fbm(cloudUv);
+        float cloudFieldHigh = fbm(cloudUv * 1.8 + vec2(11.0, -7.0));
         float cloudMask = smoothstep(0.58, 0.78, cloudField) * smoothstep(-0.02, 0.12, horizon);
+        float highMask = smoothstep(0.62, 0.82, cloudFieldHigh) * smoothstep(0.08, 0.32, horizon);
         vec3 cloudColor = mix(vec3(0.90, 0.94, 1.00), vec3(1.00, 0.80, 0.62), pow(sunDot, 8.0));
-        skyCol = mix(skyCol, cloudColor, cloudMask * 0.20);
+        vec3 highCloudColor = mix(vec3(0.88, 0.92, 0.98), vec3(1.00, 0.72, 0.58), pow(sunDot, 5.0));
+        skyCol = mix(skyCol, cloudColor, cloudMask * 0.22);
+        skyCol = mix(skyCol, highCloudColor, highMask * 0.12);
     }
 
     float sunDisc = smoothstep(1.0 - sky.params.w * 0.010, 1.0 - sky.params.w * 0.0012, sunDot);
@@ -83,6 +91,7 @@ void main() {
     skyCol += sunColor * sunDisc * (1.6 + sky.sunDir.w);
     skyCol += sunColor * sunGlow * 0.8;
     skyCol += vec3(1.00, 0.72, 0.48) * wideGlow * 0.62;
+    skyCol += vec3(1.00, 0.68, 0.54) * solarBloom * 0.28;
 
     outColor = vec4(skyCol, 1.0);
 }

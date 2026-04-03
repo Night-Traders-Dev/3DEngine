@@ -179,6 +179,7 @@ float sample_shadow(vec3 normal, vec3 lightDir) {
 
 void main() {
     vec3 baseColor = material_data.baseColor.rgb;
+    float sceneTime = scene.fogColor.w;
     int voxelBlockId = int(material_data.surfaceControl.z + 0.5);
     int voxelFaceId = int(material_data.surfaceControl.w + 0.5);
     bool waterLike = voxelBlockId == 8;
@@ -193,9 +194,10 @@ void main() {
     bool foliageLike = is_foliage_like(voxelBlockId);
     float outAlpha = material_data.baseColor.a;
     if (waterLike) {
-        float wave0 = sin(fragWorldPos.x * 0.28 + fragWorldPos.z * 0.16);
-        float wave1 = cos(fragWorldPos.z * 0.24 - fragWorldPos.x * 0.14);
-        vec3 rippleNormal = normalize(vec3(wave0 * 0.18, 1.0, wave1 * 0.18));
+        float wave0 = sin(fragWorldPos.x * 0.28 + fragWorldPos.z * 0.16 + sceneTime * 1.35);
+        float wave1 = cos(fragWorldPos.z * 0.24 - fragWorldPos.x * 0.14 - sceneTime * 1.10);
+        float wave2 = sin((fragWorldPos.x + fragWorldPos.z) * 0.18 + sceneTime * 0.72);
+        vec3 rippleNormal = normalize(vec3((wave0 + wave2 * 0.45) * 0.18, 1.0, (wave1 - wave2 * 0.35) * 0.18));
         float rippleMix = voxelFaceId == 0 ? 0.72 : 0.26;
         N = normalize(mix(N, rippleNormal, rippleMix));
         upness = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
@@ -208,10 +210,14 @@ void main() {
     if (waterLike) {
         vec3 reflectDir = reflect(-V, N);
         float skyMix = clamp(reflectDir.y * 0.5 + 0.5, 0.0, 1.0);
-        vec3 reflectedSky = mix(vec3(0.92, 0.66, 0.50), vec3(0.18, 0.38, 0.84), pow(skyMix, 0.72));
+        vec3 reflectedSky = mix(vec3(0.96, 0.72, 0.58), vec3(0.16, 0.38, 0.86), pow(skyMix, 0.72));
         float baseFresnel = pow(1.0 - max(dot(N, V), 0.0), 4.0);
-        result = mix(result * 0.75, reflectedSky, 0.18 + baseFresnel * 0.30);
-        outAlpha = clamp(max(outAlpha, 0.50 + baseFresnel * 0.20), 0.0, 0.86);
+        float waterPulse = 0.5 + 0.5 * sin(sceneTime * 0.35 + fragWorldPos.x * 0.04 + fragWorldPos.z * 0.07);
+        vec3 deepWater = vec3(0.05, 0.18, 0.33);
+        vec3 shallowWater = vec3(0.12, 0.42, 0.58);
+        result = mix(result * 0.68, reflectedSky, 0.18 + baseFresnel * 0.34);
+        result = mix(result, mix(deepWater, shallowWater, waterPulse), 0.14 + upness * 0.08);
+        outAlpha = clamp(max(outAlpha, 0.46 + baseFresnel * 0.24), 0.0, 0.84);
     }
 
     for (int i = 0; i < lightCount && i < 16; i++) {
@@ -271,6 +277,10 @@ void main() {
             diffuseTerm *= 0.75;
             specularTerm *= voxelFaceId == 0 ? 1.95 : 1.20;
             specularTerm += sunTint * fresnel * atten * 0.05 * visibility;
+            if (lightType == 1) {
+                float sparkle = pow(max(dot(reflect(-L, N), V), 0.0), voxelFaceId == 0 ? 220.0 : 120.0);
+                specularTerm += sunTint * sparkle * atten * (0.55 + fresnel * 0.60) * visibility;
+            }
         }
 
         if (foliageLike && lightType == 1) {
@@ -284,9 +294,9 @@ void main() {
 
     result *= mix(0.80, 1.00, upness);
     if (waterLike) {
-        result = saturate_color(result, 1.06);
+        result = saturate_color(result, 1.18);
     } else {
-        result = saturate_color(result, material_data.surfaceControl.y > 0.5 ? 1.14 : 1.03);
+        result = saturate_color(result, material_data.surfaceControl.y > 0.5 ? 1.18 : 1.05);
     }
 
     if (scene.fogParams.w > 0.5) {
@@ -298,10 +308,10 @@ void main() {
         float fogFactor = clamp(mix(linearFog, expFog, 0.35), 0.0, 1.0);
         vec3 fogColor = scene.fogColor.rgb;
         float horizonGlow = pow(clamp(1.0 - upness, 0.0, 1.0), 1.5);
-        fogColor = mix(fogColor, vec3(0.92, 0.78, 0.62), horizonGlow * 0.05);
+        fogColor = mix(fogColor, vec3(0.96, 0.78, 0.62), horizonGlow * 0.07);
         if (waterLike) {
-            fogColor = mix(fogColor, vec3(0.32, 0.50, 0.76), 0.18);
-            fogFactor *= 0.82;
+            fogColor = mix(fogColor, vec3(0.30, 0.50, 0.78), 0.22);
+            fogFactor *= 0.76;
         }
         result = mix(result, fogColor, fogFactor);
     }

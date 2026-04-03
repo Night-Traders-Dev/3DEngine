@@ -3,7 +3,7 @@
 
 from lighting import create_light_scene, point_light, directional_light, spot_light
 from lighting import add_light, remove_light, get_light, light_count
-from lighting import set_ambient, set_fog, set_view_position
+from lighting import set_ambient, set_fog, set_view_position, set_scene_time
 from lighting import LIGHT_TYPE_POINT, LIGHT_TYPE_DIRECTIONAL, LIGHT_TYPE_SPOT, MAX_LIGHTS
 
 import math
@@ -110,6 +110,8 @@ check("fog color", approx(ls["fog_color"][0], 0.5))
 from math3d import vec3
 set_view_position(ls, vec3(1.0, 2.0, 3.0))
 check("view pos set", approx(ls["view_pos"][0], 1.0))
+set_scene_time(ls, 12.5)
+check("scene time set", approx(ls["scene_time"], 12.5))
 check("dirty after changes", ls["dirty"] == true)
 
 # --- Results ---

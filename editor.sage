@@ -30,7 +30,7 @@ from math3d import vec3, v3_add, v3_sub, v3_scale, v3_normalize, v3_cross
 from math3d import mat4_mul, mat4_identity, radians, mat4_perspective, mat4_translate, mat4_scale
 from mesh import cube_mesh, sphere_mesh, plane_mesh, upload_mesh
 from lighting import create_light_scene, directional_light, point_light
-from lighting import add_light, set_ambient, set_fog, set_view_position
+from lighting import add_light, set_ambient, set_fog, set_view_position, set_scene_time
 from lighting import init_light_gpu, update_light_ubo
 from render_system import create_lit_material, create_lit_material_transparent, draw_mesh_lit, draw_mesh_lit_surface
 from render_system import draw_mesh_lit_surface_skinned, draw_mesh_lit_controlled
@@ -158,6 +158,7 @@ set_fog(ls, true, 40.0, 160.0, 0.48, 0.63, 0.84)
 ls["fog_density"] = 0.004
 # Force initial UBO upload
 set_view_position(ls, vec3(0.0, 5.0, 10.0))
+set_scene_time(ls, 0.0)
 update_light_ubo(ls)
 let postprocess = create_postprocess(r["width"], r["height"], r["render_pass"])
 pfx_editor_preview(postprocess)
@@ -1960,6 +1961,7 @@ while running:
         cam_pos = player_eye_position(play_player)
     _sync_world_lights(ls, world)
     set_view_position(ls, cam_pos)
+    set_scene_time(ls, ts["elapsed"])
     update_light_ubo(ls)
     _update_imported_animation_states(world, ts["dt"])
 

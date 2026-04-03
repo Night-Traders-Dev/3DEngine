@@ -1,7 +1,7 @@
 # test_sky.sage - Sanity checks for the sky system (non-GPU parts)
 # Run: ./run.sh tests/test_sky.sage
 
-from sky import create_sky, sky_preset_day, sky_preset_sunset, sky_preset_night, sky_preset_overcast
+from sky import create_sky, sky_preset_day, sky_preset_vibrant_day, sky_preset_sunset, sky_preset_night, sky_preset_overcast
 from sky import extract_inv_view_rotation
 from math3d import mat4_identity, mat4_rotate_y, radians
 
@@ -39,6 +39,12 @@ sky_preset_day(s)
 check("day sun points up", s["sun_dir"][1] > 0.0)
 check("day sky top is blue", s["sky_top"][2] > s["sky_top"][0])
 check("day intensity is 1", approx(s["sun_intensity"], 1.0))
+
+# --- Sunset preset ---
+sky_preset_vibrant_day(s)
+check("vibrant day sun stronger than base day", s["sun_intensity"] > 1.1)
+check("vibrant day sun size enlarged", s["sun_size"] > 4.0)
+check("vibrant day horizon stays bright", s["sky_horizon"][0] > 0.6 and s["sky_horizon"][2] > 0.9)
 
 # --- Sunset preset ---
 sky_preset_sunset(s)

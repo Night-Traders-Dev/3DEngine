@@ -153,7 +153,7 @@ proc generate_game_script(world, scene_name, settings):
     push(L, "from math3d import vec3, mat4_mul, mat4_perspective, radians")
     push(L, "from mesh import cube_mesh, sphere_mesh, plane_mesh, upload_mesh")
     push(L, "from lighting import create_light_scene, directional_light, point_light")
-    push(L, "from lighting import add_light, set_ambient, set_view_position")
+    push(L, "from lighting import add_light, set_ambient, set_view_position, set_scene_time")
     push(L, "from lighting import init_light_gpu, update_light_ubo")
     push(L, "from render_system import create_lit_material, create_lit_material_transparent, draw_mesh_lit_controlled, draw_mesh_lit_surface_controlled")
     push(L, "from render_system import draw_mesh_lit_surface_skinned_controlled")
@@ -560,6 +560,7 @@ proc generate_game_script(world, scene_name, settings):
     if has_health:
         push(L, "    update_score(score, dt)")
     push(L, "    set_view_position(ls, player_eye_position(player))")
+    push(L, "    set_scene_time(ls, ts[" + q + "total" + q + "])")
     push(L, "    update_light_ubo(ls)")
     if has_imported_assets:
         push(L, "    _update_imported_animation_states(world, dt)")
