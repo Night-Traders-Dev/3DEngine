@@ -23,7 +23,7 @@ from ecs import entity_count, destroy, add_tag, has_tag, remove_component, regis
 from components import TransformComponent, NameComponent, PointLightComponent, DirectionalLightComponent, MaterialComponent
 from components import MeshRendererComponent
 from input import create_input, update_input, bind_action
-from input import action_held, action_just_pressed
+from input import action_held, action_just_pressed, default_fps_bindings
 from input import mouse_delta, scroll_value, mouse_position
 from engine_math import transform_to_matrix
 from math3d import vec3, v3_add, v3_sub, v3_scale, v3_normalize, v3_cross
@@ -95,10 +95,13 @@ from asset_import import imported_animation_clip_names, imported_animation_index
 from asset_import import imported_animation_duration, create_imported_animation_state
 from asset_import import advance_imported_animation_state, cycle_imported_animation_clip, step_imported_animation_time
 from forge_version import engine_name, editor_title, editor_play_title, about_text
+from player_controller import create_player_controller, update_player
+from player_controller import player_view_matrix, player_eye_position, player_projection
 from voxel_world import create_voxel_world, generate_voxel_template_world, get_voxel, set_voxel
 from voxel_world import voxel_block_surface, voxel_block_name, voxel_is_surface_block, voxel_block_world_center
 from voxel_world import voxel_palette_ids, voxel_visible_draws, raycast_voxel_world
 from voxel_world import voxel_generated_chunk_count, voxel_chunk_size
+from voxel_world import sample_voxel_ground_radius, resolve_player_voxel_collision
 import io
 
 print "=== Forge Engine Editor ==="
@@ -429,6 +432,7 @@ deselect(editor)
 let entity_counter = entity_count(world)
 let play_mode = false
 let play_snapshot = nil
+let play_player = nil
 let active_details_field = nil
 let details_edit_tf = nil
 let show_shortcuts = false
@@ -690,6 +694,159 @@ proc _render_shadow_world(sr, w, light_scene, focus_point, radius):
     end_shadow_frame(sr, cmd)
     return true
 
+proc _play_seed_from_editor_camera():
+    let pc = create_player_controller()
+    let eye = editor_camera_position(cam)
+    let forward = v3_normalize(v3_sub(cam["target"], eye))
+    pc["position"] = vec3(eye[0], eye[1] - pc["eye_offset"], eye[2])
+    pc["yaw"] = math.atan2(forward[2], forward[0])
+    let fp = forward[1]
+    if fp < -0.999:
+        fp = -0.999
+    if fp > 0.999:
+        fp = 0.999
+    pc["pitch"] = math.asin(fp)
+    pc["captured"] = true
+    pc["noclip"] = false
+    gpu.set_cursor_mode(gpu.CURSOR_DISABLED)
+    return pc
+
+proc _play_voxel_context_for_player(w, player_pos):
+    let voxel_entities = query(w, ["transform", "voxel_world"])
+    let best = nil
+    let best_dist_sq = 999999999.0
+    let i = 0
+    while i < len(voxel_entities):
+        let eid = voxel_entities[i]
+        let t = get_component(w, eid, "transform")
+        let vw = get_component(w, eid, "voxel_world")
+        if t != nil and vw != nil:
+            let local_x = player_pos[0] - t["position"][0]
+            let local_z = player_pos[2] - t["position"][2]
+            let min_x = vw["origin_x"]
+            let max_x = vw["origin_x"] + vw["size_x"]
+            let min_z = vw["origin_z"]
+            let max_z = vw["origin_z"] + vw["size_z"]
+            if local_x >= min_x and local_x < max_x and local_z >= min_z and local_z < max_z:
+                return {"entity": eid, "transform": t, "voxel_world": vw}
+            let clamped_x = local_x
+            if clamped_x < min_x:
+                clamped_x = min_x
+            if clamped_x > max_x:
+                clamped_x = max_x
+            let clamped_z = local_z
+            if clamped_z < min_z:
+                clamped_z = min_z
+            if clamped_z > max_z:
+                clamped_z = max_z
+            let dx = local_x - clamped_x
+            let dz = local_z - clamped_z
+            let dist_sq = dx * dx + dz * dz
+            if best == nil or dist_sq < best_dist_sq:
+                best = {"entity": eid, "transform": t, "voxel_world": vw}
+                best_dist_sq = dist_sq
+        i = i + 1
+    return best
+
+proc _snap_play_player_to_ground(pc):
+    if pc == nil:
+        return nil
+    let ctx = _play_voxel_context_for_player(world, pc["position"])
+    if ctx == nil:
+        pc["ground_y"] = 0.0
+        if pc["position"][1] < pc["ground_y"]:
+            pc["position"][1] = pc["ground_y"]
+        return nil
+    let t = ctx["transform"]
+    let vw = ctx["voxel_world"]
+    let local_x = pc["position"][0] - t["position"][0]
+    let local_z = pc["position"][2] - t["position"][2]
+    let ground_y = sample_voxel_ground_radius(vw, local_x, local_z, pc["radius"]) + t["position"][1]
+    pc["ground_y"] = ground_y
+    if pc["position"][1] < ground_y:
+        pc["position"][1] = ground_y
+    return ctx
+
+proc _update_play_player(w, pc, inp, dt):
+    if pc == nil:
+        return nil
+    let ctx = _play_voxel_context_for_player(w, pc["position"])
+    if ctx == nil:
+        pc["ground_y"] = 0.0
+        update_player(pc, inp, dt)
+        return nil
+    let t = ctx["transform"]
+    let vw = ctx["voxel_world"]
+    let prev_pos = vec3(pc["position"][0], pc["position"][1], pc["position"][2])
+    let prev_local = vec3(prev_pos[0] - t["position"][0], prev_pos[1] - t["position"][1], prev_pos[2] - t["position"][2])
+    pc["ground_y"] = sample_voxel_ground_radius(vw, prev_local[0], prev_local[2], pc["radius"]) + t["position"][1]
+    update_player(pc, inp, dt)
+    let next_local = vec3(pc["position"][0] - t["position"][0], pc["position"][1] - t["position"][1], pc["position"][2] - t["position"][2])
+    let resolved_local = resolve_player_voxel_collision(vw, prev_local, next_local, pc["radius"], pc["height"])
+    pc["position"] = vec3(resolved_local[0] + t["position"][0], resolved_local[1] + t["position"][1], resolved_local[2] + t["position"][2])
+    let resolved_ground = sample_voxel_ground_radius(vw, resolved_local[0], resolved_local[2], pc["radius"]) + t["position"][1]
+    pc["ground_y"] = resolved_ground
+    if pc["position"][1] < resolved_ground:
+        pc["position"][1] = resolved_ground
+        if pc["velocity"][1] < 0.0:
+            pc["velocity"][1] = 0.0
+        pc["grounded"] = true
+    return ctx
+
+proc _begin_play_mode(message):
+    play_snapshot = snapshot_scene(world, "PIE")
+    play_mode = true
+    play_player = _play_seed_from_editor_camera()
+    _snap_play_player_to_ground(play_player)
+    print message
+    gpu.set_title(editor_play_title())
+
+proc _end_play_mode(message):
+    if play_snapshot != nil:
+        let restored_enter = load_scene_snapshot(play_snapshot)
+        if restored_enter != nil:
+            world = restored_enter["world"]
+            register_system(world, "physics", ["rigidbody", "transform"], create_physics_system(physics_world))
+            _rehydrate_mesh_refs(world)
+            _rehydrate_imported_assets(world)
+            editor["world"] = world
+            deselect(editor)
+    play_mode = false
+    play_player = nil
+    gpu.set_cursor_mode(gpu.CURSOR_NORMAL)
+    print message
+    gpu.set_title(editor_title())
+
+proc _collect_frame_voxel_draws(w, focus_point, frustum_planes, chunk_radius):
+    let groups = []
+    let voxel_renderers = query(w, ["transform", "voxel_world"])
+    let vri = 0
+    while vri < len(voxel_renderers):
+        let eid = voxel_renderers[vri]
+        let t = get_component(w, eid, "transform")
+        let vw = get_component(w, eid, "voxel_world")
+        let voxel_center = vec3(t["position"][0], t["position"][1] + vw["size_y"] / 2.0, t["position"][2])
+        let voxel_half = vec3(vw["size_x"] / 2.0, vw["size_y"] / 2.0, vw["size_z"] / 2.0)
+        let visible = true
+        if frustum_planes != nil:
+            visible = aabb_in_frustum(frustum_planes, voxel_center, voxel_half)
+        if visible:
+            let model = transform_to_matrix(t)
+            let draws = voxel_visible_draws(vw, focus_point[0] - t["position"][0], focus_point[1] - t["position"][1], focus_point[2] - t["position"][2], chunk_radius)
+            push(groups, {"entity": eid, "model": model, "draws": draws})
+        vri = vri + 1
+    return groups
+
+proc _render_shadow_voxel_groups(sr, cmd, voxel_groups):
+    let gi = 0
+    while gi < len(voxel_groups):
+        let group = voxel_groups[gi]
+        let di = 0
+        while di < len(group["draws"]):
+            shadow_draw_mesh(sr, cmd, group["draws"][di]["gpu_mesh"], group["model"])
+            di = di + 1
+        gi = gi + 1
+
 print "Found " + str(len(importable_assets)) + " importable assets"
 
 # Auto-import any .gltf files found
@@ -723,11 +880,7 @@ print "Editor loaded with " + str(entity_count(world)) + " entities"
 if len(dict_keys(imported_models)) > 0:
     print "Imported models: " + str(len(dict_keys(imported_models)))
 let _autoplay = sys.getenv("FORGE_AUTOPLAY")
-if _autoplay != nil and (_autoplay == "1" or _autoplay == "true" or _autoplay == "yes" or _autoplay == "on"):
-    play_snapshot = snapshot_scene(world, "PIE")
-    play_mode = true
-    print "Play mode started (auto)"
-    gpu.set_title(editor_play_title())
+let _autoplay_requested = _autoplay != nil and (_autoplay == "1" or _autoplay == "true" or _autoplay == "yes" or _autoplay == "on")
 
 # ============================================================================
 # Editor camera
@@ -741,6 +894,7 @@ cam["yaw"] = 0.5
 # Input
 # ============================================================================
 let inp = create_input()
+default_fps_bindings(inp)
 bind_action(inp, "select", [gpu.KEY_ESCAPE])
 bind_action(inp, "place_cube", [gpu.KEY_R])
 bind_action(inp, "place_sphere", [gpu.KEY_F])
@@ -755,6 +909,12 @@ bind_action(inp, "place_model", [gpu.KEY_E])
 bind_action(inp, "pan", [gpu.KEY_SHIFT])
 bind_action(inp, "toggle_physics", [gpu.KEY_TAB])
 bind_action(inp, "play", [gpu.KEY_ENTER])
+bind_action(inp, "toggle_capture", [gpu.KEY_ESCAPE])
+bind_action(inp, "noclip", [gpu.KEY_TAB])
+bind_action(inp, "sprint", [gpu.KEY_SHIFT])
+
+if _autoplay_requested:
+    _begin_play_mode("Play mode started (auto)")
 
 # ============================================================================
 # Hoisted procs (LLVM backend requires module-level proc definitions)
@@ -1002,7 +1162,7 @@ while running:
             scroll_window(win_content, sv[1] * -20.0)
             scroll_consumed = true
 
-    if mouse_in_viewport and scroll_consumed == false:
+    if play_mode == false and mouse_in_viewport and scroll_consumed == false:
         if gpu.mouse_button(gpu.MOUSE_RIGHT) and voxel_brush_edit == false:
             cam["yaw"] = cam["yaw"] + md[0] * 0.005
             cam["pitch"] = cam["pitch"] + md[1] * 0.005
@@ -1104,23 +1264,9 @@ while running:
         # Play button
         if mx >= sw_f / 2.0 - 40.0 and mx < sw_f / 2.0 + 40.0:
             if play_mode == false:
-                play_snapshot = snapshot_scene(world, "PIE")
-                play_mode = true
-                print "Play mode started (ENTER or Play to stop)"
-                gpu.set_title(editor_play_title())
+                _begin_play_mode("Play mode started (ENTER or Play to stop)")
             else:
-                if play_snapshot != nil:
-                    let restored = load_scene_snapshot(play_snapshot)
-                    if restored != nil:
-                        world = restored["world"]
-                        register_system(world, "physics", ["rigidbody", "transform"], create_physics_system(physics_world))
-                        _rehydrate_mesh_refs(world)
-                        _rehydrate_imported_assets(world)
-                        editor["world"] = world
-                        deselect(editor)
-                play_mode = false
-                print "Play mode stopped"
-                gpu.set_title(editor_title())
+                _end_play_mode("Play mode stopped")
             window_consumed = true
         # Save button
         if mx >= sw_f / 2.0 + 50.0 and mx < sw_f / 2.0 + 110.0:
@@ -1641,23 +1787,9 @@ while running:
     # Play mode (ENTER) — toggle Play-In-Editor simulation
     if action_just_pressed(inp, "play"):
         if play_mode == false:
-            play_snapshot = snapshot_scene(world, "PIE")
-            play_mode = true
-            print "Play mode started (ENTER to stop)"
-            gpu.set_title(editor_play_title())
+            _begin_play_mode("Play mode started (ENTER to stop)")
         else:
-            if play_snapshot != nil:
-                let restored_enter = load_scene_snapshot(play_snapshot)
-                if restored_enter != nil:
-                    world = restored_enter["world"]
-                    register_system(world, "physics", ["rigidbody", "transform"], create_physics_system(physics_world))
-                    _rehydrate_mesh_refs(world)
-                    _rehydrate_imported_assets(world)
-                    editor["world"] = world
-                    deselect(editor)
-            play_mode = false
-            print "Play mode stopped"
-            gpu.set_title(editor_title())
+            _end_play_mode("Play mode stopped")
 
     # Imported animation controls on selected asset
     if play_mode == false and text_editing == false and editor["selected"] >= 0 and has_component(world, editor["selected"], "imported_asset"):
@@ -1771,6 +1903,8 @@ while running:
         io.writefile("assets/generated_game.sage", code)
         print "Generated: assets/generated_game.sage"
 
+    if play_mode and play_player != nil:
+        _update_play_player(world, play_player, inp, dt)
     if play_mode:
         tick_systems(world, dt)
         flush_dead(world)
@@ -1781,6 +1915,8 @@ while running:
 
     # --- Lighting ---
     let cam_pos = editor_camera_position(cam)
+    if play_mode and play_player != nil:
+        cam_pos = player_eye_position(play_player)
     _sync_world_lights(ls, world)
     set_view_position(ls, cam_pos)
     update_light_ubo(ls)
@@ -1790,7 +1926,38 @@ while running:
     if gpu.window_should_close():
         running = false
         continue
-    _render_shadow_world(shadow_renderer, world, ls, cam_pos, 45.0)
+    let voxel_groups = _collect_frame_voxel_draws(world, cam_pos, nil, 1)
+    if shadow_renderer != nil:
+        let shadow_light = primary_shadow_light(ls)
+        if shadow_light["index"] >= 0:
+            let light_vp = compute_light_vp_stable(shadow_light["direction"], cam_pos, 45.0, shadow_renderer["resolution"] + 0.0)
+            let shadow_cmd = begin_shadow_frame(shadow_renderer, light_vp, shadow_light["index"])
+            let shadow_renderers = query(world, ["transform", "mesh_id"])
+            let sri = 0
+            while sri < len(shadow_renderers):
+                let eid = shadow_renderers[sri]
+                let t = get_component(world, eid, "transform")
+                if t != nil and _mesh_casts_shadows(world, eid):
+                    let model = transform_to_matrix(t)
+                    if has_component(world, eid, "imported_asset"):
+                        let asset = get_component(world, eid, "imported_asset")
+                        let anim_state = nil
+                        if has_component(world, eid, "animation_state"):
+                            anim_state = get_component(world, eid, "animation_state")
+                        let draws = imported_asset_draws(asset, anim_state)
+                        let gi = 0
+                        while gi < len(draws):
+                            let gm = draws[gi]
+                            let imported_model = mat4_mul(model, gm["model"])
+                            shadow_draw_mesh_skinned(shadow_renderer, shadow_cmd, gm["gpu_mesh"], imported_model, gm)
+                            gi = gi + 1
+                    else:
+                        let mi = get_component(world, eid, "mesh_id")
+                        if mi != nil and dict_has(mi, "mesh") and mi["mesh"] != nil:
+                            shadow_draw_mesh(shadow_renderer, shadow_cmd, mi["mesh"], model)
+                sri = sri + 1
+            _render_shadow_voxel_groups(shadow_renderer, shadow_cmd, voxel_groups)
+            end_shadow_frame(shadow_renderer, shadow_cmd)
     let frame = begin_frame(r)
     if frame == nil:
         # Frame failed (resize/minimize) - skip but don't quit
@@ -1801,6 +1968,9 @@ while running:
     let aspect = r["width"] / r["height"]
     let proj = mat4_mul(mat4_identity(), mat4_identity())
     proj = mat4_perspective(radians(60.0), aspect, 0.1, 500.0)
+    if play_mode and play_player != nil:
+        view = player_view_matrix(play_player)
+        proj = player_projection(play_player, aspect)
     let vp = mat4_mul(proj, view)
     let sw = r["width"] + 0.0
     let sh = r["height"] + 0.0
@@ -1808,7 +1978,8 @@ while running:
     # Sky dome (behind everything)
     draw_sky(sky, cmd, view, aspect, 60.0, ts["elapsed"])
     # Editor grid overlay
-    draw_editor_grid(grid, cmd, vp)
+    if play_mode == false:
+        draw_editor_grid(grid, cmd, vp)
 
     # 3D scene with frustum culling
     let frustum_planes = extract_frustum_planes(vp)
@@ -1860,24 +2031,16 @@ while running:
                         draw_mesh_lit_controlled(cmd, lit_mat, mi["mesh"], mvp, model, ls["desc_set"], receive_shadows)
                     draw_count = draw_count + 1
         ri = ri + 1
-    let voxel_renderers = query(world, ["transform", "voxel_world"])
     let vri = 0
-    while vri < len(voxel_renderers):
-        let eid = voxel_renderers[vri]
-        let t = get_component(world, eid, "transform")
-        let vw = get_component(world, eid, "voxel_world")
-        let voxel_center = vec3(t["position"][0], t["position"][1] + vw["size_y"] / 2.0, t["position"][2])
-        let voxel_half = vec3(vw["size_x"] / 2.0, vw["size_y"] / 2.0, vw["size_z"] / 2.0)
-        if aabb_in_frustum(frustum_planes, voxel_center, voxel_half):
-            let model = transform_to_matrix(t)
-            let draws = voxel_visible_draws(vw, cam_pos[0] - t["position"][0], cam_pos[1] - t["position"][1], cam_pos[2] - t["position"][2], 1)
-            let di = 0
-            while di < len(draws):
-                let draw = draws[di]
-                let voxel_mvp = mat4_mul(vp, model)
-                draw_mesh_lit_surface_controlled(cmd, lit_mat, draw["gpu_mesh"], voxel_mvp, model, ls["desc_set"], draw["surface"], true)
-                draw_count = draw_count + 1
-                di = di + 1
+    while vri < len(voxel_groups):
+        let group = voxel_groups[vri]
+        let di = 0
+        while di < len(group["draws"]):
+            let draw = group["draws"][di]
+            let voxel_mvp = mat4_mul(vp, group["model"])
+            draw_mesh_lit_surface_controlled(cmd, lit_mat, draw["gpu_mesh"], voxel_mvp, group["model"], ls["desc_set"], draw["surface"], true)
+            draw_count = draw_count + 1
+            di = di + 1
         vri = vri + 1
 
     # Gizmo visualization (draw handles as colored boxes)

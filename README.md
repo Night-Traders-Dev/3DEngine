@@ -60,7 +60,7 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 - **Prefab system** — Save entities as reusable .prefab.json templates
 - **Undo/Redo** — CTRL+Z / CTRL+Y with full command history (100 levels)
 - **Modal dialogs** — Quit confirmation, About dialog
-- **Play-in-Editor** — Press ENTER to jump into simulation, with a faster in-memory scene snapshot path for heavier voxel/editor scenes
+- **Play-in-Editor** — Press ENTER to jump into simulation, with a faster in-memory scene snapshot path for heavier voxel/editor scenes plus real viewport-seeded WASD + mouse-look controls in PIE for voxel/world testing
 - **Save Screenshot** — Capture viewport to PNG from File menu
 - **Compile Native** — Generate LLVM-compiled standalone executables
 - **Keyboard shortcuts** — Press F1 to see all shortcuts
@@ -104,7 +104,7 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 
 ### Code Generation
 
-Press **ENTER** or use File > Export Game to generate `assets/generated_game.sage` — a complete, runnable game with renderer, physics, HUD, FPS controls, and game loop. Export now preserves authored scene lights, uses the primary scene camera to seed the generated runtime player transform, yaw/pitch, and FOV, runs a directional shadow prepass with the same texel-snapped light matrix logic used by the editor, carries mesh visibility plus `cast_shadows` / `receive_shadows` into the generated runtime, restores authored voxel world actors from serialized block data, and re-imports authored glTF assets at runtime with node hierarchy transforms, transform-animation clip playback, and first-pass GPU skinned mesh deformation, including clip selection, current time, speed, and looping state. The current skinning path uses a shared 128-joint-per-draw budget and is still missing broader character tooling beyond playback.
+Press **ENTER** or use File > Export Game to generate `assets/generated_game.sage` — a complete, runnable game with renderer, physics, HUD, FPS controls, and game loop. Export now preserves authored scene lights, uses the primary scene camera to seed the generated runtime player transform, yaw/pitch, and FOV, runs a directional shadow prepass with the same texel-snapped light matrix logic used by the editor, carries mesh visibility plus `cast_shadows` / `receive_shadows` into the generated runtime, restores authored voxel world actors from serialized block data, and re-imports authored glTF assets at runtime with node hierarchy transforms, transform-animation clip playback, and first-pass GPU skinned mesh deformation, including clip selection, current time, speed, and looping state. The editor’s own PIE path now seeds its temporary player camera from the current viewport as well, so voxel/world testing inside the editor behaves more like a real runtime pass. The current skinning path uses a shared 128-joint-per-draw budget and is still missing broader character tooling beyond playback.
 
 ```bash
 ./run.sh assets/generated_game.sage
@@ -243,7 +243,7 @@ FORGE_TEMPLATE=voxel FORGE_AUTOPLAY=1 ./forge_engine
 tar -czf forge_engine-$(cat VERSION).tar.gz -C build dist
 ```
 
-The distribution build bundles the SageLang interpreter with all engine source, shaders, assets, and the root `VERSION` file into a portable directory. `FORGE_TEMPLATE` can bypass the launcher for deterministic QA boots, and `FORGE_AUTOPLAY=1` enters Play-In-Editor automatically using the same in-memory snapshot path the editor uses at runtime. Native LLVM compilation is not yet supported for multi-module projects (the LLVM backend resolves GPU constants but not cross-module `from X import Y` imports).
+The distribution build bundles the SageLang interpreter with all engine source, shaders, assets, and the root `VERSION` file into a portable directory. `build_dist.sh` now recompiles GLSL shaders before packaging so the dist build stays in sync with the current voxel/material shader logic. `FORGE_TEMPLATE` can bypass the launcher for deterministic QA boots, and `FORGE_AUTOPLAY=1` enters Play-In-Editor automatically using the same in-memory snapshot path the editor uses at runtime. Native LLVM compilation is not yet supported for multi-module projects (the LLVM backend resolves GPU constants but not cross-module `from X import Y` imports).
 
 ## SageLang Features Used
 

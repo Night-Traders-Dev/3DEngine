@@ -64,7 +64,7 @@ proc _create_shadow_binding():
     gpu.update_descriptor_image(desc_set, 0, dummy_image, dummy_sampler)
     gpu.update_descriptor(desc_set, 1, gpu.DESC_UNIFORM_BUFFER, ubo)
     gpu.update_uniform(ubo, build_shadow_uniform_data(nil, false, 1.0, -1))
-    return {"layout": layout, "pool": pool, "desc_set": desc_set, "ubo": ubo, "dummy_image": dummy_image, "dummy_sampler": dummy_sampler, "source": nil}
+    return {"layout": layout, "pool": pool, "desc_set": desc_set, "ubo": ubo, "dummy_image": dummy_image, "dummy_sampler": dummy_sampler, "shadow_source": nil}
 
 proc _update_shadow_binding(binding):
     if binding == nil or dict_has(binding, "ubo") == false:
@@ -75,8 +75,8 @@ proc _update_shadow_binding(binding):
     let light_index = -1
     let resolution = 1.0
     let enabled = false
-    if dict_has(binding, "source") and binding["source"] != nil:
-        let source = binding["source"]
+    if dict_has(binding, "shadow_source") and binding["shadow_source"] != nil:
+        let source = binding["shadow_source"]
         image = get_shadow_texture(source)
         sampler = get_shadow_sampler(source)
         light_vp = get_light_vp(source)

@@ -77,6 +77,17 @@ if [ -d "$ENGINE_DIR/assets/prefabs" ]; then
     cp -r "$ENGINE_DIR/assets/prefabs" "$DIST/assets/"
 fi
 
+# Compile shaders so dist always reflects current GLSL sources
+echo "Compiling shaders..."
+if command -v glslc >/dev/null 2>&1; then
+    for shader in "$ENGINE_DIR"/shaders/*.vert "$ENGINE_DIR"/shaders/*.frag; do
+        [ -f "$shader" ] || continue
+        glslc "$shader" -o "$shader.spv"
+    done
+else
+    echo "Warning: glslc not found; using existing compiled shader binaries"
+fi
+
 # Copy compiled shaders
 echo "Copying shaders..."
 cp "$ENGINE_DIR"/shaders/*.spv "$DIST/shaders/" 2>/dev/null || true

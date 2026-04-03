@@ -121,6 +121,7 @@ The Forge Editor is a UE5-inspired visual scene editor with floating windows, a 
 Press **F1** at any time to see the full keyboard shortcuts overlay.
 
 Choosing the `Voxel` launcher template now seeds a first-class voxel world actor in the editor using the same shared voxel generation rules as the playable sandbox demo. Selected voxel worlds support `SHIFT+LMB/RMB` block editing plus `SHIFT+Z/X` brush cycling in the editor, and the playable voxel sandbox now supports inventory-backed mining/placement, world drops with magnetic pickup collection, a first plank-crafting loop, hostile slime mobs with simple chase/attack behavior, lazy chunk generation, incremental streamed chunk uploads, a ten-block colorful biome palette with sand, azure clay, bloom, and crystal terrain accents, mouse-wheel palette cycling, a shared hotbar/backpack/crafting HUD, plus chunked JSON save/load controls.
+Play-In-Editor now seeds a temporary FPS controller from the current viewport as well, so pressing **ENTER** in the editor gives you real WASD movement and mouse-look for voxel/world validation instead of leaving you in the orbit camera path.
 
 ### Editor Layout
 

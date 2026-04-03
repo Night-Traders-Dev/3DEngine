@@ -39,6 +39,27 @@ float hash21(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
 }
 
+vec3 voxel_palette_color(int blockId, int faceId, vec3 fallbackColor) {
+    if (blockId == 1) {
+        if (faceId == 0) return vec3(0.28, 0.86, 0.16);
+        if (faceId == 2) return vec3(0.56, 0.34, 0.16);
+        return vec3(0.52, 0.43, 0.18);
+    }
+    if (blockId == 2) return vec3(0.58, 0.34, 0.16);
+    if (blockId == 3) return vec3(0.58, 0.66, 0.76);
+    if (blockId == 4) {
+        if (faceId == 1) return vec3(0.66, 0.42, 0.18);
+        return vec3(0.82, 0.62, 0.28);
+    }
+    if (blockId == 5) return vec3(0.20, 0.68, 0.16);
+    if (blockId == 6) return vec3(0.88, 0.66, 0.30);
+    if (blockId == 7) return vec3(0.92, 0.82, 0.44);
+    if (blockId == 8) return vec3(0.34, 0.66, 0.78);
+    if (blockId == 9) return vec3(0.88, 0.34, 0.66);
+    if (blockId == 10) return vec3(0.46, 0.82, 0.98);
+    return fallbackColor;
+}
+
 vec3 voxel_detail_color(vec3 baseColor, float blockIdValue, float faceIdValue, vec2 uv) {
     int blockId = int(blockIdValue + 0.5);
     int faceId = int(faceIdValue + 0.5);
@@ -46,17 +67,17 @@ vec3 voxel_detail_color(vec3 baseColor, float blockIdValue, float faceIdValue, v
     vec2 texel = floor(tileUV * 16.0);
     float noiseA = hash21(texel + vec2(float(blockId) * 17.0, float(faceId) * 29.0));
     float noiseB = hash21(texel.yx + vec2(float(blockId) * 11.0 + 5.0, float(faceId) * 13.0 + 3.0));
-    vec3 color = baseColor * mix(0.92, 1.10, noiseA);
+    vec3 color = voxel_palette_color(blockId, faceId, baseColor) * mix(0.94, 1.08, noiseA);
 
     if (blockId == 1) {
         if (faceId == 0) {
-            color *= mix(0.96, 1.16, noiseA);
+            color *= mix(0.98, 1.18, noiseA);
             if (noiseB > 0.86) {
                 color *= 1.10;
             }
         } else if (faceId == 1) {
             float grassBand = step(12.0, texel.y);
-            vec3 dirt = baseColor * mix(0.90, 1.06, noiseA);
+            vec3 dirt = vec3(0.50, 0.40, 0.18) * mix(0.92, 1.06, noiseA);
             vec3 grass = vec3(0.24, 0.74, 0.20) * mix(0.96, 1.20, noiseB);
             color = mix(dirt, grass, grassBand);
         } else {
@@ -95,20 +116,20 @@ vec3 voxel_detail_color(vec3 baseColor, float blockIdValue, float faceIdValue, v
         color *= mix(0.94, 1.08, plankLine);
     } else if (blockId == 7) {
         float dune = sin((texel.x + texel.y * 0.5) * 0.7 + noiseB * 3.0);
-        color *= 0.95 + dune * 0.05;
-        color += vec3(0.04, 0.03, 0.00) * noiseA;
+        color *= 0.97 + dune * 0.05;
+        color += vec3(0.06, 0.04, 0.00) * noiseA;
     } else if (blockId == 8) {
         float ripple = sin((texel.x * 0.8 + texel.y * 0.35) + noiseA * 4.0);
         color *= 0.92 + ripple * 0.08;
-        color += vec3(0.00, 0.03, 0.06) * noiseB;
+        color += vec3(0.00, 0.05, 0.08) * noiseB;
     } else if (blockId == 9) {
         float petals = step(0.82, noiseB) + step(0.90, noiseA);
         color *= mix(0.90, 1.16, noiseA);
-        color += vec3(0.10, 0.02, 0.08) * petals;
+        color += vec3(0.12, 0.02, 0.10) * petals;
     } else if (blockId == 10) {
         float shard = step(0.74, abs(sin((texel.x - texel.y) * 0.85 + noiseA * 5.0)));
         color *= mix(0.92, 1.18, noiseB);
-        color += vec3(0.05, 0.10, 0.16) * shard;
+        color += vec3(0.08, 0.12, 0.18) * shard;
     }
 
     return clamp(color, 0.0, 1.0);
