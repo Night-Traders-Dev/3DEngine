@@ -346,9 +346,12 @@ while running:
             di = di + 1
         end_shadow_frame(shadow_renderer, shadow_cmd)
 
+    if gpu.window_should_close():
+        running = false
+        continue
     let frame = begin_frame(r)
     if frame == nil:
-        running = false
+        # Transient resize/minimize/swapchain blip - skip this frame
         continue
     let cmd = frame["cmd"]
 

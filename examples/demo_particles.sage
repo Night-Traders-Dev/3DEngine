@@ -220,9 +220,12 @@ while running:
     update_game_hud(hud, 1.0, score["points"], score["combo"], ts["fps"], total_alive_particles(ps))
 
     # --- Render ---
+    if gpu.window_should_close():
+        running = false
+        continue
     let frame = begin_frame(r)
     if frame == nil:
-        running = false
+        # Transient resize/minimize/swapchain blip - skip this frame
         continue
     let cmd = frame["cmd"]
 

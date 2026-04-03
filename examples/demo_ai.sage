@@ -323,9 +323,12 @@ while running:
     update_light_ubo(ls)
 
     # --- Render ---
+    if gpu.window_should_close():
+        running = false
+        continue
     let frame = begin_frame(r)
     if frame == nil:
-        running = false
+        # Transient resize/minimize/swapchain blip - skip this frame
         continue
     let cmd = frame["cmd"]
 
