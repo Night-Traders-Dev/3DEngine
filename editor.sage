@@ -78,6 +78,7 @@ let GIZMO_SCALE = "scale"
 from inspector import create_inspector, inspect_entity, clear_inspection, refresh_inspector
 from codegen import generate_game_script
 from scene_serial import save_scene, load_scene, serialize_scene, load_scene_string
+from scene_serial import snapshot_scene, load_scene_snapshot
 from physics import RigidbodyComponent, BoxColliderComponent, SphereColliderComponent
 from physics import create_physics_world, create_physics_system
 from undo_redo import execute_command, undo, redo, cmd_set_vec3, cmd_set_property
@@ -140,6 +141,7 @@ if _launch_template != nil:
     print "Template: " + str(_launch_template)
 if _launch_action == "open":
     print "Opening existing project..."
+gpu.set_cursor_mode(gpu.CURSOR_NORMAL)
 
 # ============================================================================
 # Lighting & Sky
@@ -720,6 +722,12 @@ while ai < len(importable_assets):
 print "Editor loaded with " + str(entity_count(world)) + " entities"
 if len(dict_keys(imported_models)) > 0:
     print "Imported models: " + str(len(dict_keys(imported_models)))
+let _autoplay = sys.getenv("FORGE_AUTOPLAY")
+if _autoplay != nil and (_autoplay == "1" or _autoplay == "true" or _autoplay == "yes" or _autoplay == "on"):
+    play_snapshot = snapshot_scene(world, "PIE")
+    play_mode = true
+    print "Play mode started (auto)"
+    gpu.set_title(editor_play_title())
 
 # ============================================================================
 # Editor camera
@@ -1096,13 +1104,13 @@ while running:
         # Play button
         if mx >= sw_f / 2.0 - 40.0 and mx < sw_f / 2.0 + 40.0:
             if play_mode == false:
-                play_snapshot = serialize_scene(world, "PIE")
+                play_snapshot = snapshot_scene(world, "PIE")
                 play_mode = true
                 print "Play mode started (ENTER or Play to stop)"
                 gpu.set_title(editor_play_title())
             else:
                 if play_snapshot != nil:
-                    let restored = load_scene_string(play_snapshot)
+                    let restored = load_scene_snapshot(play_snapshot)
                     if restored != nil:
                         world = restored["world"]
                         register_system(world, "physics", ["rigidbody", "transform"], create_physics_system(physics_world))
@@ -1633,13 +1641,13 @@ while running:
     # Play mode (ENTER) — toggle Play-In-Editor simulation
     if action_just_pressed(inp, "play"):
         if play_mode == false:
-            play_snapshot = serialize_scene(world, "PIE")
+            play_snapshot = snapshot_scene(world, "PIE")
             play_mode = true
             print "Play mode started (ENTER to stop)"
             gpu.set_title(editor_play_title())
         else:
             if play_snapshot != nil:
-                let restored_enter = load_scene_string(play_snapshot)
+                let restored_enter = load_scene_snapshot(play_snapshot)
                 if restored_enter != nil:
                     world = restored_enter["world"]
                     register_system(world, "physics", ["rigidbody", "transform"], create_physics_system(physics_world))

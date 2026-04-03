@@ -7,7 +7,7 @@ from components import TransformComponent, VelocityComponent, NameComponent, Cam
 from components import PointLightComponent, MeshRendererComponent
 from gameplay import HealthComponent
 from forge_version import engine_name, engine_version, scene_format_version
-from scene_serial import serialize_scene, load_scene_string
+from scene_serial import serialize_scene, load_scene_string, snapshot_scene, load_scene_snapshot
 from scene_serial import vec3_to_json, json_to_vec3
 from json import cJSON_GetArraySize, cJSON_GetArrayItem, cJSON_GetNumberValue
 from math3d import vec3
@@ -199,6 +199,28 @@ while i < len(all_eids):
 check("found player entity", found_player)
 check("found box entity", found_box)
 check("found lamp entity", found_lamp)
+
+let snapshot = snapshot_scene(w, "PIE")
+check("snapshot scene built", snapshot != nil and snapshot["name"] == "PIE")
+let snap_result = load_scene_snapshot(snapshot)
+check("snapshot scene loads", snap_result != nil)
+if snap_result != nil:
+    check("snapshot entity count", snap_result["entity_count"] == 3)
+    let snap_world = snap_result["world"]
+    let snap_box = -1
+    let snap_ids = [1, 2, 3]
+    let si = 0
+    while si < len(snap_ids):
+        let snap_eid = snap_ids[si]
+        if has_component(snap_world, snap_eid, "name"):
+            let snap_name = get_component(snap_world, snap_eid, "name")
+            if snap_name["name"] == "Box":
+                snap_box = snap_eid
+        si = si + 1
+    check("snapshot preserves box entity", snap_box > 0)
+    if snap_box > 0:
+        check("snapshot preserves voxel block", has_component(snap_world, snap_box, "voxel_world") and get_voxel(get_component(snap_world, snap_box, "voxel_world"), 6, 1, 6) == 4)
+        check("snapshot preserves imported asset marker", has_component(snap_world, snap_box, "imported_asset"))
 
 # --- File round-trip ---
 import io

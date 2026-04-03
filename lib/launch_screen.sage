@@ -70,6 +70,7 @@ proc run_launch_screen(r):
         let idx = _template_index_by_id(templates, template_override)
         r["clear_color"] = orig_clear
         if idx >= 0:
+            gpu.set_cursor_mode(gpu.CURSOR_NORMAL)
             return {"action": "new", "template": templates[idx]["id"]}
         print "WARNING: Unknown FORGE_TEMPLATE '" + template_override + "', showing launcher."
 

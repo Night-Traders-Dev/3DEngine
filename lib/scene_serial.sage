@@ -175,9 +175,9 @@ proc register_serializer(comp_type, serialize_fn):
     _serializers[comp_type] = serialize_fn
 
 # ============================================================================
-# Serialize a full scene (world) to JSON string
+# Build a full scene root node
 # ============================================================================
-proc serialize_scene(world, scene_name):
+proc _build_scene_root(world, scene_name):
     let root = cJSON_CreateObject()
     cJSON_AddStringToObject(root, "name", scene_name)
     cJSON_AddStringToObject(root, "engine", engine_name())
@@ -239,9 +239,143 @@ proc serialize_scene(world, scene_name):
         i = i + 1
 
     cJSON_AddItemToObject(root, "entities", entities_arr)
+    return root
+
+# ============================================================================
+# Serialize a full scene (world) to JSON string
+# ============================================================================
+proc serialize_scene(world, scene_name):
+    let root = _build_scene_root(world, scene_name)
     let json_str = cJSON_Print(root)
     cJSON_Delete(root)
     return json_str
+
+proc snapshot_scene(world, scene_name):
+    let snapshot = {}
+    snapshot["name"] = scene_name
+    snapshot["engine"] = engine_name()
+    snapshot["engine_version"] = engine_version()
+    snapshot["version"] = scene_format_version()
+    let entities = []
+
+    let all_entities = {}
+    let comp_types = dict_keys(world["components"])
+    let ci = 0
+    while ci < len(comp_types):
+        let store = world["components"][comp_types[ci]]
+        let eids = dict_keys(store)
+        let ei = 0
+        while ei < len(eids):
+            let sid = eids[ei]
+            if dict_has(world["entities"], sid) and world["entities"][sid] == true:
+                all_entities[sid] = true
+            ei = ei + 1
+        ci = ci + 1
+
+    let entity_keys = dict_keys(all_entities)
+    let i = 0
+    while i < len(entity_keys):
+        let sid = entity_keys[i]
+        let eid = tonumber(sid)
+        let ent = {}
+        ent["id"] = eid
+        let comps = {}
+        let ser_types = dict_keys(_serializers)
+        let j = 0
+        while j < len(ser_types):
+            let ct = ser_types[j]
+            if has_component(world, eid, ct):
+                let comp = get_component(world, eid, ct)
+                if ct == "transform":
+                    comps[ct] = {"position": vec3(comp["position"][0], comp["position"][1], comp["position"][2]), "rotation": vec3(comp["rotation"][0], comp["rotation"][1], comp["rotation"][2]), "scale": vec3(comp["scale"][0], comp["scale"][1], comp["scale"][2])}
+                else:
+                    if ct == "name":
+                        comps[ct] = comp["name"]
+                    else:
+                        if ct == "velocity":
+                            comps[ct] = {"linear": vec3(comp["linear"][0], comp["linear"][1], comp["linear"][2]), "angular": vec3(comp["angular"][0], comp["angular"][1], comp["angular"][2]), "damping": comp["damping"]}
+                        else:
+                            if ct == "camera":
+                                comps[ct] = {"fov": comp["fov"], "near": comp["near"], "far": comp["far"], "yaw": comp["yaw"], "pitch": comp["pitch"]}
+                            else:
+                                if ct == "light":
+                                    let light_data = {"type": comp["type"], "color": vec3(comp["color"][0], comp["color"][1], comp["color"][2]), "intensity": comp["intensity"]}
+                                    if dict_has(comp, "radius"):
+                                        light_data["radius"] = comp["radius"]
+                                    if dict_has(comp, "cast_shadows"):
+                                        light_data["cast_shadows"] = comp["cast_shadows"]
+                                    comps[ct] = light_data
+                                else:
+                                    if ct == "mesh_id":
+                                        if dict_has(comp, "name"):
+                                            comps[ct] = {"mesh_type": comp["name"]}
+                                        else:
+                                            comps[ct] = {"mesh_type": "cube"}
+                                    else:
+                                        if ct == "mesh_renderer":
+                                            let material = "default"
+                                            if dict_has(comp, "material"):
+                                                material = comp["material"]
+                                            let mr = {"material": material, "visible": true}
+                                            if dict_has(comp, "visible"):
+                                                mr["visible"] = comp["visible"]
+                                            if dict_has(comp, "cast_shadows"):
+                                                mr["cast_shadows"] = comp["cast_shadows"]
+                                            if dict_has(comp, "receive_shadows"):
+                                                mr["receive_shadows"] = comp["receive_shadows"]
+                                            comps[ct] = mr
+                                        else:
+                                            if ct == "health":
+                                                let health = {"current": comp["current"], "max": comp["max"]}
+                                                if dict_has(comp, "alive"):
+                                                    health["alive"] = comp["alive"]
+                                                comps[ct] = health
+                                            else:
+                                                if ct == "rigidbody":
+                                                    comps[ct] = {"mass": comp["mass"], "use_gravity": comp["use_gravity"], "is_kinematic": comp["is_kinematic"], "restitution": comp["restitution"]}
+                                                else:
+                                                    if ct == "collider":
+                                                        let collider = {"type": comp["type"]}
+                                                        if comp["type"] == "aabb":
+                                                            collider["half"] = vec3(comp["half"][0], comp["half"][1], comp["half"][2])
+                                                        if comp["type"] == "sphere":
+                                                            collider["radius"] = comp["radius"]
+                                                        comps[ct] = collider
+                                                    else:
+                                                        if ct == "material":
+                                                            comps[ct] = {"albedo": vec3(comp["albedo"][0], comp["albedo"][1], comp["albedo"][2]), "metallic": comp["metallic"], "roughness": comp["roughness"], "emission": vec3(comp["emission"][0], comp["emission"][1], comp["emission"][2]), "emission_strength": comp["emission_strength"], "alpha": comp["alpha"]}
+                                                        else:
+                                                            if ct == "imported_asset":
+                                                                let source = ""
+                                                                if dict_has(comp, "source"):
+                                                                    source = comp["source"]
+                                                                let name = source
+                                                                if dict_has(comp, "name"):
+                                                                    name = comp["name"]
+                                                                comps[ct] = {"source": source, "name": name}
+                                                            else:
+                                                                if ct == "asset_ref" or ct == "animation_state":
+                                                                    comps[ct] = cJSON_ToSage(cJSON_FromSage(comp))
+                                                                else:
+                                                                    if ct == "voxel_world":
+                                                                        from voxel_world import clone_voxel_world_snapshot
+                                                                        comps[ct] = clone_voxel_world_snapshot(comp)
+            j = j + 1
+        ent["components"] = comps
+        let tags = []
+        let tag_types = dict_keys(world["tags"])
+        let ti = 0
+        while ti < len(tag_types):
+            let tag = tag_types[ti]
+            let tstore = world["tags"][tag]
+            if dict_has(tstore, sid):
+                push(tags, tag)
+            ti = ti + 1
+        ent["tags"] = tags
+        push(entities, ent)
+        i = i + 1
+    snapshot["entities"] = entities
+    return snapshot
 
 # ============================================================================
 # Save scene to file
@@ -501,14 +635,9 @@ proc list_prefabs(directory):
     return prefabs
 
 # ============================================================================
-# Load scene from JSON string
+# Load scene from a cJSON root node
 # ============================================================================
-proc load_scene_string(json_str):
-    let root = cJSON_Parse(json_str)
-    if root == nil:
-        print "SCENE ERROR: Failed to parse scene JSON"
-        return nil
-
+proc _load_scene_root(root):
     let world = create_world()
     let name_node = cJSON_GetObjectItem(root, "name")
     let scene_name = ""
@@ -578,6 +707,156 @@ proc load_scene_string(json_str):
     result["engine_version"] = scene_engine_version
     result["scene_version"] = scene_version
     result["entity_count"] = count
+    return result
+
+# ============================================================================
+# Load scene from JSON string
+# ============================================================================
+proc load_scene_string(json_str):
+    let root = cJSON_Parse(json_str)
+    if root == nil:
+        print "SCENE ERROR: Failed to parse scene JSON"
+        return nil
+    let result = _load_scene_root(root)
+    cJSON_Delete(root)
+    return result
+
+proc load_scene_snapshot(snapshot):
+    if snapshot == nil:
+        print "SCENE ERROR: Failed to decode scene snapshot"
+        return nil
+    let world = create_world()
+    let scene_name = ""
+    if dict_has(snapshot, "name"):
+        scene_name = snapshot["name"]
+    let scene_engine = ""
+    if dict_has(snapshot, "engine"):
+        scene_engine = snapshot["engine"]
+    let scene_engine_version = ""
+    if dict_has(snapshot, "engine_version"):
+        scene_engine_version = snapshot["engine_version"]
+    let scene_version = 0
+    if dict_has(snapshot, "version"):
+        scene_version = snapshot["version"]
+    let entities = []
+    if dict_has(snapshot, "entities"):
+        entities = snapshot["entities"]
+    let i = 0
+    while i < len(entities):
+        let ent = entities[i]
+        let eid = spawn(world)
+        if dict_has(ent, "components"):
+            let comps = ent["components"]
+            let comp_types = dict_keys(comps)
+            let ci = 0
+            while ci < len(comp_types):
+                let ct = comp_types[ci]
+                let data = comps[ct]
+                let comp = nil
+                if ct == "transform":
+                    from components import TransformComponentFull
+                    comp = TransformComponentFull(data["position"], data["rotation"], data["scale"])
+                else:
+                    if ct == "name":
+                        from components import NameComponent
+                        comp = NameComponent(data)
+                    else:
+                        if ct == "velocity":
+                            from components import VelocityComponent
+                            comp = VelocityComponent()
+                            comp["linear"] = data["linear"]
+                            comp["angular"] = data["angular"]
+                            comp["damping"] = data["damping"]
+                        else:
+                            if ct == "camera":
+                                from components import CameraComponent
+                                comp = CameraComponent(data["fov"], data["near"], data["far"])
+                                comp["yaw"] = data["yaw"]
+                                comp["pitch"] = data["pitch"]
+                            else:
+                                if ct == "light":
+                                    from components import PointLightComponent, DirectionalLightComponent
+                                    if data["type"] == "directional":
+                                        comp = DirectionalLightComponent(data["color"][0], data["color"][1], data["color"][2], data["intensity"])
+                                    else:
+                                        let radius = 20.0
+                                        if dict_has(data, "radius"):
+                                            radius = data["radius"]
+                                        comp = PointLightComponent(data["color"][0], data["color"][1], data["color"][2], data["intensity"], radius)
+                                    if dict_has(data, "cast_shadows"):
+                                        comp["cast_shadows"] = data["cast_shadows"]
+                                else:
+                                    if ct == "mesh_id":
+                                        comp = {"mesh": nil, "name": data["mesh_type"]}
+                                    else:
+                                        if ct == "mesh_renderer":
+                                            from components import MeshRendererComponent
+                                            comp = MeshRendererComponent(nil, data["material"])
+                                            comp["visible"] = data["visible"]
+                                            if dict_has(data, "cast_shadows"):
+                                                comp["cast_shadows"] = data["cast_shadows"]
+                                            if dict_has(data, "receive_shadows"):
+                                                comp["receive_shadows"] = data["receive_shadows"]
+                                        else:
+                                            if ct == "health":
+                                                from gameplay import HealthComponent
+                                                comp = HealthComponent(data["max"])
+                                                comp["current"] = data["current"]
+                                                if dict_has(data, "alive"):
+                                                    comp["alive"] = data["alive"]
+                                            else:
+                                                if ct == "rigidbody":
+                                                    from physics import RigidbodyComponent, StaticBodyComponent
+                                                    if data["mass"] <= 0.0:
+                                                        comp = StaticBodyComponent()
+                                                    else:
+                                                        comp = RigidbodyComponent(data["mass"])
+                                                    comp["use_gravity"] = data["use_gravity"]
+                                                    comp["is_kinematic"] = data["is_kinematic"]
+                                                    comp["restitution"] = data["restitution"]
+                                                else:
+                                                    if ct == "collider":
+                                                        from physics import BoxColliderComponent, SphereColliderComponent
+                                                        if data["type"] == "sphere":
+                                                            comp = SphereColliderComponent(data["radius"])
+                                                        else:
+                                                            comp = BoxColliderComponent(data["half"][0], data["half"][1], data["half"][2])
+                                                    else:
+                                                        if ct == "material":
+                                                            from components import MaterialComponent
+                                                            comp = MaterialComponent(data["albedo"][0], data["albedo"][1], data["albedo"][2])
+                                                            comp["metallic"] = data["metallic"]
+                                                            comp["roughness"] = data["roughness"]
+                                                            comp["emission"] = data["emission"]
+                                                            comp["emission_strength"] = data["emission_strength"]
+                                                            comp["alpha"] = data["alpha"]
+                                                        else:
+                                                            if ct == "imported_asset":
+                                                                comp = {"source": data["source"], "name": data["name"], "gpu_meshes": [], "materials": [], "nodes": [], "animations": [], "animation_count": 0, "mesh_count": 0, "material_count": 0, "node_count": 0}
+                                                            else:
+                                                                if ct == "asset_ref" or ct == "animation_state":
+                                                                    comp = cJSON_ToSage(cJSON_FromSage(data))
+                                                                else:
+                                                                    if ct == "voxel_world":
+                                                                        from voxel_world import voxel_world_from_sage
+                                                                        comp = voxel_world_from_sage(data)
+                if comp != nil:
+                    add_component(world, eid, ct, comp)
+                ci = ci + 1
+        if dict_has(ent, "tags"):
+            let tags = ent["tags"]
+            let ti = 0
+            while ti < len(tags):
+                add_tag(world, eid, tags[ti])
+                ti = ti + 1
+        i = i + 1
+    let result = {}
+    result["world"] = world
+    result["name"] = scene_name
+    result["engine"] = scene_engine
+    result["engine_version"] = scene_engine_version
+    result["scene_version"] = scene_version
+    result["entity_count"] = len(entities)
     return result
 
 # ============================================================================

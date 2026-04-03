@@ -604,7 +604,21 @@ proc generate_voxel_template_world(vw, seed):
             cy = cy + 1
         cx = cx + 1
 
-proc voxel_world_to_sage(vw):
+proc _clone_palette_entry(entry):
+    let out = {}
+    out["id"] = entry["id"]
+    out["name"] = entry["name"]
+    if dict_has(entry, "color"):
+        out["color"] = vec3(entry["color"][0], entry["color"][1], entry["color"][2])
+    if dict_has(entry, "top_color"):
+        out["top_color"] = vec3(entry["top_color"][0], entry["top_color"][1], entry["top_color"][2])
+    if dict_has(entry, "side_color"):
+        out["side_color"] = vec3(entry["side_color"][0], entry["side_color"][1], entry["side_color"][2])
+    if dict_has(entry, "bottom_color"):
+        out["bottom_color"] = vec3(entry["bottom_color"][0], entry["bottom_color"][1], entry["bottom_color"][2])
+    return out
+
+proc clone_voxel_world_snapshot(vw):
     let data = {}
     data["size_x"] = vw["size_x"]
     data["size_y"] = vw["size_y"]
@@ -614,10 +628,30 @@ proc voxel_world_to_sage(vw):
     data["solid_count"] = vw["solid_count"]
     data["template_seed"] = vw["template_seed"]
     data["chunk_size"] = voxel_chunk_size(vw)
-    data["blocks"] = _clone_sage(vw["blocks"])
-    data["palette"] = _clone_sage(vw["palette"])
-    data["palette_ids"] = _clone_sage(vw["palette_ids"])
+    let blocks = []
+    let bi = 0
+    while bi < len(vw["blocks"]):
+        push(blocks, vw["blocks"][bi])
+        bi = bi + 1
+    data["blocks"] = blocks
+    let palette = {}
+    let palette_keys = dict_keys(vw["palette"])
+    let pi = 0
+    while pi < len(palette_keys):
+        let key = palette_keys[pi]
+        palette[key] = _clone_palette_entry(vw["palette"][key])
+        pi = pi + 1
+    data["palette"] = palette
+    let palette_ids = []
+    pi = 0
+    while pi < len(vw["palette_ids"]):
+        push(palette_ids, vw["palette_ids"][pi])
+        pi = pi + 1
+    data["palette_ids"] = palette_ids
     return data
+
+proc voxel_world_to_sage(vw):
+    return clone_voxel_world_snapshot(vw)
 
 proc voxel_world_manifest_to_sage(vw):
     let data = {}
