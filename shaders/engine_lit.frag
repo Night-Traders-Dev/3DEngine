@@ -46,6 +46,31 @@ vec3 saturate_color(vec3 color, float amount) {
     return mix(vec3(lum), color, amount);
 }
 
+float voxel_edge_distance(vec2 uv) {
+    vec2 d = min(uv, vec2(1.0) - uv);
+    return min(d.x, d.y);
+}
+
+float voxel_contact_occlusion(int faceId, vec2 uv) {
+    float edgeDist = voxel_edge_distance(uv);
+    float edgeAO = mix(0.94, 1.0, smoothstep(0.02, 0.18, edgeDist));
+    if (faceId == 1) {
+        float verticalAO = mix(0.84, 1.0, smoothstep(0.0, 0.58, uv.y));
+        return edgeAO * verticalAO;
+    }
+    if (faceId == 2) {
+        return mix(0.86, 1.0, smoothstep(0.02, 0.16, edgeDist));
+    }
+    return mix(0.97, 1.0, smoothstep(0.02, 0.20, edgeDist));
+}
+
+float water_side_foam(vec3 worldPos, vec2 uv, float time) {
+    float crest = smoothstep(0.70, 0.98, uv.y);
+    float streaks = sin(worldPos.x * 0.90 + worldPos.z * 0.55 + time * 2.8) * 0.5 + 0.5;
+    float noise = hash21(floor((worldPos.xz + vec2(time * 0.8, -time * 0.6)) * 3.2 + uv * 7.0));
+    return crest * smoothstep(0.52, 0.86, mix(streaks, noise, 0.55));
+}
+
 bool is_foliage_like(int blockId) {
     return blockId == 1 || blockId == 5 || blockId == 9 || blockId == 10;
 }
@@ -183,8 +208,13 @@ void main() {
     int voxelBlockId = int(material_data.surfaceControl.z + 0.5);
     int voxelFaceId = int(material_data.surfaceControl.w + 0.5);
     bool waterLike = voxelBlockId == 8;
+    float contactAO = 1.0;
     if (material_data.surfaceControl.y > 0.5) {
         baseColor = voxel_detail_color(baseColor, material_data.surfaceControl.z, material_data.surfaceControl.w, fragUV);
+        if (waterLike == false) {
+            contactAO = voxel_contact_occlusion(voxelFaceId, fragUV);
+            baseColor *= contactAO;
+        }
     }
 
     vec3 N = normalize(fragNormal);
@@ -217,6 +247,10 @@ void main() {
         vec3 shallowWater = vec3(0.12, 0.42, 0.58);
         result = mix(result * 0.68, reflectedSky, 0.18 + baseFresnel * 0.34);
         result = mix(result, mix(deepWater, shallowWater, waterPulse), 0.14 + upness * 0.08);
+        if (voxelFaceId == 1) {
+            float foam = water_side_foam(fragWorldPos, fragUV, sceneTime);
+            result += vec3(0.18, 0.22, 0.20) * foam;
+        }
         outAlpha = clamp(max(outAlpha, 0.46 + baseFresnel * 0.24), 0.0, 0.84);
     }
 
@@ -293,6 +327,9 @@ void main() {
     }
 
     result *= mix(0.80, 1.00, upness);
+    if (waterLike == false && material_data.surfaceControl.y > 0.5) {
+        result *= mix(0.92, 1.0, upness) * contactAO;
+    }
     if (waterLike) {
         result = saturate_color(result, 1.18);
     } else {
