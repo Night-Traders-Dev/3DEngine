@@ -58,6 +58,16 @@ proc _unique_chunk_count(draws):
         i = i + 1
     return len(dict_keys(seen))
 
+proc _mesh_max_y(mesh_data):
+    let verts = mesh_data["vertices"]
+    let max_y = -999999.0
+    let i = 1
+    while i < len(verts):
+        if verts[i] > max_y:
+            max_y = verts[i]
+        i = i + 8
+    return max_y
+
 print "=== Voxel World Sanity Checks ==="
 
 let vw = create_voxel_world(8, 8, 8)
@@ -89,6 +99,17 @@ check("sand surface is bright and warm", sand_surface["albedo"][0] > 0.75 and sa
 let water_surface = voxel_block_surface(vw, 8)
 check("water surface is visibly blue", water_surface["albedo"][2] > water_surface["albedo"][1] and water_surface["albedo"][2] > water_surface["albedo"][0])
 check("water surface is partially transparent", water_surface["alpha"] < 1.0)
+let water_mesh_world = create_voxel_world(8, 8, 8)
+set_voxel(water_mesh_world, 1, 1, 1, 8)
+let water_meshes = build_voxel_meshes(water_mesh_world)
+check("surface water top mesh emitted", dict_has(water_meshes, "8:top"))
+check("surface water top is lowered below full cube height", _mesh_max_y(water_meshes["8:top"]) < 2.0 and _mesh_max_y(water_meshes["8:top"]) > 1.8)
+check("surface water side wall follows lowered shoreline height", dict_has(water_meshes, "8:side") and _mesh_max_y(water_meshes["8:side"]) < 2.0)
+let stacked_water_world = create_voxel_world(8, 8, 8)
+set_voxel(stacked_water_world, 1, 1, 1, 8)
+set_voxel(stacked_water_world, 1, 2, 1, 8)
+let stacked_water_meshes = build_voxel_meshes(stacked_water_world)
+check("submerged water side stays full height below surface", dict_has(stacked_water_meshes, "8:side") and _mesh_max_y(stacked_water_meshes["8:side"]) > 2.8)
 let bloom_surface = voxel_block_surface(vw, 9)
 check("bloom surface is vividly pink", bloom_surface["albedo"][0] > 0.75 and bloom_surface["albedo"][2] > 0.4)
 let crystal_surface = voxel_block_surface(vw, 10)

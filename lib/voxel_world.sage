@@ -997,7 +997,10 @@ proc _mesh_bucket(meshes, block_id, face_group):
     meshes[key] = bucket
     return bucket
 
-proc _append_voxel_face(bucket, wx, wy, wz, face_name):
+proc _voxel_water_surface_height():
+    return 0.86
+
+proc _append_voxel_face(bucket, wx, wy, wz, face_name, water_surface):
     let verts = bucket["vertices"]
     let indices = bucket["indices"]
     let base = len(verts) / 8
@@ -1006,40 +1009,43 @@ proc _append_voxel_face(bucket, wx, wy, wz, face_name):
     let p2 = nil
     let p3 = nil
     let normal = vec3(0.0, 1.0, 0.0)
+    let top_y = wy + 1.0
+    if water_surface:
+        top_y = wy + _voxel_water_surface_height()
 
     if face_name == "front":
         p0 = vec3(wx, wy, wz + 1.0)
         p1 = vec3(wx + 1.0, wy, wz + 1.0)
-        p2 = vec3(wx + 1.0, wy + 1.0, wz + 1.0)
-        p3 = vec3(wx, wy + 1.0, wz + 1.0)
+        p2 = vec3(wx + 1.0, top_y, wz + 1.0)
+        p3 = vec3(wx, top_y, wz + 1.0)
         normal = vec3(0.0, 0.0, 1.0)
     else:
         if face_name == "back":
             p0 = vec3(wx + 1.0, wy, wz)
             p1 = vec3(wx, wy, wz)
-            p2 = vec3(wx, wy + 1.0, wz)
-            p3 = vec3(wx + 1.0, wy + 1.0, wz)
+            p2 = vec3(wx, top_y, wz)
+            p3 = vec3(wx + 1.0, top_y, wz)
             normal = vec3(0.0, 0.0, -1.0)
         else:
             if face_name == "right":
                 p0 = vec3(wx + 1.0, wy, wz + 1.0)
                 p1 = vec3(wx + 1.0, wy, wz)
-                p2 = vec3(wx + 1.0, wy + 1.0, wz)
-                p3 = vec3(wx + 1.0, wy + 1.0, wz + 1.0)
+                p2 = vec3(wx + 1.0, top_y, wz)
+                p3 = vec3(wx + 1.0, top_y, wz + 1.0)
                 normal = vec3(1.0, 0.0, 0.0)
             else:
                 if face_name == "left":
                     p0 = vec3(wx, wy, wz)
                     p1 = vec3(wx, wy, wz + 1.0)
-                    p2 = vec3(wx, wy + 1.0, wz + 1.0)
-                    p3 = vec3(wx, wy + 1.0, wz)
+                    p2 = vec3(wx, top_y, wz + 1.0)
+                    p3 = vec3(wx, top_y, wz)
                     normal = vec3(-1.0, 0.0, 0.0)
                 else:
                     if face_name == "top":
-                        p0 = vec3(wx, wy + 1.0, wz + 1.0)
-                        p1 = vec3(wx + 1.0, wy + 1.0, wz + 1.0)
-                        p2 = vec3(wx + 1.0, wy + 1.0, wz)
-                        p3 = vec3(wx, wy + 1.0, wz)
+                        p0 = vec3(wx, top_y, wz + 1.0)
+                        p1 = vec3(wx + 1.0, top_y, wz + 1.0)
+                        p2 = vec3(wx + 1.0, top_y, wz)
+                        p3 = vec3(wx, top_y, wz)
                         normal = vec3(0.0, 1.0, 0.0)
                     else:
                         p0 = vec3(wx, wy, wz)
@@ -1102,24 +1108,25 @@ proc _build_voxel_meshes_range(vw, x0, y0, z0, x1, y1, z1):
                 let block_id = get_voxel(vw, gx, gy, gz)
                 if block_id != 0:
                     let world_min = voxel_block_world_min(vw, gx, gy, gz)
+                    let water_surface = voxel_is_water_block(block_id) and voxel_is_water_block(get_voxel(vw, gx, gy + 1, gz)) == false
                     if _voxel_neighbor_occludes(block_id, get_voxel(vw, gx, gy, gz + 1)) == false:
                         let bucket = _mesh_bucket(meshes, block_id, _voxel_face_group("front"))
-                        _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "front")
+                        _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "front", water_surface)
                     if _voxel_neighbor_occludes(block_id, get_voxel(vw, gx, gy, gz - 1)) == false:
                         let bucket = _mesh_bucket(meshes, block_id, _voxel_face_group("back"))
-                        _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "back")
+                        _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "back", water_surface)
                     if _voxel_neighbor_occludes(block_id, get_voxel(vw, gx + 1, gy, gz)) == false:
                         let bucket = _mesh_bucket(meshes, block_id, _voxel_face_group("right"))
-                        _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "right")
+                        _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "right", water_surface)
                     if _voxel_neighbor_occludes(block_id, get_voxel(vw, gx - 1, gy, gz)) == false:
                         let bucket = _mesh_bucket(meshes, block_id, _voxel_face_group("left"))
-                        _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "left")
+                        _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "left", water_surface)
                     if _voxel_neighbor_occludes(block_id, get_voxel(vw, gx, gy + 1, gz)) == false:
                         let bucket = _mesh_bucket(meshes, block_id, _voxel_face_group("top"))
-                        _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "top")
+                        _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "top", water_surface)
                     if _voxel_neighbor_occludes(block_id, get_voxel(vw, gx, gy - 1, gz)) == false:
                         let bucket = _mesh_bucket(meshes, block_id, _voxel_face_group("bottom"))
-                        _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "bottom")
+                        _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "bottom", water_surface)
                 gz = gz + 1
             gy = gy + 1
         gx = gx + 1
