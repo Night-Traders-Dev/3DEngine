@@ -11,6 +11,14 @@ let TONEMAP_REINHARD = 0
 let TONEMAP_ACES = 1
 let TONEMAP_UNCHARTED2 = 2
 
+# Pseudo-random for noise generation
+let _pseed = [12345.6789]
+
+proc _prand():
+    _pseed[0] = _pseed[0] * 1103515245.0 + 12345.0
+    _pseed[0] = _pseed[0] - math.floor(_pseed[0] / 2147483648.0) * 2147483648.0
+    return _pseed[0] / 2147483648.0
+
 proc bloom_dimensions(width, height):
     let bw = width / 2
     let bh = height / 2
@@ -19,6 +27,50 @@ proc bloom_dimensions(width, height):
     if bh < 1:
         bh = 1
     return [bw, bh]
+
+proc create_ssao_context(width, height):
+    let ssao = {}
+    ssao["width"] = width
+    ssao["height"] = height
+    ssao["target"] = create_postprocess_target(width, height, false, false)  # R8 format
+    ssao["blur_target"] = create_postprocess_target(width, height, false, false)
+    ssao["kernel_size"] = 32
+    ssao["radius"] = 0.5
+    ssao["bias"] = 0.025
+    ssao["power"] = 2.0
+
+    # Generate SSAO kernel (hemisphere samples)
+    let kernel = []
+    let i = 0
+    while i < 32:
+        let scale = i / 32.0
+        scale = 0.1 + scale * scale * 0.9
+        push(kernel, scale)
+        i = i + 1
+    ssao["kernel_scales"] = kernel
+    return ssao
+
+proc pack_ssao_params(ssao, projection, inv_projection, width, height):
+    let data = []
+    # Projection matrix (16 floats)
+    let i = 0
+    while i < 16:
+        push(data, projection[i])
+        i = i + 1
+    # Inverse projection matrix (16 floats)
+    i = 0
+    while i < 16:
+        push(data, inv_projection[i])
+        i = i + 1
+    # Params (4 floats)
+    push(data, ssao["radius"])
+    push(data, ssao["bias"])
+    push(data, ssao["power"])
+    push(data, ssao["kernel_size"])
+    # Screen size (2 floats)
+    push(data, width)
+    push(data, height)
+    return data
 
 proc build_bloom_extract_push_data(pp):
     return [pp["bloom_threshold"], pp["bloom_soft_knee"], 1.0, pp["highlight_saturation"]]
@@ -157,6 +209,24 @@ proc _create_dual_sampler_layout():
     b1["count"] = 1
     return gpu.create_descriptor_layout([b0, b1])
 
+proc _create_triple_sampler_layout():
+    let b0 = {}
+    b0["binding"] = 0
+    b0["type"] = gpu.DESC_COMBINED_SAMPLER
+    b0["stage"] = gpu.STAGE_FRAGMENT
+    b0["count"] = 1
+    let b1 = {}
+    b1["binding"] = 1
+    b1["type"] = gpu.DESC_COMBINED_SAMPLER
+    b1["stage"] = gpu.STAGE_FRAGMENT
+    b1["count"] = 1
+    let b2 = {}
+    b2["binding"] = 2
+    b2["type"] = gpu.DESC_COMBINED_SAMPLER
+    b2["stage"] = gpu.STAGE_FRAGMENT
+    b2["count"] = 1
+    return gpu.create_descriptor_layout([b0, b1, b2])
+
 proc create_fullscreen_pipeline(render_pass, desc_layout, push_size, frag_shader_path):
     let vert = gpu.load_shader("shaders/engine_fullscreen.vert.spv", gpu.STAGE_VERTEX)
     let frag = gpu.load_shader(frag_shader_path, gpu.STAGE_FRAGMENT)
@@ -201,6 +271,11 @@ proc _refresh_postprocess_descriptors(pp):
     gpu.update_descriptor_image(pp["blur_b_set"], 0, pp["bloom_b"]["image"], pp["sampler"])
     gpu.update_descriptor_image(pp["tonemap_set"], 0, pp["scene_target"]["image"], pp["sampler"])
     gpu.update_descriptor_image(pp["tonemap_set"], 1, pp["bloom_a"]["image"], pp["sampler"])
+    gpu.update_descriptor_image(pp["tonemap_set"], 2, pp["ssao"]["blur_target"]["image"], pp["sampler"])
+    # SSAO descriptors
+    gpu.update_descriptor_image(pp["ssao_set"], 0, pp["scene_target"]["depth"], pp["sampler"])
+    gpu.update_descriptor_image(pp["ssao_set"], 1, pp["ssao_noise"], pp["sampler"])
+    gpu.update_descriptor_image(pp["ssao_blur_set"], 0, pp["ssao"]["target"]["image"], pp["sampler"])
 
 proc pfx_shaderpack_day(pp):
     pp["tonemap_mode"] = TONEMAP_ACES
@@ -216,6 +291,7 @@ proc pfx_shaderpack_day(pp):
     pp["bloom_soft_knee"] = 0.18
     pp["bloom_radius"] = 1.1
     pp["highlight_saturation"] = 1.10
+    pp["ssao_enabled"] = true
 
 proc pfx_editor_preview(pp):
     pfx_shaderpack_day(pp)
@@ -238,6 +314,7 @@ proc create_postprocess(width, height, swapchain_render_pass):
     pp["scene_copy"] = create_postprocess_target(width, height, true, false)
     pp["bloom_a"] = create_postprocess_target(pp["bloom_width"], pp["bloom_height"], true, false)
     pp["bloom_b"] = create_postprocess_target(pp["bloom_width"], pp["bloom_height"], true, false)
+    pp["ssao"] = create_ssao_context(width, height)
     pp["sampler"] = gpu.create_sampler(gpu.FILTER_LINEAR, gpu.FILTER_LINEAR, gpu.ADDRESS_CLAMP_EDGE)
 
     pp["single_layout"] = _create_single_sampler_layout()
@@ -257,6 +334,34 @@ proc create_postprocess(width, height, swapchain_render_pass):
     pp["dual_pool"] = gpu.create_descriptor_pool(1, [ps1])
     pp["tonemap_set"] = gpu.allocate_descriptor_set(pp["dual_pool"], pp["dual_layout"])
 
+    # Triple layout for tonemap (scene, bloom, ssao)
+    pp["triple_layout"] = _create_triple_sampler_layout()
+    let ps3 = {}
+    ps3["type"] = gpu.DESC_COMBINED_SAMPLER
+    ps3["count"] = 3
+    pp["triple_pool"] = gpu.create_descriptor_pool(1, [ps3])
+    pp["tonemap_set"] = gpu.allocate_descriptor_set(pp["triple_pool"], pp["triple_layout"])
+
+    # SSAO descriptors
+    pp["ssao_layout"] = _create_single_sampler_layout()
+    let ps2 = {}
+    ps2["type"] = gpu.DESC_COMBINED_SAMPLER
+    ps2["count"] = 2
+    pp["ssao_pool"] = gpu.create_descriptor_pool(2, [ps2])
+    pp["ssao_set"] = gpu.allocate_descriptor_set(pp["ssao_pool"], pp["ssao_layout"])
+    pp["ssao_blur_set"] = gpu.allocate_descriptor_set(pp["ssao_pool"], pp["ssao_layout"])
+
+    # SSAO noise texture (4x4 random rotations)
+    let noise_data = []
+    let i = 0
+    while i < 16:
+        push(noise_data, _prand() * 2.0 - 1.0)
+        push(noise_data, _prand() * 2.0 - 1.0)
+        push(noise_data, 0.0)
+        push(1.0)
+        i = i + 1
+    pp["ssao_noise"] = gpu.create_image(4, 4, 1, gpu.FORMAT_RGBA16F, gpu.IMAGE_SAMPLED, noise_data)
+
     pfx_shaderpack_day(pp)
     _refresh_postprocess_descriptors(pp)
 
@@ -264,7 +369,12 @@ proc create_postprocess(width, height, swapchain_render_pass):
     pp["extract_pipeline"] = create_fullscreen_pipeline(pp["bloom_a"]["render_pass"], pp["single_layout"], 16, "shaders/engine_bloom_extract.frag.spv")
     pp["blur_pipeline_a"] = create_fullscreen_pipeline(pp["bloom_b"]["render_pass"], pp["single_layout"], 16, "shaders/engine_bloom_blur.frag.spv")
     pp["blur_pipeline_b"] = create_fullscreen_pipeline(pp["bloom_a"]["render_pass"], pp["single_layout"], 16, "shaders/engine_bloom_blur.frag.spv")
-    pp["tonemap_pipeline"] = create_fullscreen_pipeline(swapchain_render_pass, pp["dual_layout"], 32, "shaders/engine_tonemap.frag.spv")
+    pp["tonemap_pipeline"] = create_fullscreen_pipeline(swapchain_render_pass, pp["triple_layout"], 32, "shaders/engine_tonemap.frag.spv")
+
+    # SSAO pipelines (assuming shaders exist)
+    pp["ssao_pipeline"] = create_fullscreen_pipeline(pp["ssao"]["target"]["render_pass"], pp["ssao_layout"], 32 + 64 + 16 + 8, "shaders/engine_ssao_forward.frag.spv")
+    pp["ssao_blur_pipeline"] = create_fullscreen_pipeline(pp["ssao"]["blur_target"]["render_pass"], pp["ssao_layout"], 0, "shaders/engine_ssao_blur.frag.spv")
+
     return pp
 
 proc recreate_postprocess(pp, width, height, swapchain_render_pass):
@@ -303,6 +413,13 @@ proc run_bloom_chain(pp, cmd):
     _draw_post_target(cmd, pp["bloom_a"], pp["extract_pipeline"], build_bloom_extract_push_data(pp), pp["extract_set"])
     _draw_post_target(cmd, pp["bloom_b"], pp["blur_pipeline_a"], build_bloom_blur_push_data(pp, true), pp["blur_a_set"])
     _draw_post_target(cmd, pp["bloom_a"], pp["blur_pipeline_b"], build_bloom_blur_push_data(pp, false), pp["blur_b_set"])
+    return true
+
+proc run_ssao_chain(pp, cmd, projection, inv_projection, width, height):
+    if pp == nil or pp["ssao_enabled"] == false:
+        return false
+    _draw_post_target(cmd, pp["ssao"]["target"], pp["ssao_pipeline"], pack_ssao_params(pp["ssao"], projection, inv_projection, width, height), pp["ssao_set"])
+    _draw_post_target(cmd, pp["ssao"]["blur_target"], pp["ssao_blur_pipeline"], nil, pp["ssao_blur_set"])
     return true
 
 proc draw_tonemap(cmd, pp):

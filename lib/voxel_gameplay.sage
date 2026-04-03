@@ -71,7 +71,7 @@ proc _create_mob(id, position, mob_type):
     mob["age"] = 0.0
     mob["surface"] = _slime_surface()
     mob["health"] = HealthComponent(20.0)
-    mob["drop_block"] = 4
+    mob["drop_block"] = 15
     mob["drop_count"] = 1
     mob["drop_spawned"] = false
     return mob

@@ -15,14 +15,14 @@ from renderer import create_renderer, begin_frame_commands, begin_swapchain_pass
 from renderer import shutdown_renderer, check_resize, update_title_fps
 from input import create_input, update_input, bind_action
 from input import action_just_pressed, default_fps_bindings, scroll_value
-from math3d import vec3, v3_normalize, mat4_identity, mat4_mul, radians
+from math3d import vec3, v3_normalize, mat4_identity, mat4_mul, mat4_inverse, radians
 from engine_math import make_transform, transform_to_matrix
 from lighting import create_light_scene, directional_light
 from lighting import add_light, set_ambient, set_fog, set_view_position, set_scene_time
 from lighting import init_light_gpu, update_light_ubo
 from render_system import create_lit_material, create_lit_material_transparent, draw_mesh_lit_surface_controlled
 from render_system import set_lit_material_shadow_source, set_lit_material_scene_color_source
-from sky import create_sky, init_sky_gpu, draw_sky, sky_preset_vibrant_day
+from sky import create_sky, init_sky_gpu, draw_sky, sky_preset_vibrant_day, sky_preset_sunset
 from shadow_map import create_shadow_renderer, compute_light_vp_stable
 from shadow_map import begin_shadow_frame, end_shadow_frame, shadow_draw_mesh
 from mesh import cube_mesh, upload_mesh
@@ -33,7 +33,7 @@ from game_loop import create_time_state, update_time
 from font import create_font_renderer, load_font, begin_text, add_text, flush_text
 from ui_renderer import create_ui_renderer, draw_ui
 from json import cJSON_Parse, cJSON_Print, cJSON_Delete, cJSON_FromSage, cJSON_ToSage
-from gameplay import HealthComponent, damage, health_percent, revive, update_health_regen
+from gameplay import HealthComponent, damage, health_percent, revive, update_health_regen, HungerComponent, eat_food, update_hunger, hunger_percent
 from voxel_world import create_voxel_world
 from voxel_world import voxel_palette_ids
 from voxel_world import voxel_block_name, voxel_block_surface, voxel_block_world_center, raycast_voxel_world
@@ -56,7 +56,12 @@ from voxel_gameplay import voxel_pickup_count, voxel_alive_mob_count, mob_draw_p
 from voxel_gameplay import voxel_gameplay_to_sage, voxel_gameplay_from_sage
 from postprocess import create_postprocess, recreate_postprocess, begin_scene_pass, end_scene_pass
 from postprocess import begin_transparent_scene_pass, end_transparent_scene_pass, copy_scene_color
-from postprocess import run_bloom_chain, draw_tonemap, pfx_shaderpack_day
+from postprocess import run_bloom_chain, run_ssao_chain, draw_tonemap, pfx_shaderpack_day
+from particles import create_particle_system, add_emitter_to_system
+from particles import update_particle_system, total_alive_particles
+from particles import seed_particles, get_emitter, reset_emitter
+from particle_renderer import create_particle_renderer, render_particles
+from vfx_presets import vfx_dust
 
 print "=== Forge Engine - Voxel Template Sandbox ==="
 
@@ -117,6 +122,15 @@ let font_r = create_font_renderer(r["render_pass"])
 load_font(font_r, "ui", "assets/DejaVuSans.ttf", 18.0)
 let ui_renderer = create_ui_renderer(r["render_pass"])
 
+# ============================================================================
+# Particles
+# ============================================================================
+seed_particles(world_seed)
+let particle_system = create_particle_system(1000)
+let dust_emitter = vfx_dust()
+add_emitter_to_system(particle_system, dust_emitter)
+let particle_renderer = create_particle_renderer(ui_renderer)
+
 proc _rebuild_scene_postprocess():
     postprocess = recreate_postprocess(postprocess, r["width"], r["height"], r["render_pass"])
     pfx_shaderpack_day(postprocess)
@@ -152,6 +166,9 @@ voxel_inventory_add(inventory, 7, 24)
 voxel_inventory_add(inventory, 8, 18)
 voxel_inventory_add(inventory, 9, 12)
 voxel_inventory_add(inventory, 10, 8)
+voxel_inventory_add(inventory, 15, 5)  # Apples
+voxel_inventory_add(inventory, 16, 3)  # Bread
+let recipes = default_voxel_recipes()
 let recipes = default_voxel_recipes()
 let voxel_hud = create_voxel_hud()
 let inventory_open = [false]
@@ -193,6 +210,7 @@ player["grounded"] = true
 let player_health = HealthComponent(100.0)
 player_health["regen_rate"] = 2.5
 player_health["regen_delay"] = 5.0
+let player_hunger = HungerComponent(20.0)
 ensure_voxel_mob_population(gameplay_state, voxel, player["position"], 3, world_seed)
 
 # ============================================================================
@@ -282,6 +300,7 @@ proc _make_save_state(vw, inv, selected_id, player):
     state["inventory"] = voxel_inventory_to_sage(inv)
     state["gameplay"] = voxel_gameplay_to_sage(gameplay_state)
     state["player_health"] = player_health
+    state["player_hunger"] = player_hunger
     state["selected_block"] = selected_id
     let player_state = {}
     player_state["position"] = player["position"]
@@ -300,7 +319,7 @@ let running = true
 print ""
 print "Controls:"
 print "  WASD = Move  Mouse = Look  ESC = Capture mouse  TAB = Noclip"
-print "  Left Mouse = Break block / hit slime  Right Mouse = Place block  1-5 = Palette  Z = Planks  Wheel = Cycle palette  X = Craft planks  O = Inventory"
+print "  Left Mouse = Break block / hit slime  Right Mouse = Place block / eat food  1-5 = Palette  Z = Planks  Wheel = Cycle palette  X = Craft planks  E = Cycle tools  O = Inventory"
 print ""
 
 while running:
@@ -337,7 +356,7 @@ while running:
         _select_palette_slot(4)
     if gpu.key_just_pressed(gpu.KEY_Z):
         _select_palette_slot(5)
-    if gpu.key_just_pressed(gpu.KEY_T):
+    if gpu.key_just_pressed(gpu.KEY_E):
         if voxel_has_tools(gameplay_state):
             let next_tool = (gameplay_state["active_tool"] + 1) % len(gameplay_state["tools"])
             let tool = voxel_select_tool(gameplay_state, next_tool)
@@ -388,6 +407,8 @@ while running:
                         gameplay_state = voxel_gameplay_from_sage(state["gameplay"])
                     if dict_has(state, "player_health"):
                         player_health = state["player_health"]
+                    if dict_has(state, "player_hunger"):
+                        player_hunger = state["player_hunger"]
                     if dict_has(state, "selected_block") and state["selected_block"] > 0:
                         selected_block[0] = state["selected_block"]
                     if dict_has(state, "player"):
@@ -415,7 +436,18 @@ while running:
     let prev_pos = vec3(player["position"][0], player["position"][1], player["position"][2])
     player["ground_y"] = sample_voxel_ground_radius(voxel, player["position"][0], player["position"][2], player["radius"])
     update_player(player, inp, dt)
-    update_health_regen(player_health, dt, ts["total"])
+    if player_hunger["current"] > 10.0:
+        update_health_regen(player_health, dt, ts["total"])
+    update_hunger(player_hunger, dt, ts["total"])
+    if player_hunger["current"] <= 0.0:
+        damage(player_health, 1.0, ts["total"])
+
+    # Update particles
+    let player_moved = v3_length(v3_sub(player["position"], prev_pos)) > 0.01
+    if player_moved and player["grounded"]:
+        dust_emitter["position"] = vec3(player["position"][0], player["position"][1] - 0.5, player["position"][2])
+        reset_emitter(dust_emitter)
+    update_particle_system(particle_system, dt)
     let resolved = resolve_player_voxel_collision(voxel, prev_pos, player["position"], player["radius"], player["height"])
     player["position"] = resolved
     let ground_y = sample_voxel_ground_radius(voxel, player["position"][0], player["position"][2], player["radius"])
@@ -425,6 +457,9 @@ while running:
         if player["velocity"][1] < 0.0:
             player["velocity"][1] = 0.0
         player["grounded"] = true
+    else:
+        if player["position"][1] > ground_y + 0.1:
+            player["grounded"] = false
 
     let mob_events = update_voxel_mobs(gameplay_state, voxel, player["position"], player_health, dt, ts["total"])
     if len(mob_events) > 0:
@@ -467,7 +502,10 @@ while running:
             else:
                 if set_voxel(voxel, target_hit["x"], target_hit["y"], target_hit["z"], 0):
                     spawn_voxel_pickup(gameplay_state, mined_id, 1, voxel_block_world_center(voxel, target_hit["x"], target_hit["y"], target_hit["z"]))
-                    _set_status("Mined " + voxel_block_name(voxel, mined_id) + " with " + (active_tool != nil ? active_tool["name"] : "hand") + " | Drop spawned")
+                    let tool_name = "hand"
+                    if active_tool != nil:
+                        tool_name = active_tool["name"]
+                    _set_status("Mined " + voxel_block_name(voxel, mined_id) + " with " + tool_name + " | Drop spawned")
                     if active_tool != nil and active_tool["durability"] >= 0:
                         if voxel_durability_use(active_tool) == false:
                             _set_status(active_tool["name"] + " broke")
@@ -483,18 +521,31 @@ while running:
                     target_hit = nil
 
     if player["captured"] and target_hit != nil and dict_has(target_hit, "place_x") and gpu.mouse_just_pressed(gpu.MOUSE_RIGHT):
-        if voxel_inventory_remove(inventory, selected_block[0], 1):
-            if set_voxel(voxel, target_hit["place_x"], target_hit["place_y"], target_hit["place_z"], selected_block[0]):
-                if voxel_collides_player(voxel, player["position"], player["radius"], player["height"]):
-                    set_voxel(voxel, target_hit["place_x"], target_hit["place_y"], target_hit["place_z"], 0)
-                    voxel_inventory_add(inventory, selected_block[0], 1)
-                    _set_status("Placement blocked: player collision")
+        let ate_food = false
+        if selected_block[0] == 15 or selected_block[0] == 16:  # Apple or Bread
+            if voxel_inventory_count(inventory, selected_block[0]) > 0:
+                voxel_inventory_remove(inventory, selected_block[0], 1)
+                let food_points = 4
+                let saturation = 2.4
+                if selected_block[0] == 16:  # Bread
+                    food_points = 5
+                    saturation = 6.0
+                eat_food(player_hunger, food_points, saturation, ts["total"])
+                _set_status("Ate " + voxel_block_name(voxel, selected_block[0]) + " | Hunger: " + str(math.floor(player_hunger["current"] + 0.5)) + "/" + str(player_hunger["max"]))
+                ate_food = true
+        if ate_food == false:
+            if voxel_inventory_remove(inventory, selected_block[0], 1):
+                if set_voxel(voxel, target_hit["place_x"], target_hit["place_y"], target_hit["place_z"], selected_block[0]):
+                    if voxel_collides_player(voxel, player["position"], player["radius"], player["height"]):
+                        set_voxel(voxel, target_hit["place_x"], target_hit["place_y"], target_hit["place_z"], 0)
+                        voxel_inventory_add(inventory, selected_block[0], 1)
+                        _set_status("Placement blocked: player collision")
+                    else:
+                        _set_status("Placed " + voxel_block_name(voxel, selected_block[0]) + " | Remaining: " + str(voxel_inventory_count(inventory, selected_block[0])))
                 else:
-                    _set_status("Placed " + voxel_block_name(voxel, selected_block[0]) + " | Remaining: " + str(voxel_inventory_count(inventory, selected_block[0])))
+                    voxel_inventory_add(inventory, selected_block[0], 1)
             else:
-                voxel_inventory_add(inventory, selected_block[0], 1)
-        else:
-            _set_status("No " + voxel_block_name(voxel, selected_block[0]) + " left in inventory")
+                _set_status("No " + voxel_block_name(voxel, selected_block[0]) + " left in inventory")
 
     let dead_mobs = collect_dead_voxel_mobs(gameplay_state)
     let dmi = 0
@@ -621,8 +672,12 @@ while running:
         ri = ri + 1
     end_transparent_scene_pass(cmd)
     run_bloom_chain(postprocess, cmd)
+    run_ssao_chain(postprocess, cmd, proj, mat4_inverse(proj), r["width"], r["height"])
     begin_swapchain_pass(r, frame)
     draw_tonemap(cmd, postprocess)
+
+    # Render particles
+    render_particles(particle_renderer, cmd, particle_system, vp, eye)
 
     let player_chunk = voxel_chunk_coords_world(voxel, player["position"][0], player["position"][1], player["position"][2])
     draw_ui(ui_renderer, cmd, voxel_hud["root"], sw, sh)
@@ -639,7 +694,7 @@ while running:
         if active_tool["max_durability"] >= 0:
             max_dur = active_tool["max_durability"]
         active_tool_name = active_tool["name"] + " (" + str(current_dur) + "/" + str(max_dur) + ")"
-    add_text(font_r, "ui", "Selected: [" + str(selected_block[0]) + "] " + voxel_block_name(voxel, selected_block[0]) + " x" + str(voxel_inventory_count(inventory, selected_block[0])) + " | Tool: " + active_tool_name + " | Health: " + str(math.floor(player_health["current"] + 0.5)) + "/" + str(player_health["max"]) + " | Slimes: " + str(voxel_alive_mob_count(gameplay_state)) + " | Drops: " + str(voxel_pickup_count(gameplay_state)), 18.0, 66.0, 0.90, 0.92, 0.95, 1.0)
+    add_text(font_r, "ui", "Selected: [" + str(selected_block[0]) + "] " + voxel_block_name(voxel, selected_block[0]) + " x" + str(voxel_inventory_count(inventory, selected_block[0])) + " | Tool: " + active_tool_name + " | Health: " + str(math.floor(player_health["current"] + 0.5)) + "/" + str(math.floor(player_health["max"] + 0.5)) + " | Hunger: " + str(math.floor(player_hunger["current"] + 0.5)) + "/" + str(math.floor(player_hunger["max"] + 0.5)) + " | Slimes: " + str(voxel_alive_mob_count(gameplay_state)) + " | Drops: " + str(voxel_pickup_count(gameplay_state)), 18.0, 66.0, 0.90, 0.92, 0.95, 1.0)
     add_text(font_r, "ui", "Chunk: " + str(player_chunk["x"]) + ", " + str(player_chunk["y"]) + ", " + str(player_chunk["z"]) + " | Chunk size: " + str(voxel_chunk_size(voxel)) + " | Generated chunks: " + str(voxel_generated_chunk_count(voxel)) + " | Visible chunk draws: " + str(len(draws)), 18.0, 90.0, 0.72, 0.84, 0.92, 1.0)
     if mob_target != nil and (target_hit == nil or mob_target["distance"] <= target_hit["distance"]):
         add_text(font_r, "ui", "Target Mob: " + mob_target["mob"]["name"] + " | HP " + str(math.floor(mob_target["mob"]["health"]["current"] + 0.5)) + " | Range " + str(math.floor(mob_target["distance"] * 10.0) / 10.0), 18.0, 114.0, 0.78, 0.94, 0.76, 1.0)

@@ -70,6 +70,53 @@ proc update_health_regen(health, dt, time):
     heal(health, health["regen_rate"] * dt)
 
 # ============================================================================
+# Hunger Component
+# ============================================================================
+proc HungerComponent(max_hunger):
+    let h = {}
+    h["current"] = max_hunger
+    h["max"] = max_hunger
+    h["saturation"] = 5.0
+    h["exhaustion"] = 0.0
+    h["last_eat_time"] = 0.0
+    return h
+
+proc add_hunger_exhaustion(hunger, amount):
+    hunger["exhaustion"] = hunger["exhaustion"] + amount
+    while hunger["exhaustion"] >= 4.0:
+        hunger["exhaustion"] = hunger["exhaustion"] - 4.0
+        if hunger["saturation"] > 0.0:
+            hunger["saturation"] = hunger["saturation"] - 1.0
+        else:
+            if hunger["current"] > 0:
+                hunger["current"] = hunger["current"] - 1
+
+proc eat_food(hunger, food_points, saturation_points, time):
+    hunger["current"] = hunger["current"] + food_points
+    if hunger["current"] > hunger["max"]:
+        hunger["current"] = hunger["max"]
+    hunger["saturation"] = hunger["saturation"] + saturation_points
+    if hunger["saturation"] > hunger["current"]:
+        hunger["saturation"] = hunger["current"]
+    hunger["exhaustion"] = 0.0
+    hunger["last_eat_time"] = time
+
+proc update_hunger(hunger, dt, time):
+    # Natural hunger decrease over time (every 4 seconds)
+    let hunger_tick = 4.0
+    let ticks = math.floor((time - hunger["last_eat_time"]) / hunger_tick)
+    if ticks > 0:
+        hunger["current"] = hunger["current"] - ticks
+        if hunger["current"] < 0:
+            hunger["current"] = 0
+        hunger["last_eat_time"] = hunger["last_eat_time"] + ticks * hunger_tick
+
+proc hunger_percent(hunger):
+    if hunger["max"] <= 0.0:
+        return 0.0
+    return hunger["current"] / hunger["max"]
+
+# ============================================================================
 # Timer Component - fires callback after delay
 # ============================================================================
 proc TimerComponent(duration, repeating):

@@ -144,6 +144,22 @@ proc create_voxel_world(size_x, size_y, size_z):
     _register_block(vw, 12, "Iron Ore", vec3(0.58, 0.47, 0.34), vec3(0.58, 0.47, 0.34), vec3(0.50, 0.41, 0.34), 3.5, 1)
     _register_block(vw, 13, "Gold Ore", vec3(0.88, 0.70, 0.23), vec3(0.88, 0.70, 0.23), vec3(0.74, 0.58, 0.20), 4.0, 2)
     _register_block(vw, 14, "Diamond Ore", vec3(0.35, 0.87, 0.94), vec3(0.35, 0.87, 0.94), vec3(0.21, 0.72, 0.78), 4.5, 2)
+    _register_block(vw, 15, "Apple", vec3(0.85, 0.25, 0.15), vec3(0.75, 0.20, 0.10), vec3(0.65, 0.15, 0.05), 0.3, 0)
+    _register_block(vw, 16, "Bread", vec3(0.85, 0.70, 0.40), vec3(0.80, 0.65, 0.35), vec3(0.75, 0.60, 0.30), 0.4, 0)
+    _register_block(vw, 17, "Furnace", vec3(0.45, 0.45, 0.45), vec3(0.40, 0.40, 0.40), vec3(0.35, 0.35, 0.35), 3.0, 0)
+    _register_block(vw, 18, "Crafting Table", vec3(0.55, 0.35, 0.20), vec3(0.50, 0.30, 0.15), vec3(0.45, 0.25, 0.10), 2.0, 0)
+    _register_block(vw, 19, "Stone Pickaxe", vec3(0.56, 0.60, 0.66), vec3(0.44, 0.48, 0.54), vec3(0.33, 0.36, 0.42), 2.5, 0)
+    _register_block(vw, 20, "Stone Shovel", vec3(0.56, 0.60, 0.66), vec3(0.44, 0.48, 0.54), vec3(0.33, 0.36, 0.42), 2.5, 0)
+    _register_block(vw, 21, "Stone Sword", vec3(0.56, 0.60, 0.66), vec3(0.44, 0.48, 0.54), vec3(0.33, 0.36, 0.42), 2.5, 0)
+    _register_block(vw, 22, "Iron Ingot", vec3(0.85, 0.85, 0.90), vec3(0.75, 0.75, 0.80), vec3(0.65, 0.65, 0.70), 1.0, 0)
+    _register_block(vw, 23, "Iron Pickaxe", vec3(0.85, 0.85, 0.90), vec3(0.75, 0.75, 0.80), vec3(0.65, 0.65, 0.70), 1.0, 0)
+    _register_block(vw, 24, "Iron Shovel", vec3(0.85, 0.85, 0.90), vec3(0.75, 0.75, 0.80), vec3(0.65, 0.65, 0.70), 1.0, 0)
+    _register_block(vw, 25, "Iron Sword", vec3(0.85, 0.85, 0.90), vec3(0.75, 0.75, 0.80), vec3(0.65, 0.65, 0.70), 1.0, 0)
+    _register_block(vw, 26, "Diamond", vec3(0.35, 0.87, 0.94), vec3(0.25, 0.77, 0.84), vec3(0.15, 0.67, 0.74), 1.0, 0)
+    _register_block(vw, 27, "Diamond Pickaxe", vec3(0.35, 0.87, 0.94), vec3(0.25, 0.77, 0.84), vec3(0.15, 0.67, 0.74), 1.0, 0)
+    _register_block(vw, 28, "Diamond Shovel", vec3(0.35, 0.87, 0.94), vec3(0.25, 0.77, 0.84), vec3(0.15, 0.67, 0.74), 1.0, 0)
+    _register_block(vw, 29, "Diamond Sword", vec3(0.35, 0.87, 0.94), vec3(0.25, 0.77, 0.84), vec3(0.15, 0.67, 0.74), 1.0, 0)
+    _register_block(vw, 30, "Wheat", vec3(0.75, 0.65, 0.25), vec3(0.70, 0.60, 0.20), vec3(0.65, 0.55, 0.15), 0.3, 0)
     vw["mesh_data"] = {}
     vw["gpu_meshes"] = {}
     vw["draws"] = []
@@ -1493,3 +1509,41 @@ proc resolve_player_voxel_collision(vw, prev_pos, next_pos, radius, height):
     if voxel_collides_player(vw, resolved, radius, height):
         return vec3(prev_pos[0], prev_pos[1], prev_pos[2])
     return resolved
+
+# ============================================================================
+# Crafting Recipes
+# ============================================================================
+proc default_voxel_recipes():
+    let recipes = []
+    # Planks from wood
+    push(recipes, {"input_block": 4, "input_count": 1, "output_block": 6, "output_count": 4, "name": "Planks"})
+    # Stone tools
+    push(recipes, {"input_block": 3, "input_count": 2, "output_block": 19, "output_count": 1, "name": "Stone Pickaxe"})
+    push(recipes, {"input_block": 3, "input_count": 1, "output_block": 20, "output_count": 1, "name": "Stone Shovel"})
+    push(recipes, {"input_block": 3, "input_count": 3, "output_block": 21, "output_count": 1, "name": "Stone Sword"})
+    # Iron tools
+    push(recipes, {"input_block": 22, "input_count": 3, "output_block": 23, "output_count": 1, "name": "Iron Pickaxe"})
+    push(recipes, {"input_block": 22, "input_count": 1, "output_block": 24, "output_count": 1, "name": "Iron Shovel"})
+    push(recipes, {"input_block": 22, "input_count": 2, "output_block": 25, "output_count": 1, "name": "Iron Sword"})
+    # Diamond tools
+    push(recipes, {"input_block": 26, "input_count": 3, "output_block": 27, "output_count": 1, "name": "Diamond Pickaxe"})
+    push(recipes, {"input_block": 26, "input_count": 1, "output_block": 28, "output_count": 1, "name": "Diamond Shovel"})
+    push(recipes, {"input_block": 26, "input_count": 2, "output_block": 29, "output_count": 1, "name": "Diamond Sword"})
+    # Furnace
+    push(recipes, {"input_block": 3, "input_count": 8, "output_block": 17, "output_count": 1, "name": "Furnace"})
+    # Crafting table
+    push(recipes, {"input_block": 6, "input_count": 4, "output_block": 18, "output_count": 1, "name": "Crafting Table"})
+    # Bread
+    push(recipes, {"input_block": 30, "input_count": 3, "output_block": 16, "output_count": 1, "name": "Bread"})
+    return recipes
+
+proc try_craft_voxel_recipe(inv, recipe):
+    if recipe == nil or dict_has(recipe, "input_block") == false or dict_has(recipe, "input_count") == false or dict_has(recipe, "output_block") == false or dict_has(recipe, "output_count") == false:
+        return false
+    let input_count = voxel_inventory_count(inv, recipe["input_block"])
+    if input_count < recipe["input_count"]:
+        return false
+    if voxel_inventory_remove(inv, recipe["input_block"], recipe["input_count"]) == false:
+        return false
+    voxel_inventory_add(inv, recipe["output_block"], recipe["output_count"])
+    return true

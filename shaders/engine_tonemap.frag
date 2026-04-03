@@ -5,6 +5,7 @@ layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D hdrTexture;
 layout(set = 0, binding = 1) uniform sampler2D bloomTexture;
+layout(set = 0, binding = 2) uniform sampler2D ssaoTexture;
 
 layout(push_constant) uniform TonemapPC {
     vec4 params0; // x=exposure, y=bloom_strength, z=tonemap_mode, w=gamma
@@ -67,6 +68,10 @@ void main() {
     color = apply_contrast(color, pc.params1.x);
     color = apply_saturation(color, pc.params1.y);
     color = apply_warmth(color, pc.params1.z);
+
+    // Apply SSAO
+    float ssao = texture(ssaoTexture, fragUV).r;
+    color *= ssao;
 
     vec2 centered = fragUV * 2.0 - 1.0;
     float vignette = 1.0 - dot(centered, centered) * pc.params1.w;
