@@ -79,8 +79,8 @@ let ls = create_light_scene()
 init_light_gpu(ls)
 let sun_dir = vec3(-0.45, -0.82, -0.35)
 add_light(ls, directional_light(sun_dir[0], sun_dir[1], sun_dir[2], 1.0, 0.98, 0.92, 1.2))
-set_ambient(ls, 0.14, 0.18, 0.28, 0.24)
-set_fog(ls, true, 30.0, 140.0, 0.66, 0.78, 0.95)
+set_ambient(ls, 0.10, 0.13, 0.18, 0.18)
+set_fog(ls, true, 38.0, 155.0, 0.47, 0.62, 0.82)
 ls["fog_density"] = 0.004
 
 let postprocess = create_postprocess(r["width"], r["height"], r["render_pass"])

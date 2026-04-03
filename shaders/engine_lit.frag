@@ -52,22 +52,22 @@ bool is_foliage_like(int blockId) {
 
 vec3 voxel_palette_color(int blockId, int faceId, vec3 fallbackColor) {
     if (blockId == 1) {
-        if (faceId == 0) return vec3(0.34, 0.67, 0.24);
-        if (faceId == 2) return vec3(0.42, 0.27, 0.15);
-        return vec3(0.52, 0.38, 0.18);
+        if (faceId == 0) return vec3(0.31, 0.63, 0.21);
+        if (faceId == 2) return vec3(0.39, 0.25, 0.13);
+        return vec3(0.46, 0.34, 0.16);
     }
-    if (blockId == 2) return vec3(0.50, 0.31, 0.17);
-    if (blockId == 3) return vec3(0.50, 0.54, 0.60);
+    if (blockId == 2) return vec3(0.46, 0.28, 0.15);
+    if (blockId == 3) return vec3(0.44, 0.48, 0.54);
     if (blockId == 4) {
-        if (faceId == 1) return vec3(0.54, 0.36, 0.19);
-        return vec3(0.72, 0.56, 0.28);
+        if (faceId == 1) return vec3(0.49, 0.32, 0.16);
+        return vec3(0.69, 0.53, 0.26);
     }
-    if (blockId == 5) return vec3(0.24, 0.49, 0.19);
-    if (blockId == 6) return vec3(0.74, 0.55, 0.27);
-    if (blockId == 7) return vec3(0.84, 0.77, 0.57);
-    if (blockId == 8) return vec3(0.34, 0.47, 0.60);
-    if (blockId == 9) return vec3(0.80, 0.30, 0.47);
-    if (blockId == 10) return vec3(0.54, 0.82, 0.94);
+    if (blockId == 5) return vec3(0.19, 0.43, 0.15);
+    if (blockId == 6) return vec3(0.72, 0.54, 0.26);
+    if (blockId == 7) return vec3(0.79, 0.72, 0.53);
+    if (blockId == 8) return vec3(0.13, 0.30, 0.62);
+    if (blockId == 9) return vec3(0.78, 0.29, 0.46);
+    if (blockId == 10) return vec3(0.52, 0.82, 0.94);
     return fallbackColor;
 }
 
@@ -130,9 +130,9 @@ vec3 voxel_detail_color(vec3 baseColor, float blockIdValue, float faceIdValue, v
         color *= 0.97 + dune * 0.05;
         color += vec3(0.06, 0.04, 0.00) * noiseA;
     } else if (blockId == 8) {
-        float ripple = sin((texel.x * 0.8 + texel.y * 0.35) + noiseA * 4.0);
-        color *= 0.92 + ripple * 0.08;
-        color += vec3(0.00, 0.05, 0.08) * noiseB;
+        float ripple = sin((texel.x * 0.7 + texel.y * 0.4) + noiseA * 5.0);
+        color *= 0.90 + ripple * 0.06;
+        color += vec3(0.00, 0.08, 0.14) * noiseB;
     } else if (blockId == 9) {
         float petals = step(0.82, noiseB) + step(0.90, noiseA);
         color *= mix(0.90, 1.16, noiseA);
@@ -180,6 +180,8 @@ float sample_shadow(vec3 normal, vec3 lightDir) {
 void main() {
     vec3 baseColor = material_data.baseColor.rgb;
     int voxelBlockId = int(material_data.surfaceControl.z + 0.5);
+    int voxelFaceId = int(material_data.surfaceControl.w + 0.5);
+    bool waterLike = voxelBlockId == 8;
     if (material_data.surfaceControl.y > 0.5) {
         baseColor = voxel_detail_color(baseColor, material_data.surfaceControl.z, material_data.surfaceControl.w, fragUV);
     }
@@ -189,11 +191,26 @@ void main() {
     int lightCount = int(scene.viewPos.w);
     float upness = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
     bool foliageLike = is_foliage_like(voxelBlockId);
+    if (waterLike) {
+        float wave0 = sin(fragWorldPos.x * 0.28 + fragWorldPos.z * 0.16);
+        float wave1 = cos(fragWorldPos.z * 0.24 - fragWorldPos.x * 0.14);
+        vec3 rippleNormal = normalize(vec3(wave0 * 0.18, 1.0, wave1 * 0.18));
+        float rippleMix = voxelFaceId == 0 ? 0.72 : 0.26;
+        N = normalize(mix(N, rippleNormal, rippleMix));
+        upness = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
+    }
 
     vec3 result = scene.ambient.rgb * scene.ambient.w * baseColor;
-    vec3 skyBounce = mix(vec3(0.06, 0.05, 0.04), vec3(0.22, 0.40, 0.78), upness);
-    result += baseColor * skyBounce * mix(0.05, 0.12, upness);
+    vec3 skyBounce = mix(vec3(0.05, 0.04, 0.04), vec3(0.18, 0.36, 0.76), upness);
+    result += baseColor * skyBounce * mix(0.05, 0.13, upness);
     result += baseColor * vec3(0.08, 0.05, 0.03) * (1.0 - upness) * 0.08;
+    if (waterLike) {
+        vec3 reflectDir = reflect(-V, N);
+        float skyMix = clamp(reflectDir.y * 0.5 + 0.5, 0.0, 1.0);
+        vec3 reflectedSky = mix(vec3(0.92, 0.66, 0.50), vec3(0.18, 0.38, 0.84), pow(skyMix, 0.72));
+        float baseFresnel = pow(1.0 - max(dot(N, V), 0.0), 4.0);
+        result = mix(result * 0.75, reflectedSky, 0.18 + baseFresnel * 0.30);
+    }
 
     for (int i = 0; i < lightCount && i < 16; i++) {
         int lightType = int(scene.lights[i].position.w);
@@ -239,10 +256,20 @@ void main() {
         vec3 H = normalize(L + V);
         float spec = pow(max(dot(N, H), 0.0), 40.0);
         float fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+        if (waterLike) {
+            diff *= voxelFaceId == 0 ? 0.26 : 0.14;
+            spec = pow(max(dot(N, H), 0.0), voxelFaceId == 0 ? 96.0 : 52.0);
+            fresnel = pow(1.0 - max(dot(N, V), 0.0), 4.5);
+        }
 
         vec3 sunTint = mix(lightColor, vec3(1.0, 0.78, 0.48), lightType == 1 ? 0.25 : 0.10);
         vec3 diffuseTerm = baseColor * sunTint * diff * atten * visibility;
         vec3 specularTerm = sunTint * spec * atten * (0.10 + fresnel * 0.06) * visibility;
+        if (waterLike) {
+            diffuseTerm *= 0.75;
+            specularTerm *= voxelFaceId == 0 ? 1.95 : 1.20;
+            specularTerm += sunTint * fresnel * atten * 0.05 * visibility;
+        }
 
         if (foliageLike && lightType == 1) {
             float trans = pow(clamp(1.0 - ndotl, 0.0, 1.0), 1.5) * (0.35 + 0.65 * max(dot(-L, V), 0.0));
@@ -253,8 +280,12 @@ void main() {
         result += specularTerm;
     }
 
-    result *= mix(0.82, 1.00, upness);
-    result = saturate_color(result, material_data.surfaceControl.y > 0.5 ? 1.12 : 1.03);
+    result *= mix(0.80, 1.00, upness);
+    if (waterLike) {
+        result = saturate_color(result, 1.06);
+    } else {
+        result = saturate_color(result, material_data.surfaceControl.y > 0.5 ? 1.14 : 1.03);
+    }
 
     if (scene.fogParams.w > 0.5) {
         float dist = length(scene.viewPos.xyz - fragWorldPos);
@@ -266,6 +297,10 @@ void main() {
         vec3 fogColor = scene.fogColor.rgb;
         float horizonGlow = pow(clamp(1.0 - upness, 0.0, 1.0), 1.5);
         fogColor = mix(fogColor, vec3(0.92, 0.78, 0.62), horizonGlow * 0.05);
+        if (waterLike) {
+            fogColor = mix(fogColor, vec3(0.32, 0.50, 0.76), 0.18);
+            fogFactor *= 0.82;
+        }
         result = mix(result, fogColor, fogFactor);
     }
 

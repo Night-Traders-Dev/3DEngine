@@ -68,6 +68,19 @@ proc _register_block(vw, block_id, name, top_color, side_color, bottom_color):
     vw["palette"][_palette_key(block_id)] = entry
     push(vw["palette_ids"], block_id)
 
+proc voxel_is_water_block(block_id):
+    return block_id == 8
+
+proc voxel_is_collision_block(block_id):
+    return block_id != 0 and voxel_is_water_block(block_id) == false
+
+proc _voxel_neighbor_occludes(block_id, neighbor_block_id):
+    if neighbor_block_id == 0:
+        return false
+    if voxel_is_water_block(block_id):
+        return voxel_is_water_block(neighbor_block_id)
+    return true
+
 proc create_voxel_world(size_x, size_y, size_z):
     let vw = {}
     vw["size_x"] = size_x
@@ -83,16 +96,16 @@ proc create_voxel_world(size_x, size_y, size_z):
         i = i + 1
     vw["palette"] = {}
     vw["palette_ids"] = []
-    _register_block(vw, 1, "Grass", vec3(0.38, 0.70, 0.27), vec3(0.54, 0.38, 0.19), vec3(0.43, 0.28, 0.16))
-    _register_block(vw, 2, "Dirt", vec3(0.56, 0.37, 0.20), vec3(0.50, 0.31, 0.17), vec3(0.40, 0.23, 0.12))
-    _register_block(vw, 3, "Stone", vec3(0.60, 0.64, 0.70), vec3(0.48, 0.52, 0.58), vec3(0.36, 0.39, 0.46))
-    _register_block(vw, 4, "Wood", vec3(0.78, 0.64, 0.34), vec3(0.56, 0.38, 0.20), vec3(0.70, 0.53, 0.26))
-    _register_block(vw, 5, "Leaf", vec3(0.30, 0.58, 0.23), vec3(0.22, 0.46, 0.18), vec3(0.18, 0.36, 0.14))
-    _register_block(vw, 6, "Plank", vec3(0.83, 0.64, 0.33), vec3(0.72, 0.53, 0.24), vec3(0.60, 0.41, 0.18))
-    _register_block(vw, 7, "Sand", vec3(0.88, 0.82, 0.62), vec3(0.80, 0.73, 0.54), vec3(0.67, 0.60, 0.45))
-    _register_block(vw, 8, "Azure Clay", vec3(0.38, 0.53, 0.66), vec3(0.30, 0.43, 0.56), vec3(0.24, 0.34, 0.46))
-    _register_block(vw, 9, "Bloom", vec3(0.84, 0.31, 0.48), vec3(0.72, 0.24, 0.38), vec3(0.58, 0.18, 0.30))
-    _register_block(vw, 10, "Crystal", vec3(0.60, 0.86, 0.96), vec3(0.42, 0.70, 0.88), vec3(0.30, 0.52, 0.72))
+    _register_block(vw, 1, "Grass", vec3(0.32, 0.65, 0.22), vec3(0.47, 0.34, 0.16), vec3(0.39, 0.25, 0.13))
+    _register_block(vw, 2, "Dirt", vec3(0.52, 0.33, 0.18), vec3(0.46, 0.28, 0.15), vec3(0.36, 0.20, 0.10))
+    _register_block(vw, 3, "Stone", vec3(0.56, 0.60, 0.66), vec3(0.44, 0.48, 0.54), vec3(0.33, 0.36, 0.42))
+    _register_block(vw, 4, "Wood", vec3(0.72, 0.56, 0.28), vec3(0.50, 0.33, 0.17), vec3(0.61, 0.45, 0.22))
+    _register_block(vw, 5, "Leaf", vec3(0.22, 0.48, 0.18), vec3(0.15, 0.36, 0.12), vec3(0.11, 0.27, 0.09))
+    _register_block(vw, 6, "Plank", vec3(0.76, 0.58, 0.28), vec3(0.65, 0.46, 0.20), vec3(0.53, 0.35, 0.15))
+    _register_block(vw, 7, "Sand", vec3(0.82, 0.76, 0.56), vec3(0.74, 0.67, 0.49), vec3(0.61, 0.55, 0.40))
+    _register_block(vw, 8, "Water", vec3(0.18, 0.42, 0.70), vec3(0.10, 0.25, 0.54), vec3(0.07, 0.16, 0.36))
+    _register_block(vw, 9, "Bloom", vec3(0.82, 0.29, 0.46), vec3(0.70, 0.22, 0.36), vec3(0.56, 0.17, 0.28))
+    _register_block(vw, 10, "Crystal", vec3(0.56, 0.84, 0.96), vec3(0.39, 0.67, 0.87), vec3(0.27, 0.50, 0.72))
     vw["mesh_data"] = {}
     vw["gpu_meshes"] = {}
     vw["draws"] = []
@@ -405,17 +418,17 @@ proc voxel_is_surface_block(vw, gx, gy, gz):
     let block_id = get_voxel(vw, gx, gy, gz)
     if block_id == 0:
         return false
-    if get_voxel(vw, gx + 1, gy, gz) == 0:
+    if _voxel_neighbor_occludes(block_id, get_voxel(vw, gx + 1, gy, gz)) == false:
         return true
-    if get_voxel(vw, gx - 1, gy, gz) == 0:
+    if _voxel_neighbor_occludes(block_id, get_voxel(vw, gx - 1, gy, gz)) == false:
         return true
-    if get_voxel(vw, gx, gy + 1, gz) == 0:
+    if _voxel_neighbor_occludes(block_id, get_voxel(vw, gx, gy + 1, gz)) == false:
         return true
-    if get_voxel(vw, gx, gy - 1, gz) == 0:
+    if _voxel_neighbor_occludes(block_id, get_voxel(vw, gx, gy - 1, gz)) == false:
         return true
-    if get_voxel(vw, gx, gy, gz + 1) == 0:
+    if _voxel_neighbor_occludes(block_id, get_voxel(vw, gx, gy, gz + 1)) == false:
         return true
-    if get_voxel(vw, gx, gy, gz - 1) == 0:
+    if _voxel_neighbor_occludes(block_id, get_voxel(vw, gx, gy, gz - 1)) == false:
         return true
     return false
 
@@ -462,7 +475,7 @@ proc _template_height(vw, gx, gz, seed):
 proc _find_surface_y(vw, gx, gz):
     let y = vw["size_y"] - 1
     while y >= 0:
-        if get_voxel(vw, gx, y, gz) != 0:
+        if voxel_is_collision_block(get_voxel(vw, gx, y, gz)):
             return y
         y = y - 1
     return -1
@@ -492,9 +505,18 @@ proc _template_bloom_metric(gx, gz, seed):
 proc _template_crystal_metric(gx, gz, seed):
     return math.sin((gx + seed * 3.0) * 0.43) + math.cos((gz - seed * 2.7) * 0.37)
 
+proc _template_water_level(vw, seed):
+    let water_level = 3 + math.floor(seed * 0.0)
+    if water_level < 2:
+        water_level = 2
+    if water_level > vw["size_y"] - 5:
+        water_level = vw["size_y"] - 5
+    return water_level
+
 proc _template_surface_block(vw, gx, gz, h, seed):
     let biome = _template_biome_metric(gx, gz, seed)
-    if h <= 3 or biome > 1.18:
+    let water_level = _template_water_level(vw, seed)
+    if h <= water_level + 1 or biome > 1.18:
         return 7
     if biome < -1.45 and h >= 5:
         return 3
@@ -532,6 +554,8 @@ proc _template_has_tree(vw, gx, gz, seed):
     if metric < 2.15:
         return false
     let surface_y = _template_height(vw, gx, gz, seed) - 1
+    if surface_y <= _template_water_level(vw, seed):
+        return false
     return surface_y + 5 < vw["size_y"]
 
 proc _apply_template_tree_chunk(vw, bounds, gx, gz, seed):
@@ -616,6 +640,7 @@ proc generate_voxel_template_chunk(vw, cx, cy, cz, seed):
     if dict_has(vw["generated_chunks"], chunk_key):
         return false
     let bounds = voxel_chunk_bounds(vw, cx, cy, cz)
+    let water_level = _template_water_level(vw, seed)
     let gx = bounds["x0"]
     while gx < bounds["x1"]:
         let gz = bounds["z0"]
@@ -628,6 +653,9 @@ proc generate_voxel_template_chunk(vw, cx, cy, cz, seed):
                 if y < h:
                     let depth_from_surface = (h - 1) - y
                     block_id = _template_fill_block(surface_block, depth_from_surface)
+                else:
+                    if y <= water_level and surface_block != 10:
+                        block_id = 8
                 _set_voxel_if_in_bounds(vw, gx, y, gz, block_id)
                 y = y + 1
             gz = gz + 1
@@ -1053,22 +1081,22 @@ proc _build_voxel_meshes_range(vw, x0, y0, z0, x1, y1, z1):
                 let block_id = get_voxel(vw, gx, gy, gz)
                 if block_id != 0:
                     let world_min = voxel_block_world_min(vw, gx, gy, gz)
-                    if get_voxel(vw, gx, gy, gz + 1) == 0:
+                    if _voxel_neighbor_occludes(block_id, get_voxel(vw, gx, gy, gz + 1)) == false:
                         let bucket = _mesh_bucket(meshes, block_id, _voxel_face_group("front"))
                         _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "front")
-                    if get_voxel(vw, gx, gy, gz - 1) == 0:
+                    if _voxel_neighbor_occludes(block_id, get_voxel(vw, gx, gy, gz - 1)) == false:
                         let bucket = _mesh_bucket(meshes, block_id, _voxel_face_group("back"))
                         _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "back")
-                    if get_voxel(vw, gx + 1, gy, gz) == 0:
+                    if _voxel_neighbor_occludes(block_id, get_voxel(vw, gx + 1, gy, gz)) == false:
                         let bucket = _mesh_bucket(meshes, block_id, _voxel_face_group("right"))
                         _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "right")
-                    if get_voxel(vw, gx - 1, gy, gz) == 0:
+                    if _voxel_neighbor_occludes(block_id, get_voxel(vw, gx - 1, gy, gz)) == false:
                         let bucket = _mesh_bucket(meshes, block_id, _voxel_face_group("left"))
                         _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "left")
-                    if get_voxel(vw, gx, gy + 1, gz) == 0:
+                    if _voxel_neighbor_occludes(block_id, get_voxel(vw, gx, gy + 1, gz)) == false:
                         let bucket = _mesh_bucket(meshes, block_id, _voxel_face_group("top"))
                         _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "top")
-                    if get_voxel(vw, gx, gy - 1, gz) == 0:
+                    if _voxel_neighbor_occludes(block_id, get_voxel(vw, gx, gy - 1, gz)) == false:
                         let bucket = _mesh_bucket(meshes, block_id, _voxel_face_group("bottom"))
                         _append_voxel_face(bucket, world_min[0], world_min[1], world_min[2], "bottom")
                 gz = gz + 1
@@ -1305,7 +1333,7 @@ proc raycast_voxel_world(vw, origin, direction, max_dist):
 proc voxel_top_solid_y(vw, gx, gz):
     let y = vw["size_y"] - 1
     while y >= 0:
-        if get_voxel(vw, gx, y, gz) != 0:
+        if voxel_is_collision_block(get_voxel(vw, gx, y, gz)):
             return y
         y = y - 1
     return -1
@@ -1349,7 +1377,7 @@ proc voxel_collides_player(vw, pos, radius, height):
         while gy <= max_y:
             let gz = min_z
             while gz <= max_z:
-                if get_voxel(vw, gx, gy, gz) != 0:
+                if voxel_is_collision_block(get_voxel(vw, gx, gy, gz)):
                     return true
                 gz = gz + 1
             gy = gy + 1

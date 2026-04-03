@@ -153,8 +153,8 @@ gpu.set_cursor_mode(gpu.CURSOR_NORMAL)
 # ============================================================================
 let ls = create_light_scene()
 init_light_gpu(ls)
-set_ambient(ls, 0.16, 0.20, 0.30, 0.24)
-set_fog(ls, true, 34.0, 150.0, 0.66, 0.78, 0.95)
+set_ambient(ls, 0.11, 0.14, 0.20, 0.18)
+set_fog(ls, true, 40.0, 160.0, 0.48, 0.63, 0.84)
 ls["fog_density"] = 0.004
 # Force initial UBO upload
 set_view_position(ls, vec3(0.0, 5.0, 10.0))

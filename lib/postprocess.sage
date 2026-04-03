@@ -151,28 +151,28 @@ proc _refresh_postprocess_descriptors(pp):
 
 proc pfx_shaderpack_day(pp):
     pp["tonemap_mode"] = TONEMAP_ACES
-    pp["exposure"] = 1.14
+    pp["exposure"] = 0.92
     pp["gamma"] = 2.2
-    pp["contrast"] = 1.08
-    pp["saturation"] = 1.16
-    pp["warmth"] = 0.08
-    pp["vignette_strength"] = 0.10
+    pp["contrast"] = 1.12
+    pp["saturation"] = 1.20
+    pp["warmth"] = 0.03
+    pp["vignette_strength"] = 0.08
     pp["bloom_enabled"] = true
-    pp["bloom_intensity"] = 0.34
-    pp["bloom_threshold"] = 0.70
-    pp["bloom_soft_knee"] = 0.28
+    pp["bloom_intensity"] = 0.22
+    pp["bloom_threshold"] = 0.88
+    pp["bloom_soft_knee"] = 0.22
     pp["bloom_radius"] = 1.0
-    pp["highlight_saturation"] = 1.10
+    pp["highlight_saturation"] = 1.04
 
 proc pfx_editor_preview(pp):
     pfx_shaderpack_day(pp)
-    pp["exposure"] = 1.04
-    pp["contrast"] = 1.05
-    pp["saturation"] = 1.10
-    pp["warmth"] = 0.05
-    pp["bloom_intensity"] = 0.24
-    pp["bloom_threshold"] = 0.80
-    pp["vignette_strength"] = 0.06
+    pp["exposure"] = 0.86
+    pp["contrast"] = 1.08
+    pp["saturation"] = 1.15
+    pp["warmth"] = 0.01
+    pp["bloom_intensity"] = 0.14
+    pp["bloom_threshold"] = 0.98
+    pp["vignette_strength"] = 0.05
 
 proc create_postprocess(width, height, swapchain_render_pass):
     let pp = {}

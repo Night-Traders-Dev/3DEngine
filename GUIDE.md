@@ -70,7 +70,7 @@ forge-engine/
 ├── shaders/             # GLSL + SPIR-V shaders
 ├── assets/              # Fonts, textures, saved scenes
 ├── examples/            # 9 demo programs
-├── tests/               # 59 test suites, 1,730 checks
+├── tests/               # 59 test suites, 1,735 checks
 └── build/               # Distribution output
     └── dist/            # Self-contained distributable
 ```
@@ -98,7 +98,7 @@ When you launch the editor, a **Project Browser** screen appears before the edit
 | **FPS** | First Person Shooter | Player controller, weapons, health/damage HUD, AI enemies |
 | **RPG** | Role-Playing Game | Third-person camera, inventory, quests, stats/leveling |
 | **Top-Down** | Top-Down Action | Overhead camera, twin-stick controls, projectiles, spawner |
-| **Voxel** | Voxel World | Shared voxel sandbox module, first-class editor voxel world actor, place/break tools, grounded ten-block palette, hotbar/backpack HUD, inventory/crafting/chunk-save loop |
+| **Voxel** | Voxel World | Shared voxel sandbox module, first-class editor voxel world actor, place/break tools, grounded ten-block palette with real water, hotbar/backpack HUD, inventory/crafting/chunk-save loop |
 | **Racing** | Racing Game | Vehicle physics, chase camera, lap timer, speed HUD |
 | **Survival** | Survival | Crafting, hunger/thirst, day-night cycle, buildable shelters |
 | **Sandbox** | Sandbox / Empty | Empty scene with grid, basic lighting, full creative freedom |
@@ -120,7 +120,7 @@ The Forge Editor is a UE5-inspired visual scene editor with floating windows, a 
 
 Press **F1** at any time to see the full keyboard shortcuts overlay.
 
-Choosing the `Voxel` launcher template now seeds a first-class voxel world actor in the editor using the same shared voxel generation rules as the playable sandbox demo. Selected voxel worlds support `SHIFT+LMB/RMB` block editing plus `SHIFT+Z/X` brush cycling in the editor, and the playable voxel sandbox now supports inventory-backed mining/placement, world drops with magnetic pickup collection, a first plank-crafting loop, hostile slime mobs with simple chase/attack behavior, lazy chunk generation, incremental streamed chunk uploads, a grounded ten-block palette with natural terrain colors plus sparse bloom/crystal accents, stable per-material lit color bindings, a real HDR offscreen bloom + tone-map composite for the voxel/editor path, mouse-wheel palette cycling, a shared hotbar/backpack/crafting HUD, plus chunked JSON save/load controls.
+Choosing the `Voxel` launcher template now seeds a first-class voxel world actor in the editor using the same shared voxel generation rules as the playable sandbox demo. Selected voxel worlds support `SHIFT+LMB/RMB` block editing plus `SHIFT+Z/X` brush cycling in the editor, and the playable voxel sandbox now supports inventory-backed mining/placement, world drops with magnetic pickup collection, a first plank-crafting loop, hostile slime mobs with simple chase/attack behavior, lazy chunk generation, incremental streamed chunk uploads, a grounded ten-block palette with natural terrain colors plus real water and sparse bloom/crystal accents, stable per-material lit color bindings, water-aware terrain/collision helpers, a real HDR offscreen bloom + tone-map composite with retuned sky/fog grading for the voxel/editor path, mouse-wheel palette cycling, a shared hotbar/backpack/crafting HUD, plus chunked JSON save/load controls.
 Play-In-Editor now seeds a temporary FPS controller from the current viewport as well, so pressing **ENTER** in the editor gives you real WASD movement and mouse-look for voxel/world validation instead of leaving you in the orbit camera path.
 
 ### Editor Layout
