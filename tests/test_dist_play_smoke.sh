@@ -49,7 +49,7 @@ else
     check_pass
 fi
 
-if rg -q "Applied voxel template scene" "$play_log" && rg -q "Play mode started (auto)" "$play_log"; then
+if rg -F -q "Applied voxel template scene" "$play_log" && rg -F -q "Play mode started (auto)" "$play_log"; then
     check_pass
 else
     cat "$play_log"
