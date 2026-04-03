@@ -191,6 +191,7 @@ void main() {
     int lightCount = int(scene.viewPos.w);
     float upness = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
     bool foliageLike = is_foliage_like(voxelBlockId);
+    float outAlpha = material_data.baseColor.a;
     if (waterLike) {
         float wave0 = sin(fragWorldPos.x * 0.28 + fragWorldPos.z * 0.16);
         float wave1 = cos(fragWorldPos.z * 0.24 - fragWorldPos.x * 0.14);
@@ -210,6 +211,7 @@ void main() {
         vec3 reflectedSky = mix(vec3(0.92, 0.66, 0.50), vec3(0.18, 0.38, 0.84), pow(skyMix, 0.72));
         float baseFresnel = pow(1.0 - max(dot(N, V), 0.0), 4.0);
         result = mix(result * 0.75, reflectedSky, 0.18 + baseFresnel * 0.30);
+        outAlpha = clamp(max(outAlpha, 0.50 + baseFresnel * 0.20), 0.0, 0.86);
     }
 
     for (int i = 0; i < lightCount && i < 16; i++) {
@@ -305,5 +307,5 @@ void main() {
     }
 
     result = max(result - vec3(0.01), vec3(0.0));
-    outColor = vec4(result, material_data.baseColor.a);
+    outColor = vec4(result, outAlpha);
 }

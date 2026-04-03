@@ -74,6 +74,13 @@ proc voxel_is_water_block(block_id):
 proc voxel_is_collision_block(block_id):
     return block_id != 0 and voxel_is_water_block(block_id) == false
 
+proc voxel_draw_is_water(draw):
+    if draw == nil:
+        return false
+    if dict_has(draw, "block_id") == false:
+        return false
+    return voxel_is_water_block(draw["block_id"])
+
 proc _voxel_neighbor_occludes(block_id, neighbor_block_id):
     if neighbor_block_id == 0:
         return false
@@ -238,6 +245,14 @@ proc voxel_block_face_surface(vw, block_id, face_group):
         surface["voxel_texture"] = true
         surface["voxel_block_id"] = block_id + 0.0
         surface["voxel_face_id"] = _voxel_face_texture_id(face_group) + 0.0
+        if voxel_is_water_block(block_id):
+            if face_group == "top":
+                surface["alpha"] = 0.58
+            else:
+                if face_group == "side":
+                    surface["alpha"] = 0.72
+                else:
+                    surface["alpha"] = 0.82
     return surface
 
 proc voxel_in_bounds(vw, gx, gy, gz):

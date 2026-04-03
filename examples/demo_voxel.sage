@@ -20,7 +20,7 @@ from engine_math import make_transform, transform_to_matrix
 from lighting import create_light_scene, directional_light
 from lighting import add_light, set_ambient, set_fog, set_view_position
 from lighting import init_light_gpu, update_light_ubo
-from render_system import create_lit_material, draw_mesh_lit_surface_controlled
+from render_system import create_lit_material, create_lit_material_transparent, draw_mesh_lit_surface_controlled
 from render_system import set_lit_material_shadow_source
 from sky import create_sky, init_sky_gpu, draw_sky, sky_preset_vibrant_day
 from shadow_map import create_shadow_renderer, compute_light_vp_stable
@@ -91,11 +91,13 @@ sky_preset_vibrant_day(sky)
 init_sky_gpu(sky, postprocess["scene_target"]["render_pass"])
 
 let lit_mat = create_lit_material(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
+let lit_water_mat = create_lit_material_transparent(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
 let shadow_renderer = nil
 try:
     shadow_renderer = create_shadow_renderer(2048)
     if shadow_renderer != nil:
         set_lit_material_shadow_source(lit_mat, shadow_renderer)
+        set_lit_material_shadow_source(lit_water_mat, shadow_renderer)
         print "Voxel shadows enabled"
 catch e:
     print "Voxel shadows skipped: " + str(e)
@@ -114,8 +116,10 @@ proc _rebuild_scene_postprocess():
     sky_preset_vibrant_day(sky)
     init_sky_gpu(sky, postprocess["scene_target"]["render_pass"])
     lit_mat = create_lit_material(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
+    lit_water_mat = create_lit_material_transparent(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
     if shadow_renderer != nil:
         set_lit_material_shadow_source(lit_mat, shadow_renderer)
+        set_lit_material_shadow_source(lit_water_mat, shadow_renderer)
 
 # ============================================================================
 # Shared voxel world
@@ -470,7 +474,8 @@ while running:
         let shadow_cmd = begin_shadow_frame(shadow_renderer, light_vp, 0)
         let di = 0
         while di < len(draws):
-            shadow_draw_mesh(shadow_renderer, shadow_cmd, draws[di]["gpu_mesh"], mat4_identity())
+            if draws[di]["block_id"] != 8:
+                shadow_draw_mesh(shadow_renderer, shadow_cmd, draws[di]["gpu_mesh"], mat4_identity())
             di = di + 1
         let mi = 0
         while mi < len(gameplay_state["mobs"]):
@@ -508,7 +513,15 @@ while running:
     let ri = 0
     while ri < len(draws):
         let draw = draws[ri]
-        draw_mesh_lit_surface_controlled(cmd, lit_mat, draw["gpu_mesh"], world_mvp, identity, ls["desc_set"], draw["surface"], true)
+        if draw["block_id"] != 8:
+            draw_mesh_lit_surface_controlled(cmd, lit_mat, draw["gpu_mesh"], world_mvp, identity, ls["desc_set"], draw["surface"], true)
+        ri = ri + 1
+
+    ri = 0
+    while ri < len(draws):
+        let draw = draws[ri]
+        if draw["block_id"] == 8:
+            draw_mesh_lit_surface_controlled(cmd, lit_water_mat, draw["gpu_mesh"], world_mvp, identity, ls["desc_set"], draw["surface"], false)
         ri = ri + 1
 
     let pi = 0

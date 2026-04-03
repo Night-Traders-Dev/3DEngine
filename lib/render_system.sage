@@ -176,7 +176,7 @@ proc get_material(reg, name):
 # ============================================================================
 # Create a lit material (uses SceneUBO for lighting)
 # ============================================================================
-proc create_lit_material(render_pass, desc_layout, desc_set):
+proc _create_lit_material_variant(render_pass, desc_layout, desc_set, blend_enabled, depth_write_enabled, material_name):
     let vert = gpu.load_shader("shaders/engine_lit.vert.spv", gpu.STAGE_VERTEX)
     let frag = gpu.load_shader("shaders/engine_lit.frag.spv", gpu.STAGE_FRAGMENT)
     if vert < 0 or frag < 0:
@@ -199,7 +199,8 @@ proc create_lit_material(render_pass, desc_layout, desc_set):
     cfg["cull_mode"] = gpu.CULL_BACK
     cfg["front_face"] = gpu.FRONT_CCW
     cfg["depth_test"] = true
-    cfg["depth_write"] = true
+    cfg["depth_write"] = depth_write_enabled
+    cfg["blend"] = blend_enabled
     cfg["vertex_bindings"] = [mesh_vertex_binding()]
     cfg["vertex_attribs"] = mesh_vertex_attribs()
     let pipeline = gpu.create_graphics_pipeline(cfg)
@@ -208,7 +209,7 @@ proc create_lit_material(render_pass, desc_layout, desc_set):
         return nil
 
     let mat = {}
-    mat["name"] = "lit"
+    mat["name"] = material_name
     mat["pipeline"] = pipeline
     mat["pipe_layout"] = pipe_layout
     mat["desc_set"] = desc_set
@@ -232,6 +233,12 @@ proc create_lit_material(render_pass, desc_layout, desc_set):
     material_binding["material_key"] = default_key
     mat["material_bindings"][default_key] = material_binding
     return mat
+
+proc create_lit_material(render_pass, desc_layout, desc_set):
+    return _create_lit_material_variant(render_pass, desc_layout, desc_set, false, true, "lit")
+
+proc create_lit_material_transparent(render_pass, desc_layout, desc_set):
+    return _create_lit_material_variant(render_pass, desc_layout, desc_set, true, false, "lit_transparent")
 
 proc set_lit_material_shadow_source(mat, shadow_renderer):
     mat["shadow_source"] = shadow_renderer

@@ -155,7 +155,7 @@ proc generate_game_script(world, scene_name, settings):
     push(L, "from lighting import create_light_scene, directional_light, point_light")
     push(L, "from lighting import add_light, set_ambient, set_view_position")
     push(L, "from lighting import init_light_gpu, update_light_ubo")
-    push(L, "from render_system import create_lit_material, draw_mesh_lit_controlled, draw_mesh_lit_surface_controlled")
+    push(L, "from render_system import create_lit_material, create_lit_material_transparent, draw_mesh_lit_controlled, draw_mesh_lit_surface_controlled")
     push(L, "from render_system import draw_mesh_lit_surface_skinned_controlled")
     push(L, "from render_system import set_lit_material_shadow_source")
     if has_imported_assets:
@@ -299,7 +299,8 @@ proc generate_game_script(world, scene_name, settings):
         push(L, "        let draws = voxel_visible_draws(vw, focus_point[0] - t[" + q + "position" + q + "][0], focus_point[1] - t[" + q + "position" + q + "][1], focus_point[2] - t[" + q + "position" + q + "][2], 1)")
         push(L, "        let di = 0")
         push(L, "        while di < len(draws):")
-        push(L, "            shadow_draw_mesh(shadow_renderer, cmd, draws[di][" + q + "gpu_mesh" + q + "], model)")
+        push(L, "            if draws[di][" + q + "block_id" + q + "] != 8:")
+        push(L, "                shadow_draw_mesh(shadow_renderer, cmd, draws[di][" + q + "gpu_mesh" + q + "], model)")
         push(L, "            di = di + 1")
         push(L, "        vi = vi + 1")
     push(L, "    end_shadow_frame(shadow_renderer, cmd)")
@@ -346,6 +347,8 @@ proc generate_game_script(world, scene_name, settings):
         push(L, "add_light(ls, point_light(5.0, 4.0, 3.0, 1.0, 0.8, 0.6, 3.0, 20.0))")
     push(L, "set_ambient(ls, 0.2, 0.2, 0.25, 0.4)")
     push(L, "let lit_mat = create_lit_material(r[" + q + "render_pass" + q + "], ls[" + q + "desc_layout" + q + "], ls[" + q + "desc_set" + q + "])")
+    if has_voxel_worlds:
+        push(L, "let lit_water_mat = create_lit_material_transparent(r[" + q + "render_pass" + q + "], ls[" + q + "desc_layout" + q + "], ls[" + q + "desc_set" + q + "])")
     if has_imported_assets:
         push(L, "let pbr_renderer = create_pbr_renderer(r[" + q + "render_pass" + q + "], ls[" + q + "desc_layout" + q + "])")
         push(L, "let pbr_sampler = gpu.create_sampler(gpu.FILTER_LINEAR, gpu.FILTER_LINEAR, gpu.ADDRESS_REPEAT)")
@@ -355,6 +358,8 @@ proc generate_game_script(world, scene_name, settings):
     push(L, "    shadow_renderer = create_shadow_renderer(2048)")
     push(L, "    if shadow_renderer != nil:")
     push(L, "        set_lit_material_shadow_source(lit_mat, shadow_renderer)")
+    if has_voxel_worlds:
+        push(L, "        set_lit_material_shadow_source(lit_water_mat, shadow_renderer)")
     if has_imported_assets:
         push(L, "        if pbr_renderer != nil:")
         push(L, "            set_pbr_shadow_source(pbr_renderer, shadow_renderer)")
@@ -614,7 +619,14 @@ proc generate_game_script(world, scene_name, settings):
         push(L, "        let di = 0")
         push(L, "        while di < len(draws):")
         push(L, "            let draw = draws[di]")
-        push(L, "            draw_mesh_lit_surface_controlled(cmd, lit_mat, draw[" + q + "gpu_mesh" + q + "], voxel_mvp, model, ls[" + q + "desc_set" + q + "], draw[" + q + "surface" + q + "], true)")
+        push(L, "            if draw[" + q + "block_id" + q + "] != 8:")
+        push(L, "                draw_mesh_lit_surface_controlled(cmd, lit_mat, draw[" + q + "gpu_mesh" + q + "], voxel_mvp, model, ls[" + q + "desc_set" + q + "], draw[" + q + "surface" + q + "], true)")
+        push(L, "            di = di + 1")
+        push(L, "        di = 0")
+        push(L, "        while di < len(draws):")
+        push(L, "            let draw = draws[di]")
+        push(L, "            if draw[" + q + "block_id" + q + "] == 8:")
+        push(L, "                draw_mesh_lit_surface_controlled(cmd, lit_water_mat, draw[" + q + "gpu_mesh" + q + "], voxel_mvp, model, ls[" + q + "desc_set" + q + "], draw[" + q + "surface" + q + "], false)")
         push(L, "            di = di + 1")
         push(L, "        vri = vri + 1")
     push(L, "    let rl = query(world, [" + q + "transform" + q + ", " + q + "mesh_id" + q + "])")

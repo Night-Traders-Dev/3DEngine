@@ -32,7 +32,7 @@ from mesh import cube_mesh, sphere_mesh, plane_mesh, upload_mesh
 from lighting import create_light_scene, directional_light, point_light
 from lighting import add_light, set_ambient, set_fog, set_view_position
 from lighting import init_light_gpu, update_light_ubo
-from render_system import create_lit_material, draw_mesh_lit, draw_mesh_lit_surface
+from render_system import create_lit_material, create_lit_material_transparent, draw_mesh_lit, draw_mesh_lit_surface
 from render_system import draw_mesh_lit_surface_skinned, draw_mesh_lit_controlled
 from render_system import draw_mesh_lit_surface_controlled, draw_mesh_lit_surface_skinned_controlled
 from render_system import set_lit_material_shadow_source
@@ -162,6 +162,7 @@ update_light_ubo(ls)
 let postprocess = create_postprocess(r["width"], r["height"], r["render_pass"])
 pfx_editor_preview(postprocess)
 let lit_mat = create_lit_material(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
+let lit_water_mat = create_lit_material_transparent(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
 let pbr_renderer = create_pbr_renderer(postprocess["scene_target"]["render_pass"], ls["desc_layout"])
 let pbr_sampler = gpu.create_sampler(gpu.FILTER_LINEAR, gpu.FILTER_LINEAR, gpu.ADDRESS_REPEAT)
 let pbr_fallbacks = create_pbr_fallback_textures()
@@ -189,6 +190,7 @@ try:
     shadow_renderer = create_shadow_renderer(2048)
     if shadow_renderer != nil:
         set_lit_material_shadow_source(lit_mat, shadow_renderer)
+        set_lit_material_shadow_source(lit_water_mat, shadow_renderer)
         if pbr_renderer != nil:
             set_pbr_shadow_source(pbr_renderer, shadow_renderer)
         let shadow_light_vp = compute_light_vp_stable(vec3(-0.3, -0.8, -0.5), vec3(0.0, 0.0, 0.0), 50.0, shadow_renderer["resolution"] + 0.0)
@@ -600,9 +602,11 @@ proc _rebuild_scene_postprocess():
     init_sky_gpu(sky, postprocess["scene_target"]["render_pass"])
     grid = create_editor_grid(postprocess["scene_target"]["render_pass"])
     lit_mat = create_lit_material(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
+    lit_water_mat = create_lit_material_transparent(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
     pbr_renderer = create_pbr_renderer(postprocess["scene_target"]["render_pass"], ls["desc_layout"])
     if shadow_renderer != nil:
         set_lit_material_shadow_source(lit_mat, shadow_renderer)
+        set_lit_material_shadow_source(lit_water_mat, shadow_renderer)
         if pbr_renderer != nil:
             set_pbr_shadow_source(pbr_renderer, shadow_renderer)
     _invalidate_imported_pbr_cache()
@@ -878,7 +882,8 @@ proc _render_shadow_voxel_groups(sr, cmd, voxel_groups):
         let group = voxel_groups[gi]
         let di = 0
         while di < len(group["draws"]):
-            shadow_draw_mesh(sr, cmd, group["draws"][di]["gpu_mesh"], group["model"])
+            if group["draws"][di]["block_id"] != 8:
+                shadow_draw_mesh(sr, cmd, group["draws"][di]["gpu_mesh"], group["model"])
             di = di + 1
         gi = gi + 1
 
@@ -2075,8 +2080,20 @@ while running:
         while di < len(group["draws"]):
             let draw = group["draws"][di]
             let voxel_mvp = mat4_mul(vp, group["model"])
-            draw_mesh_lit_surface_controlled(cmd, lit_mat, draw["gpu_mesh"], voxel_mvp, group["model"], ls["desc_set"], draw["surface"], true)
+            if draw["block_id"] != 8:
+                draw_mesh_lit_surface_controlled(cmd, lit_mat, draw["gpu_mesh"], voxel_mvp, group["model"], ls["desc_set"], draw["surface"], true)
             draw_count = draw_count + 1
+            di = di + 1
+        vri = vri + 1
+    vri = 0
+    while vri < len(voxel_groups):
+        let group = voxel_groups[vri]
+        let di = 0
+        while di < len(group["draws"]):
+            let draw = group["draws"][di]
+            let voxel_mvp = mat4_mul(vp, group["model"])
+            if draw["block_id"] == 8:
+                draw_mesh_lit_surface_controlled(cmd, lit_water_mat, draw["gpu_mesh"], voxel_mvp, group["model"], ls["desc_set"], draw["surface"], false)
             di = di + 1
         vri = vri + 1
 
