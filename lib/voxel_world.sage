@@ -83,16 +83,16 @@ proc create_voxel_world(size_x, size_y, size_z):
         i = i + 1
     vw["palette"] = {}
     vw["palette_ids"] = []
-    _register_block(vw, 1, "Grass", vec3(0.28, 0.86, 0.16), vec3(0.52, 0.43, 0.18), vec3(0.56, 0.34, 0.16))
-    _register_block(vw, 2, "Dirt", vec3(0.66, 0.42, 0.18), vec3(0.58, 0.34, 0.16), vec3(0.48, 0.27, 0.12))
-    _register_block(vw, 3, "Stone", vec3(0.64, 0.70, 0.78), vec3(0.52, 0.58, 0.66), vec3(0.38, 0.42, 0.50))
-    _register_block(vw, 4, "Wood", vec3(0.84, 0.66, 0.28), vec3(0.66, 0.42, 0.18), vec3(0.76, 0.56, 0.26))
-    _register_block(vw, 5, "Leaf", vec3(0.24, 0.74, 0.16), vec3(0.19, 0.60, 0.14), vec3(0.16, 0.48, 0.12))
-    _register_block(vw, 6, "Plank", vec3(0.90, 0.72, 0.36), vec3(0.80, 0.58, 0.24), vec3(0.68, 0.46, 0.20))
-    _register_block(vw, 7, "Sand", vec3(0.95, 0.86, 0.48), vec3(0.88, 0.76, 0.40), vec3(0.79, 0.67, 0.34))
-    _register_block(vw, 8, "Azure Clay", vec3(0.38, 0.72, 0.82), vec3(0.30, 0.58, 0.72), vec3(0.24, 0.46, 0.60))
-    _register_block(vw, 9, "Bloom", vec3(0.92, 0.42, 0.70), vec3(0.78, 0.28, 0.56), vec3(0.62, 0.22, 0.44))
-    _register_block(vw, 10, "Crystal", vec3(0.58, 0.88, 1.00), vec3(0.42, 0.70, 0.96), vec3(0.34, 0.54, 0.86))
+    _register_block(vw, 1, "Grass", vec3(0.38, 0.70, 0.27), vec3(0.54, 0.38, 0.19), vec3(0.43, 0.28, 0.16))
+    _register_block(vw, 2, "Dirt", vec3(0.56, 0.37, 0.20), vec3(0.50, 0.31, 0.17), vec3(0.40, 0.23, 0.12))
+    _register_block(vw, 3, "Stone", vec3(0.60, 0.64, 0.70), vec3(0.48, 0.52, 0.58), vec3(0.36, 0.39, 0.46))
+    _register_block(vw, 4, "Wood", vec3(0.78, 0.64, 0.34), vec3(0.56, 0.38, 0.20), vec3(0.70, 0.53, 0.26))
+    _register_block(vw, 5, "Leaf", vec3(0.30, 0.58, 0.23), vec3(0.22, 0.46, 0.18), vec3(0.18, 0.36, 0.14))
+    _register_block(vw, 6, "Plank", vec3(0.83, 0.64, 0.33), vec3(0.72, 0.53, 0.24), vec3(0.60, 0.41, 0.18))
+    _register_block(vw, 7, "Sand", vec3(0.88, 0.82, 0.62), vec3(0.80, 0.73, 0.54), vec3(0.67, 0.60, 0.45))
+    _register_block(vw, 8, "Azure Clay", vec3(0.38, 0.53, 0.66), vec3(0.30, 0.43, 0.56), vec3(0.24, 0.34, 0.46))
+    _register_block(vw, 9, "Bloom", vec3(0.84, 0.31, 0.48), vec3(0.72, 0.24, 0.38), vec3(0.58, 0.18, 0.30))
+    _register_block(vw, 10, "Crystal", vec3(0.60, 0.86, 0.96), vec3(0.42, 0.70, 0.88), vec3(0.30, 0.52, 0.72))
     vw["mesh_data"] = {}
     vw["gpu_meshes"] = {}
     vw["draws"] = []
@@ -494,14 +494,10 @@ proc _template_crystal_metric(gx, gz, seed):
 
 proc _template_surface_block(vw, gx, gz, h, seed):
     let biome = _template_biome_metric(gx, gz, seed)
-    if h <= 3 and biome > 1.05:
+    if h <= 3 or biome > 1.18:
         return 7
-    if biome < -1.15:
-        return 8
-    if h >= 6 and _template_crystal_metric(gx, gz, seed) > 1.68:
-        return 10
-    if h >= 4 and _template_bloom_metric(gx, gz, seed) > 1.72:
-        return 9
+    if biome < -1.45 and h >= 5:
+        return 3
     return 1
 
 proc _template_fill_block(surface_block, depth_from_surface):
@@ -568,19 +564,25 @@ proc _apply_template_color_feature_chunk(vw, bounds, gx, gz, seed):
     if ground_y < 0 or ground_y + 1 >= vw["size_y"]:
         return false
     let surface_block = get_voxel(vw, gx, ground_y, gz)
-    if surface_block != 10:
-        return false
-    let metric = _template_crystal_metric(gx, gz, seed)
-    let spike_height = 1 + math.floor((metric - 1.68) * 2.2)
-    if spike_height < 1:
-        spike_height = 1
-    if spike_height > 3:
-        spike_height = 3
-    let i = 1
-    while i <= spike_height and ground_y + i < vw["size_y"]:
-        _set_voxel_if_in_chunk(vw, bounds, gx, ground_y + i, gz, 10)
-        i = i + 1
-    return true
+    if surface_block == 1:
+        let bloom_metric = _template_bloom_metric(gx, gz, seed)
+        if bloom_metric > 2.48:
+            _set_voxel_if_in_chunk(vw, bounds, gx, ground_y + 1, gz, 9)
+            return true
+    if surface_block == 3:
+        let crystal_metric = _template_crystal_metric(gx, gz, seed)
+        if crystal_metric > 2.58:
+            let spike_height = 1 + math.floor((crystal_metric - 2.58) * 1.6)
+            if spike_height < 1:
+                spike_height = 1
+            if spike_height > 2:
+                spike_height = 2
+            let i = 1
+            while i <= spike_height and ground_y + i < vw["size_y"]:
+                _set_voxel_if_in_chunk(vw, bounds, gx, ground_y + i, gz, 10)
+                i = i + 1
+            return true
+    return false
 
 proc _add_template_tree(vw, gx, gz):
     let ground_y = _find_surface_y(vw, gx, gz)

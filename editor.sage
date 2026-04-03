@@ -14,7 +14,7 @@
 import gpu
 import math
 import sys
-from renderer import create_renderer, begin_frame, end_frame
+from renderer import create_renderer, begin_frame_commands, begin_swapchain_pass, end_frame
 from renderer import shutdown_renderer, check_resize, update_title_fps
 from launch_screen import run_launch_screen
 from ecs import create_world, spawn, add_component, get_component
@@ -102,6 +102,8 @@ from voxel_world import voxel_block_surface, voxel_block_name, voxel_is_surface_
 from voxel_world import voxel_palette_ids, voxel_visible_draws, raycast_voxel_world
 from voxel_world import voxel_generated_chunk_count, voxel_chunk_size
 from voxel_world import sample_voxel_ground_radius, resolve_player_voxel_collision
+from postprocess import create_postprocess, recreate_postprocess, begin_scene_pass, end_scene_pass
+from postprocess import run_bloom_chain, draw_tonemap, pfx_editor_preview
 import io
 
 print "=== Forge Engine Editor ==="
@@ -157,17 +159,19 @@ ls["fog_density"] = 0.004
 # Force initial UBO upload
 set_view_position(ls, vec3(0.0, 5.0, 10.0))
 update_light_ubo(ls)
-let lit_mat = create_lit_material(r["render_pass"], ls["desc_layout"], ls["desc_set"])
-let pbr_renderer = create_pbr_renderer(r["render_pass"], ls["desc_layout"])
+let postprocess = create_postprocess(r["width"], r["height"], r["render_pass"])
+pfx_editor_preview(postprocess)
+let lit_mat = create_lit_material(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
+let pbr_renderer = create_pbr_renderer(postprocess["scene_target"]["render_pass"], ls["desc_layout"])
 let pbr_sampler = gpu.create_sampler(gpu.FILTER_LINEAR, gpu.FILTER_LINEAR, gpu.ADDRESS_REPEAT)
 let pbr_fallbacks = create_pbr_fallback_textures()
 
 let sky = create_sky()
 sky_preset_vibrant_day(sky)
-init_sky_gpu(sky, r["render_pass"])
+init_sky_gpu(sky, postprocess["scene_target"]["render_pass"])
 
 # Editor grid (Unreal-style ground grid)
-let grid = create_editor_grid(r["render_pass"])
+let grid = create_editor_grid(postprocess["scene_target"]["render_pass"])
 
 # Post-processing effects (subtle vignette for cinematic viewport)
 let editor_postfx = create_postfx()
@@ -573,6 +577,35 @@ proc _ensure_imported_pbr_materials(asset):
         i = i + 1
     asset["pbr_materials"] = built
     return built
+
+proc _invalidate_imported_pbr_cache():
+    let model_keys = dict_keys(imported_models)
+    let mi = 0
+    while mi < len(model_keys):
+        imported_models[model_keys[mi]]["pbr_materials"] = []
+        mi = mi + 1
+    let imported_ids = query(world, ["imported_asset"])
+    mi = 0
+    while mi < len(imported_ids):
+        let asset = get_component(world, imported_ids[mi], "imported_asset")
+        if asset != nil:
+            asset["pbr_materials"] = []
+        mi = mi + 1
+
+proc _rebuild_scene_postprocess():
+    postprocess = recreate_postprocess(postprocess, r["width"], r["height"], r["render_pass"])
+    pfx_editor_preview(postprocess)
+    sky = create_sky()
+    sky_preset_vibrant_day(sky)
+    init_sky_gpu(sky, postprocess["scene_target"]["render_pass"])
+    grid = create_editor_grid(postprocess["scene_target"]["render_pass"])
+    lit_mat = create_lit_material(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
+    pbr_renderer = create_pbr_renderer(postprocess["scene_target"]["render_pass"], ls["desc_layout"])
+    if shadow_renderer != nil:
+        set_lit_material_shadow_source(lit_mat, shadow_renderer)
+        if pbr_renderer != nil:
+            set_pbr_shadow_source(pbr_renderer, shadow_renderer)
+    _invalidate_imported_pbr_cache()
 
 proc _update_imported_animation_states(w, dt):
     let animated = query(w, ["imported_asset", "animation_state"])
@@ -1062,7 +1095,8 @@ while running:
         running = false
         continue
     # Handle resize after events are processed
-    check_resize(r)
+    if check_resize(r):
+        _rebuild_scene_postprocess()
     let cur_w = r["width"] + 0.0
     let cur_h = r["height"] + 0.0
     if cur_w < 1.0 or cur_h < 1.0:
@@ -1960,7 +1994,7 @@ while running:
                 sri = sri + 1
             _render_shadow_voxel_groups(shadow_renderer, shadow_cmd, voxel_groups)
             end_shadow_frame(shadow_renderer, shadow_cmd)
-    let frame = begin_frame(r)
+    let frame = begin_frame_commands(r)
     if frame == nil:
         # Frame failed (resize/minimize) - skip but don't quit
         continue
@@ -1977,6 +2011,7 @@ while running:
     let sw = r["width"] + 0.0
     let sh = r["height"] + 0.0
 
+    begin_scene_pass(postprocess, cmd, r["clear_color"])
     # Sky dome (behind everything)
     draw_sky(sky, cmd, view, aspect, 60.0, ts["elapsed"])
     # Editor grid overlay
@@ -2057,6 +2092,11 @@ while running:
             let gmvp = mat4_mul(vp, gmodel)
             draw_mesh_lit(cmd, lit_mat, cube_gpu, gmvp, gmodel, ls["desc_set"])
             gi = gi + 1
+
+    end_scene_pass(cmd)
+    run_bloom_chain(postprocess, cmd)
+    begin_swapchain_pass(r, frame)
+    draw_tonemap(cmd, postprocess)
 
 
     # --- Editor UI (TrueType font rendering) ---

@@ -38,15 +38,6 @@ float fbm(vec2 p) {
     return v;
 }
 
-vec3 aces_filmic(vec3 x) {
-    float a = 2.51;
-    float b = 0.03;
-    float c = 2.43;
-    float d = 0.59;
-    float e = 0.14;
-    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-}
-
 void main() {
     vec2 uv = fragUV * 2.0 - 1.0;
     uv.x *= sky.params.x;
@@ -92,7 +83,5 @@ void main() {
     skyCol += sunColor * sunGlow * 0.8;
     skyCol += vec3(1.00, 0.72, 0.48) * wideGlow * 0.7;
 
-    skyCol = aces_filmic(skyCol * 0.96);
-    skyCol = pow(skyCol, vec3(1.0 / 2.2));
     outColor = vec4(skyCol, 1.0);
 }

@@ -98,9 +98,9 @@ proc create_renderer(width, height, title):
     return r
 
 # ============================================================================
-# Begin frame - returns dict with cmd, image_index, time, or nil if should close
+# Internal frame acquisition - returns dict with cmd, image_index, time, or nil
 # ============================================================================
-proc begin_frame(r):
+proc begin_frame_commands(r):
     if gpu.window_should_close():
         return nil
     gpu.poll_events()
@@ -136,6 +136,26 @@ proc begin_frame(r):
     frame["image_index"] = img_idx
     frame["time"] = t
     frame["current_frame"] = cf
+    return frame
+
+proc begin_swapchain_pass(r, frame):
+    if frame == nil:
+        return nil
+    let cmd = frame["cmd"]
+    let img_idx = frame["image_index"]
+    gpu.cmd_begin_render_pass(cmd, r["render_pass"], r["framebuffers"][img_idx], [r["clear_color"], [1.0, 0.0, 0.0, 0.0]])
+    gpu.cmd_set_viewport(cmd, 0, 0, r["width"], r["height"], 0.0, 1.0)
+    gpu.cmd_set_scissor(cmd, 0, 0, r["width"], r["height"])
+    return cmd
+
+# ============================================================================
+# Begin frame - returns dict with cmd, image_index, time, or nil if should close
+# ============================================================================
+proc begin_frame(r):
+    let frame = begin_frame_commands(r)
+    if frame == nil:
+        return nil
+    begin_swapchain_pass(r, frame)
     return frame
 
 # ============================================================================

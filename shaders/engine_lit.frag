@@ -46,37 +46,28 @@ vec3 saturate_color(vec3 color, float amount) {
     return mix(vec3(lum), color, amount);
 }
 
-vec3 aces_filmic(vec3 x) {
-    float a = 2.51;
-    float b = 0.03;
-    float c = 2.43;
-    float d = 0.59;
-    float e = 0.14;
-    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-}
-
 bool is_foliage_like(int blockId) {
     return blockId == 1 || blockId == 5 || blockId == 9 || blockId == 10;
 }
 
 vec3 voxel_palette_color(int blockId, int faceId, vec3 fallbackColor) {
     if (blockId == 1) {
-        if (faceId == 0) return vec3(0.25, 0.76, 0.19);
-        if (faceId == 2) return vec3(0.44, 0.28, 0.12);
-        return vec3(0.55, 0.39, 0.16);
+        if (faceId == 0) return vec3(0.34, 0.67, 0.24);
+        if (faceId == 2) return vec3(0.42, 0.27, 0.15);
+        return vec3(0.52, 0.38, 0.18);
     }
-    if (blockId == 2) return vec3(0.56, 0.33, 0.15);
-    if (blockId == 3) return vec3(0.54, 0.61, 0.70);
+    if (blockId == 2) return vec3(0.50, 0.31, 0.17);
+    if (blockId == 3) return vec3(0.50, 0.54, 0.60);
     if (blockId == 4) {
-        if (faceId == 1) return vec3(0.49, 0.31, 0.14);
-        return vec3(0.73, 0.55, 0.24);
+        if (faceId == 1) return vec3(0.54, 0.36, 0.19);
+        return vec3(0.72, 0.56, 0.28);
     }
-    if (blockId == 5) return vec3(0.18, 0.56, 0.15);
-    if (blockId == 6) return vec3(0.78, 0.57, 0.27);
-    if (blockId == 7) return vec3(0.90, 0.79, 0.46);
-    if (blockId == 8) return vec3(0.34, 0.64, 0.82);
-    if (blockId == 9) return vec3(0.88, 0.30, 0.63);
-    if (blockId == 10) return vec3(0.46, 0.86, 1.00);
+    if (blockId == 5) return vec3(0.24, 0.49, 0.19);
+    if (blockId == 6) return vec3(0.74, 0.55, 0.27);
+    if (blockId == 7) return vec3(0.84, 0.77, 0.57);
+    if (blockId == 8) return vec3(0.34, 0.47, 0.60);
+    if (blockId == 9) return vec3(0.80, 0.30, 0.47);
+    if (blockId == 10) return vec3(0.54, 0.82, 0.94);
     return fallbackColor;
 }
 
@@ -279,7 +270,5 @@ void main() {
     }
 
     result = max(result - vec3(0.01), vec3(0.0));
-    result = aces_filmic(result * 0.88);
-    result = pow(result, vec3(1.0 / 2.2));
     outColor = vec4(result, material_data.baseColor.a);
 }

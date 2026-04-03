@@ -179,8 +179,5 @@ void main() {
         color = mix(color, scene.fogColor.rgb, fogFactor);
     }
 
-    // Reinhard tone mapping + gamma
-    color = color / (color + vec3(1.0));
-    color = pow(color, vec3(1.0 / 2.2));
     outColor = vec4(color, albedoSample.a * pc.baseColor.a);
 }

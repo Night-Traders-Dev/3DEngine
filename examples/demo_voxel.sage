@@ -11,7 +11,7 @@
 import gpu
 import math
 import io
-from renderer import create_renderer, begin_frame, end_frame
+from renderer import create_renderer, begin_frame_commands, begin_swapchain_pass, end_frame
 from renderer import shutdown_renderer, check_resize, update_title_fps
 from input import create_input, update_input, bind_action
 from input import action_just_pressed, default_fps_bindings, scroll_value
@@ -53,6 +53,8 @@ from voxel_gameplay import spawn_voxel_mob, ensure_voxel_mob_population, update_
 from voxel_gameplay import find_target_voxel_mob, collect_dead_voxel_mobs
 from voxel_gameplay import voxel_pickup_count, voxel_alive_mob_count, mob_draw_position
 from voxel_gameplay import voxel_gameplay_to_sage, voxel_gameplay_from_sage
+from postprocess import create_postprocess, recreate_postprocess, begin_scene_pass, end_scene_pass
+from postprocess import run_bloom_chain, draw_tonemap, pfx_shaderpack_day
 
 print "=== Forge Engine - Voxel Template Sandbox ==="
 
@@ -81,11 +83,14 @@ set_ambient(ls, 0.14, 0.18, 0.28, 0.24)
 set_fog(ls, true, 30.0, 140.0, 0.66, 0.78, 0.95)
 ls["fog_density"] = 0.004
 
+let postprocess = create_postprocess(r["width"], r["height"], r["render_pass"])
+pfx_shaderpack_day(postprocess)
+
 let sky = create_sky()
 sky_preset_vibrant_day(sky)
-init_sky_gpu(sky, r["render_pass"])
+init_sky_gpu(sky, postprocess["scene_target"]["render_pass"])
 
-let lit_mat = create_lit_material(r["render_pass"], ls["desc_layout"], ls["desc_set"])
+let lit_mat = create_lit_material(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
 let shadow_renderer = nil
 try:
     shadow_renderer = create_shadow_renderer(2048)
@@ -101,6 +106,16 @@ catch e:
 let font_r = create_font_renderer(r["render_pass"])
 load_font(font_r, "ui", "assets/DejaVuSans.ttf", 18.0)
 let ui_renderer = create_ui_renderer(r["render_pass"])
+
+proc _rebuild_scene_postprocess():
+    postprocess = recreate_postprocess(postprocess, r["width"], r["height"], r["render_pass"])
+    pfx_shaderpack_day(postprocess)
+    sky = create_sky()
+    sky_preset_vibrant_day(sky)
+    init_sky_gpu(sky, postprocess["scene_target"]["render_pass"])
+    lit_mat = create_lit_material(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
+    if shadow_renderer != nil:
+        set_lit_material_shadow_source(lit_mat, shadow_renderer)
 
 # ============================================================================
 # Shared voxel world
@@ -274,7 +289,8 @@ while running:
         status_timer[0] = status_timer[0] - dt
         if status_timer[0] < 0.0:
             status_timer[0] = 0.0
-    check_resize(r)
+    if check_resize(r):
+        _rebuild_scene_postprocess()
     update_input(inp)
 
     if action_just_pressed(inp, "quit"):
@@ -470,7 +486,7 @@ while running:
     if gpu.window_should_close():
         running = false
         continue
-    let frame = begin_frame(r)
+    let frame = begin_frame_commands(r)
     if frame == nil:
         # Transient resize/minimize/swapchain blip - skip this frame
         continue
@@ -486,6 +502,7 @@ while running:
     let sh = r["height"] + 0.0
     update_voxel_hud(voxel_hud, voxel, inventory, selected_block[0], inventory_open[0], recipes, sw, sh)
 
+    begin_scene_pass(postprocess, cmd, r["clear_color"])
     draw_sky(sky, cmd, view, aspect, radians(player["fov"]), ts["total"])
 
     let ri = 0
@@ -528,6 +545,11 @@ while running:
         let highlight_model = transform_to_matrix(highlight_t)
         let highlight_mvp = mat4_mul(vp, highlight_model)
         draw_mesh_lit_surface_controlled(cmd, lit_mat, cube_gpu, highlight_mvp, highlight_model, ls["desc_set"], _highlight_surface(), false)
+
+    end_scene_pass(cmd)
+    run_bloom_chain(postprocess, cmd)
+    begin_swapchain_pass(r, frame)
+    draw_tonemap(cmd, postprocess)
 
     let player_chunk = voxel_chunk_coords_world(voxel, player["position"][0], player["position"][1], player["position"][2])
     draw_ui(ui_renderer, cmd, voxel_hud["root"], sw, sh)
