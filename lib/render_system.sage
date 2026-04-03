@@ -15,7 +15,7 @@ let SKIN_UBO_FLOATS = MAX_SKIN_JOINTS * 16
 let SKIN_UBO_BYTES = SKIN_UBO_FLOATS * 4
 let SHADOW_UBO_FLOATS = 20
 let SHADOW_UBO_BYTES = SHADOW_UBO_FLOATS * 4
-let LIT_MATERIAL_UBO_FLOATS = 8
+let LIT_MATERIAL_UBO_FLOATS = 12
 let LIT_MATERIAL_UBO_BYTES = LIT_MATERIAL_UBO_FLOATS * 4
 
 proc _create_skin_binding():
@@ -90,7 +90,7 @@ proc _update_shadow_binding(binding):
     gpu.update_uniform(binding["ubo"], build_shadow_uniform_data(light_vp, enabled, resolution, light_index))
     return binding["ubo"]
 
-proc build_lit_material_uniform_data(base_color, receive_shadows, texture_info):
+proc build_lit_material_uniform_data(base_color, receive_shadows, texture_info, scene_color_enabled):
     let color = [0.75, 0.75, 0.75, 1.0]
     if base_color != nil:
         color = base_color
@@ -107,7 +107,10 @@ proc build_lit_material_uniform_data(base_color, receive_shadows, texture_info):
             texture_block_id = texture_info[1]
         if len(texture_info) > 2:
             texture_face_id = texture_info[2]
-    return [color[0], color[1], color[2], color[3], receive_flag, texture_enabled, texture_block_id, texture_face_id]
+    let scene_color_flag = 0.0
+    if scene_color_enabled:
+        scene_color_flag = 1.0
+    return [color[0], color[1], color[2], color[3], receive_flag, texture_enabled, texture_block_id, texture_face_id, scene_color_flag, 0.0, 0.0, 0.0]
 
 proc _create_lit_material_binding():
     let b0 = {}
@@ -115,26 +118,48 @@ proc _create_lit_material_binding():
     b0["type"] = gpu.DESC_UNIFORM_BUFFER
     b0["stage"] = gpu.STAGE_FRAGMENT
     b0["count"] = 1
-    let layout = gpu.create_descriptor_layout([b0])
+    let b1 = {}
+    b1["binding"] = 1
+    b1["type"] = gpu.DESC_COMBINED_SAMPLER
+    b1["stage"] = gpu.STAGE_FRAGMENT
+    b1["count"] = 1
+    let layout = gpu.create_descriptor_layout([b0, b1])
     let ps0 = {}
     ps0["type"] = gpu.DESC_UNIFORM_BUFFER
     ps0["count"] = 1
-    let pool = gpu.create_descriptor_pool(1, [ps0])
+    let ps1 = {}
+    ps1["type"] = gpu.DESC_COMBINED_SAMPLER
+    ps1["count"] = 1
+    let pool = gpu.create_descriptor_pool(1, [ps0, ps1])
     let desc_set = gpu.allocate_descriptor_set(pool, layout)
     let ubo = gpu.create_uniform_buffer(LIT_MATERIAL_UBO_BYTES)
+    let dummy_image = gpu.create_image(1, 1, 1, gpu.FORMAT_RGBA8, gpu.IMAGE_SAMPLED | gpu.IMAGE_TRANSFER_DST)
+    let dummy_sampler = gpu.create_sampler(gpu.FILTER_LINEAR, gpu.FILTER_LINEAR, gpu.ADDRESS_CLAMP_EDGE)
     gpu.update_descriptor(desc_set, 0, gpu.DESC_UNIFORM_BUFFER, ubo)
-    gpu.update_uniform(ubo, build_lit_material_uniform_data(nil, true, nil))
-    return {"layout": layout, "pool": pool, "desc_set": desc_set, "ubo": ubo}
+    gpu.update_descriptor_image(desc_set, 1, dummy_image, dummy_sampler)
+    gpu.update_uniform(ubo, build_lit_material_uniform_data(nil, true, nil, false))
+    return {"layout": layout, "pool": pool, "desc_set": desc_set, "ubo": ubo, "dummy_image": dummy_image, "dummy_sampler": dummy_sampler}
 
-proc _update_lit_material_binding(binding, base_color, receive_shadows, texture_info):
+proc _update_lit_material_binding(binding, base_color, receive_shadows, texture_info, scene_color_image, scene_color_sampler):
     if binding == nil or dict_has(binding, "ubo") == false:
         return nil
-    let data = build_lit_material_uniform_data(base_color, receive_shadows, texture_info)
+    binding["base_color"] = base_color
+    binding["receive_shadows"] = receive_shadows
+    binding["texture_info"] = texture_info
+    let scene_color_enabled = scene_color_image != nil and scene_color_image >= 0
+    let data = build_lit_material_uniform_data(base_color, receive_shadows, texture_info, scene_color_enabled)
     gpu.update_uniform(binding["ubo"], data)
+    let image = binding["dummy_image"]
+    let sampler = binding["dummy_sampler"]
+    if scene_color_image != nil and scene_color_image >= 0:
+        image = scene_color_image
+        if scene_color_sampler != nil and scene_color_sampler >= 0:
+            sampler = scene_color_sampler
+    gpu.update_descriptor_image(binding["desc_set"], 1, image, sampler)
     return binding["ubo"]
 
 proc _lit_material_binding_key(base_color, receive_shadows, texture_info):
-    let data = build_lit_material_uniform_data(base_color, receive_shadows, texture_info)
+    let data = build_lit_material_uniform_data(base_color, receive_shadows, texture_info, false)
     let key = ""
     let i = 0
     while i < len(data):
@@ -149,10 +174,12 @@ proc _get_lit_material_binding(mat, base_color, receive_shadows, texture_info):
         mat["material_bindings"] = {}
     let key = _lit_material_binding_key(base_color, receive_shadows, texture_info)
     if dict_has(mat["material_bindings"], key):
-        return mat["material_bindings"][key]
+        let existing = mat["material_bindings"][key]
+        _update_lit_material_binding(existing, base_color, receive_shadows, texture_info, mat["scene_color_image"], mat["scene_color_sampler"])
+        return existing
     let binding = _create_lit_material_binding()
     binding["material_key"] = key
-    _update_lit_material_binding(binding, base_color, receive_shadows, texture_info)
+    _update_lit_material_binding(binding, base_color, receive_shadows, texture_info, mat["scene_color_image"], mat["scene_color_sampler"])
     mat["material_bindings"][key] = binding
     return binding
 
@@ -225,12 +252,15 @@ proc _create_lit_material_variant(render_pass, desc_layout, desc_set, blend_enab
     mat["shadow_dummy_sampler"] = shadow_binding["dummy_sampler"]
     mat["shadow_source"] = nil
     mat["material_layout"] = material_binding["layout"]
+    mat["scene_color_image"] = nil
+    mat["scene_color_sampler"] = nil
     mat["material_bindings"] = {}
     mat["vert"] = vert
     mat["frag"] = frag
     _update_shadow_binding(mat)
     let default_key = _lit_material_binding_key(nil, true, nil)
     material_binding["material_key"] = default_key
+    _update_lit_material_binding(material_binding, nil, true, nil, nil, nil)
     mat["material_bindings"][default_key] = material_binding
     return mat
 
@@ -244,6 +274,30 @@ proc set_lit_material_shadow_source(mat, shadow_renderer):
     mat["shadow_source"] = shadow_renderer
     _update_shadow_binding(mat)
     return shadow_renderer
+
+proc set_lit_material_scene_color_source(mat, image, sampler):
+    if mat == nil:
+        return nil
+    mat["scene_color_image"] = image
+    mat["scene_color_sampler"] = sampler
+    if dict_has(mat, "material_bindings") == false or mat["material_bindings"] == nil:
+        return image
+    let keys = dict_keys(mat["material_bindings"])
+    let i = 0
+    while i < len(keys):
+        let binding = mat["material_bindings"][keys[i]]
+        let base_color = nil
+        let receive_shadows = true
+        let texture_info = nil
+        if dict_has(binding, "base_color"):
+            base_color = binding["base_color"]
+        if dict_has(binding, "receive_shadows"):
+            receive_shadows = binding["receive_shadows"]
+        if dict_has(binding, "texture_info"):
+            texture_info = binding["texture_info"]
+        _update_lit_material_binding(binding, base_color, receive_shadows, texture_info, image, sampler)
+        i = i + 1
+    return image
 
 # ============================================================================
 # Create an unlit material (flat color, no lighting)

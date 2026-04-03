@@ -21,7 +21,7 @@ from lighting import create_light_scene, directional_light
 from lighting import add_light, set_ambient, set_fog, set_view_position, set_scene_time
 from lighting import init_light_gpu, update_light_ubo
 from render_system import create_lit_material, create_lit_material_transparent, draw_mesh_lit_surface_controlled
-from render_system import set_lit_material_shadow_source
+from render_system import set_lit_material_shadow_source, set_lit_material_scene_color_source
 from sky import create_sky, init_sky_gpu, draw_sky, sky_preset_vibrant_day
 from shadow_map import create_shadow_renderer, compute_light_vp_stable
 from shadow_map import begin_shadow_frame, end_shadow_frame, shadow_draw_mesh
@@ -54,6 +54,7 @@ from voxel_gameplay import find_target_voxel_mob, collect_dead_voxel_mobs
 from voxel_gameplay import voxel_pickup_count, voxel_alive_mob_count, mob_draw_position
 from voxel_gameplay import voxel_gameplay_to_sage, voxel_gameplay_from_sage
 from postprocess import create_postprocess, recreate_postprocess, begin_scene_pass, end_scene_pass
+from postprocess import begin_transparent_scene_pass, end_transparent_scene_pass, copy_scene_color
 from postprocess import run_bloom_chain, draw_tonemap, pfx_shaderpack_day
 
 print "=== Forge Engine - Voxel Template Sandbox ==="
@@ -91,7 +92,8 @@ sky_preset_vibrant_day(sky)
 init_sky_gpu(sky, postprocess["scene_target"]["render_pass"])
 
 let lit_mat = create_lit_material(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
-let lit_water_mat = create_lit_material_transparent(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
+let lit_water_mat = create_lit_material_transparent(postprocess["scene_target"]["load_render_pass"], ls["desc_layout"], ls["desc_set"])
+set_lit_material_scene_color_source(lit_water_mat, postprocess["scene_copy"]["image"], postprocess["sampler"])
 let shadow_renderer = nil
 try:
     shadow_renderer = create_shadow_renderer(2048)
@@ -116,7 +118,8 @@ proc _rebuild_scene_postprocess():
     sky_preset_vibrant_day(sky)
     init_sky_gpu(sky, postprocess["scene_target"]["render_pass"])
     lit_mat = create_lit_material(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
-    lit_water_mat = create_lit_material_transparent(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
+    lit_water_mat = create_lit_material_transparent(postprocess["scene_target"]["load_render_pass"], ls["desc_layout"], ls["desc_set"])
+    set_lit_material_scene_color_source(lit_water_mat, postprocess["scene_copy"]["image"], postprocess["sampler"])
     if shadow_renderer != nil:
         set_lit_material_shadow_source(lit_mat, shadow_renderer)
         set_lit_material_shadow_source(lit_water_mat, shadow_renderer)
@@ -518,13 +521,6 @@ while running:
             draw_mesh_lit_surface_controlled(cmd, lit_mat, draw["gpu_mesh"], world_mvp, identity, ls["desc_set"], draw["surface"], true)
         ri = ri + 1
 
-    ri = 0
-    while ri < len(draws):
-        let draw = draws[ri]
-        if draw["block_id"] == 8:
-            draw_mesh_lit_surface_controlled(cmd, lit_water_mat, draw["gpu_mesh"], world_mvp, identity, ls["desc_set"], draw["surface"], false)
-        ri = ri + 1
-
     let pi = 0
     while pi < len(gameplay_state["pickups"]):
         let pickup = gameplay_state["pickups"][pi]
@@ -561,6 +557,15 @@ while running:
         draw_mesh_lit_surface_controlled(cmd, lit_mat, cube_gpu, highlight_mvp, highlight_model, ls["desc_set"], _highlight_surface(), false)
 
     end_scene_pass(cmd)
+    copy_scene_color(postprocess, cmd)
+    begin_transparent_scene_pass(postprocess, cmd)
+    ri = 0
+    while ri < len(draws):
+        let draw = draws[ri]
+        if draw["block_id"] == 8:
+            draw_mesh_lit_surface_controlled(cmd, lit_water_mat, draw["gpu_mesh"], world_mvp, identity, ls["desc_set"], draw["surface"], false)
+        ri = ri + 1
+    end_transparent_scene_pass(cmd)
     run_bloom_chain(postprocess, cmd)
     begin_swapchain_pass(r, frame)
     draw_tonemap(cmd, postprocess)

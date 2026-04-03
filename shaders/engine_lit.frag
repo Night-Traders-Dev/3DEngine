@@ -3,6 +3,7 @@
 layout(location = 0) in vec3 fragWorldPos;
 layout(location = 1) in vec3 fragNormal;
 layout(location = 2) in vec2 fragUV;
+layout(location = 3) in vec2 fragScreenUV;
 
 layout(location = 0) out vec4 outColor;
 
@@ -30,7 +31,10 @@ layout(set = 2, binding = 1) uniform ShadowUBO {
 layout(set = 3, binding = 0) uniform MaterialUBO {
     vec4 baseColor;
     vec4 surfaceControl; // x = receive shadows, y = voxel detail, z = block id, w = face id
+    vec4 waterControl;  // x = scene color source enabled
 } material_data;
+
+layout(set = 3, binding = 1) uniform sampler2D sceneColorCopy;
 
 layout(push_constant) uniform PushConstants {
     mat4 mvp;
@@ -223,10 +227,14 @@ void main() {
     float upness = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
     bool foliageLike = is_foliage_like(voxelBlockId);
     float outAlpha = material_data.baseColor.a;
+    vec2 screenUV = clamp(fragScreenUV, vec2(0.002), vec2(0.998));
+    float wave0 = 0.0;
+    float wave1 = 0.0;
+    float wave2 = 0.0;
     if (waterLike) {
-        float wave0 = sin(fragWorldPos.x * 0.28 + fragWorldPos.z * 0.16 + sceneTime * 1.35);
-        float wave1 = cos(fragWorldPos.z * 0.24 - fragWorldPos.x * 0.14 - sceneTime * 1.10);
-        float wave2 = sin((fragWorldPos.x + fragWorldPos.z) * 0.18 + sceneTime * 0.72);
+        wave0 = sin(fragWorldPos.x * 0.28 + fragWorldPos.z * 0.16 + sceneTime * 1.35);
+        wave1 = cos(fragWorldPos.z * 0.24 - fragWorldPos.x * 0.14 - sceneTime * 1.10);
+        wave2 = sin((fragWorldPos.x + fragWorldPos.z) * 0.18 + sceneTime * 0.72);
         vec3 rippleNormal = normalize(vec3((wave0 + wave2 * 0.45) * 0.18, 1.0, (wave1 - wave2 * 0.35) * 0.18));
         float rippleMix = voxelFaceId == 0 ? 0.72 : 0.26;
         N = normalize(mix(N, rippleNormal, rippleMix));
@@ -245,13 +253,33 @@ void main() {
         float waterPulse = 0.5 + 0.5 * sin(sceneTime * 0.35 + fragWorldPos.x * 0.04 + fragWorldPos.z * 0.07);
         vec3 deepWater = vec3(0.05, 0.18, 0.33);
         vec3 shallowWater = vec3(0.12, 0.42, 0.58);
-        result = mix(result * 0.68, reflectedSky, 0.18 + baseFresnel * 0.34);
-        result = mix(result, mix(deepWater, shallowWater, waterPulse), 0.14 + upness * 0.08);
+        vec3 refractedWater = mix(deepWater, shallowWater, waterPulse);
+        vec3 reflectedWater = reflectedSky;
+        if (material_data.waterControl.x > 0.5) {
+            vec2 refractDistort = vec2(
+                wave0 * 0.010 + wave2 * 0.006,
+                wave1 * 0.008 - wave2 * 0.005
+            );
+            if (voxelFaceId != 0) {
+                refractDistort *= 0.45;
+            }
+            vec2 refractUV = clamp(screenUV + refractDistort, vec2(0.002), vec2(0.998));
+            vec3 sceneBehind = texture(sceneColorCopy, refractUV).rgb;
+            vec2 reflectDistort = vec2(
+                wave1 * 0.006 - wave2 * 0.004,
+                0.0 - abs(wave0) * 0.010
+            );
+            vec3 reflectedScene = texture(sceneColorCopy, clamp(screenUV + reflectDistort, vec2(0.002), vec2(0.998))).rgb;
+            refractedWater = mix(sceneBehind, refractedWater, 0.24 + upness * 0.10);
+            reflectedWater = mix(reflectedScene, reflectedSky, 0.58);
+        }
+        result = mix(refractedWater, result, 0.18);
+        result = mix(result, reflectedWater, 0.14 + baseFresnel * 0.30);
         if (voxelFaceId == 1) {
             float foam = water_side_foam(fragWorldPos, fragUV, sceneTime);
             result += vec3(0.18, 0.22, 0.20) * foam;
         }
-        outAlpha = clamp(max(outAlpha, 0.46 + baseFresnel * 0.24), 0.0, 0.84);
+        outAlpha = clamp(max(outAlpha, 0.42 + baseFresnel * 0.28), 0.0, 0.78);
     }
 
     for (int i = 0; i < lightCount && i < 16; i++) {

@@ -20,6 +20,7 @@ layout(location = 4) in vec4 inWeights;
 layout(location = 0) out vec3 fragWorldPos;
 layout(location = 1) out vec3 fragNormal;
 layout(location = 2) out vec2 fragUV;
+layout(location = 3) out vec2 fragScreenUV;
 
 void main() {
     ivec4 joint_indices = clamp(ivec4(inJoints + vec4(0.5)), ivec4(0), ivec4(MAX_SKIN_JOINTS - 1));
@@ -31,8 +32,10 @@ void main() {
     vec4 localPos = skin_matrix * vec4(inPosition, 1.0);
     vec3 localNormal = mat3(skin_matrix) * inNormal;
     vec4 worldPos = pc.model * localPos;
-    gl_Position = pc.mvp * localPos;
+    vec4 clipPos = pc.mvp * localPos;
+    gl_Position = clipPos;
     fragWorldPos = worldPos.xyz;
     fragNormal = normalize(mat3(pc.model) * localNormal);
     fragUV = inUV;
+    fragScreenUV = clipPos.xy / max(clipPos.w, 0.0001) * 0.5 + 0.5;
 }

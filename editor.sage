@@ -35,7 +35,7 @@ from lighting import init_light_gpu, update_light_ubo
 from render_system import create_lit_material, create_lit_material_transparent, draw_mesh_lit, draw_mesh_lit_surface
 from render_system import draw_mesh_lit_surface_skinned, draw_mesh_lit_controlled
 from render_system import draw_mesh_lit_surface_controlled, draw_mesh_lit_surface_skinned_controlled
-from render_system import set_lit_material_shadow_source
+from render_system import set_lit_material_shadow_source, set_lit_material_scene_color_source
 from pbr_material import create_pbr_renderer, create_pbr_fallback_textures
 from pbr_material import create_pbr_material_from_imported, bind_pbr_material, draw_pbr
 from pbr_material import draw_pbr_skinned, draw_pbr_controlled, draw_pbr_skinned_controlled
@@ -103,6 +103,7 @@ from voxel_world import voxel_palette_ids, voxel_visible_draws, raycast_voxel_wo
 from voxel_world import voxel_generated_chunk_count, voxel_chunk_size
 from voxel_world import sample_voxel_ground_radius, resolve_player_voxel_collision
 from postprocess import create_postprocess, recreate_postprocess, begin_scene_pass, end_scene_pass
+from postprocess import begin_transparent_scene_pass, end_transparent_scene_pass, copy_scene_color
 from postprocess import run_bloom_chain, draw_tonemap, pfx_editor_preview
 import io
 
@@ -163,7 +164,8 @@ update_light_ubo(ls)
 let postprocess = create_postprocess(r["width"], r["height"], r["render_pass"])
 pfx_editor_preview(postprocess)
 let lit_mat = create_lit_material(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
-let lit_water_mat = create_lit_material_transparent(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
+let lit_water_mat = create_lit_material_transparent(postprocess["scene_target"]["load_render_pass"], ls["desc_layout"], ls["desc_set"])
+set_lit_material_scene_color_source(lit_water_mat, postprocess["scene_copy"]["image"], postprocess["sampler"])
 let pbr_renderer = create_pbr_renderer(postprocess["scene_target"]["render_pass"], ls["desc_layout"])
 let pbr_sampler = gpu.create_sampler(gpu.FILTER_LINEAR, gpu.FILTER_LINEAR, gpu.ADDRESS_REPEAT)
 let pbr_fallbacks = create_pbr_fallback_textures()
@@ -603,7 +605,8 @@ proc _rebuild_scene_postprocess():
     init_sky_gpu(sky, postprocess["scene_target"]["render_pass"])
     grid = create_editor_grid(postprocess["scene_target"]["render_pass"])
     lit_mat = create_lit_material(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
-    lit_water_mat = create_lit_material_transparent(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
+    lit_water_mat = create_lit_material_transparent(postprocess["scene_target"]["load_render_pass"], ls["desc_layout"], ls["desc_set"])
+    set_lit_material_scene_color_source(lit_water_mat, postprocess["scene_copy"]["image"], postprocess["sampler"])
     pbr_renderer = create_pbr_renderer(postprocess["scene_target"]["render_pass"], ls["desc_layout"])
     if shadow_renderer != nil:
         set_lit_material_shadow_source(lit_mat, shadow_renderer)
@@ -2087,17 +2090,6 @@ while running:
             draw_count = draw_count + 1
             di = di + 1
         vri = vri + 1
-    vri = 0
-    while vri < len(voxel_groups):
-        let group = voxel_groups[vri]
-        let di = 0
-        while di < len(group["draws"]):
-            let draw = group["draws"][di]
-            let voxel_mvp = mat4_mul(vp, group["model"])
-            if draw["block_id"] == 8:
-                draw_mesh_lit_surface_controlled(cmd, lit_water_mat, draw["gpu_mesh"], voxel_mvp, group["model"], ls["desc_set"], draw["surface"], false)
-            di = di + 1
-        vri = vri + 1
 
     # Gizmo visualization (draw handles as colored boxes)
     if editor["selected"] >= 0:
@@ -2113,6 +2105,20 @@ while running:
             gi = gi + 1
 
     end_scene_pass(cmd)
+    copy_scene_color(postprocess, cmd)
+    begin_transparent_scene_pass(postprocess, cmd)
+    vri = 0
+    while vri < len(voxel_groups):
+        let group = voxel_groups[vri]
+        let di = 0
+        while di < len(group["draws"]):
+            let draw = group["draws"][di]
+            let voxel_mvp = mat4_mul(vp, group["model"])
+            if draw["block_id"] == 8:
+                draw_mesh_lit_surface_controlled(cmd, lit_water_mat, draw["gpu_mesh"], voxel_mvp, group["model"], ls["desc_set"], draw["surface"], false)
+            di = di + 1
+        vri = vri + 1
+    end_transparent_scene_pass(cmd)
     run_bloom_chain(postprocess, cmd)
     begin_swapchain_pass(r, frame)
     draw_tonemap(cmd, postprocess)

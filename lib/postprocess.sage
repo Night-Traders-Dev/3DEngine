@@ -41,6 +41,33 @@ proc build_tonemap_push_data(pp):
         pp["vignette_strength"]
     ]
 
+proc scene_pass_clear_values(clear_color):
+    let cc = [0.02, 0.03, 0.06, 1.0]
+    if clear_color != nil:
+        cc = clear_color
+    return [cc, [1.0, 0.0, 0.0, 0.0]]
+
+proc scene_pass_load_values():
+    return [[0.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0]]
+
+proc _scene_color_attachment(format, load_op, initial_layout):
+    let attach = {}
+    attach["format"] = format
+    attach["load_op"] = load_op
+    attach["store_op"] = gpu.STORE_STORE
+    attach["initial_layout"] = initial_layout
+    attach["final_layout"] = gpu.LAYOUT_SHADER_READ
+    return attach
+
+proc _scene_depth_attachment(load_op, initial_layout):
+    let attach = {}
+    attach["format"] = gpu.FORMAT_DEPTH32F
+    attach["load_op"] = load_op
+    attach["store_op"] = gpu.STORE_STORE
+    attach["initial_layout"] = initial_layout
+    attach["final_layout"] = gpu.LAYOUT_DEPTH_ATTACH
+    return attach
+
 proc create_postprocess_target(width, height, hdr, with_depth):
     let format = gpu.FORMAT_RGBA8
     if hdr:
@@ -50,9 +77,31 @@ proc create_postprocess_target(width, height, hdr, with_depth):
 proc create_hdr_target(width, height):
     return create_postprocess_target(width, height, true, true)
 
+proc create_scene_target(width, height):
+    let target = {}
+    target["image"] = gpu.create_image(width, height, 1, gpu.FORMAT_RGBA16F, gpu.IMAGE_COLOR_ATTACH | gpu.IMAGE_SAMPLED)
+    target["depth"] = gpu.create_image(width, height, 1, gpu.FORMAT_DEPTH32F, gpu.IMAGE_DEPTH_ATTACH)
+    target["render_pass"] = gpu.create_render_pass([
+        _scene_color_attachment(gpu.FORMAT_RGBA16F, gpu.LOAD_CLEAR, gpu.LAYOUT_UNDEFINED),
+        _scene_depth_attachment(gpu.LOAD_CLEAR, gpu.LAYOUT_UNDEFINED)
+    ])
+    target["framebuffer"] = gpu.create_framebuffer(target["render_pass"], [target["image"], target["depth"]], width, height)
+    target["load_render_pass"] = gpu.create_render_pass([
+        _scene_color_attachment(gpu.FORMAT_RGBA16F, gpu.LOAD_LOAD, gpu.LAYOUT_SHADER_READ),
+        _scene_depth_attachment(gpu.LOAD_LOAD, gpu.LAYOUT_DEPTH_ATTACH)
+    ])
+    target["load_framebuffer"] = gpu.create_framebuffer(target["load_render_pass"], [target["image"], target["depth"]], width, height)
+    target["width"] = width
+    target["height"] = height
+    return target
+
 proc _destroy_target(target):
     if target == nil:
         return
+    if dict_has(target, "load_framebuffer") and target["load_framebuffer"] != nil and target["load_framebuffer"] >= 0:
+        gpu.destroy_framebuffer(target["load_framebuffer"])
+    if dict_has(target, "load_render_pass") and target["load_render_pass"] != nil and target["load_render_pass"] >= 0:
+        gpu.destroy_render_pass(target["load_render_pass"])
     if dict_has(target, "framebuffer") and target["framebuffer"] != nil and target["framebuffer"] >= 0:
         gpu.destroy_framebuffer(target["framebuffer"])
     if dict_has(target, "render_pass") and target["render_pass"] != nil and target["render_pass"] >= 0:
@@ -75,11 +124,13 @@ proc _destroy_fullscreen_pipeline(fp):
 proc destroy_postprocess(pp):
     if pp == nil:
         return
+    _destroy_fullscreen_pipeline(pp["copy_pipeline"])
     _destroy_fullscreen_pipeline(pp["extract_pipeline"])
     _destroy_fullscreen_pipeline(pp["blur_pipeline_a"])
     _destroy_fullscreen_pipeline(pp["blur_pipeline_b"])
     _destroy_fullscreen_pipeline(pp["tonemap_pipeline"])
     _destroy_target(pp["scene_target"])
+    _destroy_target(pp["scene_copy"])
     _destroy_target(pp["bloom_a"])
     _destroy_target(pp["bloom_b"])
     if dict_has(pp, "sampler") and pp["sampler"] != nil and pp["sampler"] >= 0:
@@ -137,12 +188,14 @@ proc create_fullscreen_pipeline(render_pass, desc_layout, push_size, frag_shader
 
 proc draw_fullscreen(cmd, fp, push_data, desc_set):
     gpu.cmd_bind_graphics_pipeline(cmd, fp["pipeline"])
-    gpu.cmd_push_constants(cmd, fp["pipe_layout"], gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT, push_data)
+    if push_data != nil and len(push_data) > 0:
+        gpu.cmd_push_constants(cmd, fp["pipe_layout"], gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT, push_data)
     if desc_set >= 0:
         gpu.cmd_bind_descriptor_set(cmd, fp["pipe_layout"], 0, desc_set, 0)
     gpu.cmd_draw(cmd, 3, 1, 0, 0)
 
 proc _refresh_postprocess_descriptors(pp):
+    gpu.update_descriptor_image(pp["scene_copy_set"], 0, pp["scene_target"]["image"], pp["sampler"])
     gpu.update_descriptor_image(pp["extract_set"], 0, pp["scene_target"]["image"], pp["sampler"])
     gpu.update_descriptor_image(pp["blur_a_set"], 0, pp["bloom_a"]["image"], pp["sampler"])
     gpu.update_descriptor_image(pp["blur_b_set"], 0, pp["bloom_b"]["image"], pp["sampler"])
@@ -181,7 +234,8 @@ proc create_postprocess(width, height, swapchain_render_pass):
     pp["height"] = height
     pp["bloom_width"] = dims[0]
     pp["bloom_height"] = dims[1]
-    pp["scene_target"] = create_hdr_target(width, height)
+    pp["scene_target"] = create_scene_target(width, height)
+    pp["scene_copy"] = create_postprocess_target(width, height, true, false)
     pp["bloom_a"] = create_postprocess_target(pp["bloom_width"], pp["bloom_height"], true, false)
     pp["bloom_b"] = create_postprocess_target(pp["bloom_width"], pp["bloom_height"], true, false)
     pp["sampler"] = gpu.create_sampler(gpu.FILTER_LINEAR, gpu.FILTER_LINEAR, gpu.ADDRESS_CLAMP_EDGE)
@@ -189,8 +243,9 @@ proc create_postprocess(width, height, swapchain_render_pass):
     pp["single_layout"] = _create_single_sampler_layout()
     let ps0 = {}
     ps0["type"] = gpu.DESC_COMBINED_SAMPLER
-    ps0["count"] = 3
-    pp["single_pool"] = gpu.create_descriptor_pool(3, [ps0])
+    ps0["count"] = 4
+    pp["single_pool"] = gpu.create_descriptor_pool(4, [ps0])
+    pp["scene_copy_set"] = gpu.allocate_descriptor_set(pp["single_pool"], pp["single_layout"])
     pp["extract_set"] = gpu.allocate_descriptor_set(pp["single_pool"], pp["single_layout"])
     pp["blur_a_set"] = gpu.allocate_descriptor_set(pp["single_pool"], pp["single_layout"])
     pp["blur_b_set"] = gpu.allocate_descriptor_set(pp["single_pool"], pp["single_layout"])
@@ -205,6 +260,7 @@ proc create_postprocess(width, height, swapchain_render_pass):
     pfx_shaderpack_day(pp)
     _refresh_postprocess_descriptors(pp)
 
+    pp["copy_pipeline"] = create_fullscreen_pipeline(pp["scene_copy"]["render_pass"], pp["single_layout"], 0, "shaders/engine_scene_copy.frag.spv")
     pp["extract_pipeline"] = create_fullscreen_pipeline(pp["bloom_a"]["render_pass"], pp["single_layout"], 16, "shaders/engine_bloom_extract.frag.spv")
     pp["blur_pipeline_a"] = create_fullscreen_pipeline(pp["bloom_b"]["render_pass"], pp["single_layout"], 16, "shaders/engine_bloom_blur.frag.spv")
     pp["blur_pipeline_b"] = create_fullscreen_pipeline(pp["bloom_a"]["render_pass"], pp["single_layout"], 16, "shaders/engine_bloom_blur.frag.spv")
@@ -216,14 +272,19 @@ proc recreate_postprocess(pp, width, height, swapchain_render_pass):
     return create_postprocess(width, height, swapchain_render_pass)
 
 proc begin_scene_pass(pp, cmd, clear_color):
-    let cc = [0.02, 0.03, 0.06, 1.0]
-    if clear_color != nil:
-        cc = clear_color
-    gpu.cmd_begin_render_pass(cmd, pp["scene_target"]["render_pass"], pp["scene_target"]["framebuffer"], [cc, [1.0, 0.0, 0.0, 0.0]])
+    gpu.cmd_begin_render_pass(cmd, pp["scene_target"]["render_pass"], pp["scene_target"]["framebuffer"], scene_pass_clear_values(clear_color))
     gpu.cmd_set_viewport(cmd, 0, 0, pp["width"], pp["height"], 0.0, 1.0)
     gpu.cmd_set_scissor(cmd, 0, 0, pp["width"], pp["height"])
 
 proc end_scene_pass(cmd):
+    gpu.cmd_end_render_pass(cmd)
+
+proc begin_transparent_scene_pass(pp, cmd):
+    gpu.cmd_begin_render_pass(cmd, pp["scene_target"]["load_render_pass"], pp["scene_target"]["load_framebuffer"], scene_pass_load_values())
+    gpu.cmd_set_viewport(cmd, 0, 0, pp["width"], pp["height"], 0.0, 1.0)
+    gpu.cmd_set_scissor(cmd, 0, 0, pp["width"], pp["height"])
+
+proc end_transparent_scene_pass(cmd):
     gpu.cmd_end_render_pass(cmd)
 
 proc _draw_post_target(cmd, target, fp, push_data, desc_set):
@@ -232,6 +293,9 @@ proc _draw_post_target(cmd, target, fp, push_data, desc_set):
     gpu.cmd_set_scissor(cmd, 0, 0, target["width"], target["height"])
     draw_fullscreen(cmd, fp, push_data, desc_set)
     gpu.cmd_end_render_pass(cmd)
+
+proc copy_scene_color(pp, cmd):
+    _draw_post_target(cmd, pp["scene_copy"], pp["copy_pipeline"], nil, pp["scene_copy_set"])
 
 proc run_bloom_chain(pp, cmd):
     if pp == nil or pp["bloom_enabled"] == false:

@@ -3,6 +3,7 @@
 
 from postprocess import bloom_dimensions, build_bloom_extract_push_data, build_bloom_blur_push_data
 from postprocess import build_tonemap_push_data, pfx_shaderpack_day, pfx_editor_preview
+from postprocess import scene_pass_clear_values, scene_pass_load_values
 from postprocess import TONEMAP_ACES
 
 let pass_count = 0
@@ -52,6 +53,16 @@ let tonemap = build_tonemap_push_data(pp)
 check("tonemap push has 8 floats", len(tonemap) == 8)
 check("tonemap push stores exposure and bloom", tonemap[0] == 0.84 and tonemap[1] == 0.18)
 check("tonemap push stores grading params", tonemap[4] == 1.18 and tonemap[7] == 0.08)
+
+let clear_values = scene_pass_clear_values(nil)
+check("scene clear values include color and depth", len(clear_values) == 2 and len(clear_values[0]) == 4 and len(clear_values[1]) == 4)
+check("scene clear values use default sky-ish color", clear_values[0][0] == 0.02 and clear_values[0][3] == 1.0)
+
+let custom_clear = scene_pass_clear_values([0.3, 0.4, 0.5, 1.0])
+check("scene clear values accept overrides", custom_clear[0][0] == 0.3 and custom_clear[0][2] == 0.5)
+
+let load_values = scene_pass_load_values()
+check("scene load values keep color and depth attachments", len(load_values) == 2 and load_values[1][0] == 1.0)
 
 let preset = {}
 pfx_shaderpack_day(preset)
