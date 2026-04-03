@@ -26,6 +26,8 @@ let VOXEL_SLOT_SELECTED = color_with_alpha(ui_core.THEME_ACCENT, 0.95)
 let VOXEL_SLOT_READY = color_with_alpha(ui_core.THEME_SUCCESS, 0.80)
 let VOXEL_SLOT_DIM = color_with_alpha(ui_core.THEME_TEXT_DIM, 0.35)
 let VOXEL_TRACK = rgba(0.10, 0.10, 0.12, 0.85)
+let VOXEL_HOTBAR_SLOT_COUNT = 10
+let VOXEL_INVENTORY_ROW_COUNT = 10
 
 proc _set_widget_color(widget, color):
     widget["color"] = color
@@ -74,7 +76,8 @@ proc create_voxel_hud():
     hud["root"]["height"] = 720.0
     hud["root"]["visible"] = true
 
-    hud["hotbar_panel"] = create_panel(0.0, -18.0, 386.0, 78.0, VOXEL_HUD_PANEL)
+    let hotbar_w = 26.0 + VOXEL_HOTBAR_SLOT_COUNT * 60.0
+    hud["hotbar_panel"] = create_panel(0.0, -18.0, hotbar_w, 78.0, VOXEL_HUD_PANEL)
     hud["hotbar_panel"]["anchor"] = ANCHOR_BOTTOM_CENTER
     hud["hotbar_panel"]["border_color"] = VOXEL_HUD_PANEL_BORDER
     hud["hotbar_panel"]["border_width"] = ui_core.BORDER_NORMAL
@@ -82,13 +85,14 @@ proc create_voxel_hud():
 
     hud["hotbar_slots"] = []
     let hi = 0
-    while hi < 6:
+    while hi < VOXEL_HOTBAR_SLOT_COUNT:
         let slot = _create_voxel_slot(14.0 + hi * 60.0, 12.0, 50.0)
         add_child(hud["hotbar_panel"], slot["panel"])
         push(hud["hotbar_slots"], slot)
         hi = hi + 1
 
-    hud["inventory_panel"] = create_panel(18.0, -254.0, 252.0, 224.0, VOXEL_HUD_PANEL)
+    let inventory_h = 38.0 + VOXEL_INVENTORY_ROW_COUNT * 31.0
+    hud["inventory_panel"] = create_panel(18.0, 0.0 - (30.0 + inventory_h), 252.0, inventory_h, VOXEL_HUD_PANEL)
     hud["inventory_panel"]["anchor"] = ANCHOR_BOTTOM_LEFT
     hud["inventory_panel"]["border_color"] = VOXEL_HUD_PANEL_BORDER
     hud["inventory_panel"]["border_width"] = ui_core.BORDER_NORMAL
@@ -97,7 +101,7 @@ proc create_voxel_hud():
 
     hud["inventory_rows"] = []
     let ri = 0
-    while ri < 6:
+    while ri < VOXEL_INVENTORY_ROW_COUNT:
         let row = _create_inventory_row(12.0, 32.0 + ri * 31.0, 228.0, 30.0)
         add_child(hud["inventory_panel"], row["panel"])
         push(hud["inventory_rows"], row)

@@ -40,6 +40,15 @@ proc _block_face_total(meshes, block_id):
         i = i + 1
     return total
 
+proc _count_block(vw, block_id):
+    let total = 0
+    let i = 0
+    while i < len(vw["blocks"]):
+        if vw["blocks"][i] == block_id:
+            total = total + 1
+        i = i + 1
+    return total
+
 proc _unique_chunk_count(draws):
     let seen = {}
     let i = 0
@@ -53,9 +62,11 @@ print "=== Voxel World Sanity Checks ==="
 
 let vw = create_voxel_world(8, 8, 8)
 check("voxel world created", vw != nil)
-check("palette has six block types", len(voxel_palette_ids(vw)) == 6)
+check("palette has ten block types", len(voxel_palette_ids(vw)) == 10)
 check("grass palette entry exists", voxel_palette_entry(vw, 1) != nil)
 check("plank palette entry exists", voxel_palette_entry(vw, 6) != nil)
+check("sand palette entry exists", voxel_palette_entry(vw, 7) != nil)
+check("crystal palette entry exists", voxel_palette_entry(vw, 10) != nil)
 check("air name fallback", voxel_block_name(vw, 0) == "Air")
 
 set_voxel(vw, 1, 1, 1, 1)
@@ -73,6 +84,12 @@ check("surface exports voxel texture metadata", grass_top["voxel_texture"] == tr
 check("face texture ids differ by group", grass_top["voxel_face_id"] == 0.0 and grass_side["voxel_face_id"] == 1.0 and grass_bottom["voxel_face_id"] == 2.0)
 let plank_surface = voxel_block_surface(vw, 6)
 check("plank surface is warm colored", plank_surface["albedo"][0] > plank_surface["albedo"][2] and plank_surface["albedo"][1] > 0.55)
+let sand_surface = voxel_block_surface(vw, 7)
+check("sand surface is bright and warm", sand_surface["albedo"][0] > 0.9 and sand_surface["albedo"][1] > sand_surface["albedo"][2])
+let bloom_surface = voxel_block_surface(vw, 9)
+check("bloom surface is vividly pink", bloom_surface["albedo"][0] > 0.85 and bloom_surface["albedo"][2] > 0.6)
+let crystal_surface = voxel_block_surface(vw, 10)
+check("crystal surface is cool tinted", crystal_surface["albedo"][2] > crystal_surface["albedo"][0] and crystal_surface["albedo"][1] > 0.8)
 
 let single_meshes = build_voxel_meshes(vw)
 check("single grass top mesh emitted", dict_has(single_meshes, "1:top"))
@@ -116,6 +133,12 @@ let generated = create_voxel_world(16, 12, 16)
 generate_voxel_template_world(generated, 5.0)
 check("generated world has blocks", generated["solid_count"] > 0)
 check("generated terrain exposes surfaces", voxel_is_surface_block(generated, 8, voxel_top_solid_y(generated, 8, 8), 8) == true)
+let colorful_generated = create_voxel_world(48, 18, 48)
+generate_voxel_template_world(colorful_generated, 7.0)
+check("generated world includes sand biome blocks", _count_block(colorful_generated, 7) > 0)
+check("generated world includes azure clay blocks", _count_block(colorful_generated, 8) > 0)
+check("generated world includes bloom blocks", _count_block(colorful_generated, 9) > 0)
+check("generated world includes crystal blocks", _count_block(colorful_generated, 10) > 0)
 
 let lazy_generated = create_voxel_world(48, 18, 48)
 check("lazy world starts with no generated chunks", voxel_generated_chunk_count(lazy_generated) == 0)

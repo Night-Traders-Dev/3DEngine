@@ -6,7 +6,7 @@
 #   WASD = Move | Mouse = Look | ESC = Capture mouse
 #   SPACE = Jump | SHIFT = Sprint | TAB = Noclip | Q = Quit
 #   Left Mouse = Break block / hit mob | Right Mouse = Place selected block
-#   1-5 = Select block palette | Z = Select planks | X = Craft planks from wood
+#   1-5 = Select palette | Z = Select planks | Mouse Wheel = Cycle palette | X = Craft planks from wood
 
 import gpu
 import math
@@ -14,7 +14,7 @@ import io
 from renderer import create_renderer, begin_frame, end_frame
 from renderer import shutdown_renderer, check_resize, update_title_fps
 from input import create_input, update_input, bind_action
-from input import action_just_pressed, default_fps_bindings
+from input import action_just_pressed, default_fps_bindings, scroll_value
 from math3d import vec3, mat4_identity, mat4_mul, radians
 from engine_math import make_transform, transform_to_matrix
 from lighting import create_light_scene, directional_light
@@ -35,6 +35,7 @@ from ui_renderer import create_ui_renderer, draw_ui
 from json import cJSON_Parse, cJSON_Print, cJSON_Delete, cJSON_FromSage, cJSON_ToSage
 from gameplay import HealthComponent, damage, health_percent, revive, update_health_regen
 from voxel_world import create_voxel_world
+from voxel_world import voxel_palette_ids
 from voxel_world import voxel_block_name, voxel_block_surface, voxel_block_world_center, raycast_voxel_world
 from voxel_world import set_voxel, sample_voxel_ground_radius, voxel_collides_player
 from voxel_world import resolve_player_voxel_collision
@@ -117,6 +118,10 @@ voxel_inventory_add(inventory, 3, 64)
 voxel_inventory_add(inventory, 4, 24)
 voxel_inventory_add(inventory, 5, 24)
 voxel_inventory_add(inventory, 6, 0)
+voxel_inventory_add(inventory, 7, 24)
+voxel_inventory_add(inventory, 8, 18)
+voxel_inventory_add(inventory, 9, 12)
+voxel_inventory_add(inventory, 10, 8)
 let recipes = default_voxel_recipes()
 let voxel_hud = create_voxel_hud()
 let inventory_open = [false]
@@ -172,9 +177,50 @@ proc _set_status(text):
     status_timer[0] = 4.0
 
 proc _palette_slot_label(block_id):
+    let palette_ids = voxel_palette_ids(voxel)
+    let i = 0
+    while i < len(palette_ids):
+        if palette_ids[i] == block_id:
+            if i < 5:
+                return str(i + 1)
+            if block_id == 6:
+                return "Z"
+            return ""
+        i = i + 1
     if block_id == 6:
         return "Z"
     return str(block_id)
+
+proc _palette_index_for_block(block_id):
+    let palette_ids = voxel_palette_ids(voxel)
+    let i = 0
+    while i < len(palette_ids):
+        if palette_ids[i] == block_id:
+            return i
+        i = i + 1
+    return 0
+
+proc _set_selected_palette_index(index, announce):
+    let palette_ids = voxel_palette_ids(voxel)
+    if len(palette_ids) == 0:
+        return
+    while index < 0:
+        index = index + len(palette_ids)
+    while index >= len(palette_ids):
+        index = index - len(palette_ids)
+    let next_block = palette_ids[index]
+    if selected_block[0] == next_block:
+        return
+    selected_block[0] = next_block
+    if announce:
+        _set_status("Selected " + voxel_block_name(voxel, next_block))
+
+proc _select_palette_slot(slot_index):
+    _set_selected_palette_index(slot_index, false)
+
+proc _cycle_selected_block(step):
+    let current = _palette_index_for_block(selected_block[0])
+    _set_selected_palette_index(current + step, true)
 
 proc _encode_json(data):
     let node = cJSON_FromSage(data)
@@ -216,7 +262,7 @@ let running = true
 print ""
 print "Controls:"
 print "  WASD = Move  Mouse = Look  ESC = Capture mouse  TAB = Noclip"
-print "  Left Mouse = Break block / hit slime  Right Mouse = Place block  1-5 = Palette  Z = Planks  X = Craft planks  O = Inventory"
+print "  Left Mouse = Break block / hit slime  Right Mouse = Place block  1-5 = Palette  Z = Planks  Wheel = Cycle palette  X = Craft planks  O = Inventory"
 print ""
 
 while running:
@@ -241,17 +287,23 @@ while running:
             _set_status("Inventory closed")
 
     if gpu.key_just_pressed(gpu.KEY_1):
-        selected_block[0] = 1
+        _select_palette_slot(0)
     if gpu.key_just_pressed(gpu.KEY_2):
-        selected_block[0] = 2
+        _select_palette_slot(1)
     if gpu.key_just_pressed(gpu.KEY_3):
-        selected_block[0] = 3
+        _select_palette_slot(2)
     if gpu.key_just_pressed(gpu.KEY_4):
-        selected_block[0] = 4
+        _select_palette_slot(3)
     if gpu.key_just_pressed(gpu.KEY_5):
-        selected_block[0] = 5
+        _select_palette_slot(4)
     if gpu.key_just_pressed(gpu.KEY_Z):
-        selected_block[0] = 6
+        _select_palette_slot(5)
+    let sv = scroll_value(inp)
+    if sv[1] > 0.1:
+        _cycle_selected_block(-1)
+    else:
+        if sv[1] < -0.1:
+            _cycle_selected_block(1)
     if gpu.key_just_pressed(gpu.KEY_X):
         if try_craft_voxel_recipe(inventory, recipes[0]):
             selected_block[0] = recipes[0]["output_block"]
@@ -479,7 +531,7 @@ while running:
     draw_ui(ui_renderer, cmd, voxel_hud["root"], sw, sh)
     begin_text(font_r)
     add_text(font_r, "ui", "VOXEL TEMPLATE SANDBOX", 18.0, 18.0, 0.94, 0.96, 0.98, 1.0)
-    add_text(font_r, "ui", "LMB break / hit  RMB place  1-5 palette  Z planks  X craft  O inventory  C save  V load  TAB noclip  ESC mouse", 18.0, 42.0, 0.70, 0.74, 0.80, 1.0)
+    add_text(font_r, "ui", "LMB break / hit  RMB place  1-5 palette  Z planks  Wheel cycle  X craft  O inventory  C save  V load  TAB noclip  ESC mouse", 18.0, 42.0, 0.70, 0.74, 0.80, 1.0)
     add_text(font_r, "ui", "Selected: [" + str(selected_block[0]) + "] " + voxel_block_name(voxel, selected_block[0]) + " x" + str(voxel_inventory_count(inventory, selected_block[0])) + " | Health: " + str(math.floor(player_health["current"] + 0.5)) + "/" + str(player_health["max"]) + " | Slimes: " + str(voxel_alive_mob_count(gameplay_state)) + " | Drops: " + str(voxel_pickup_count(gameplay_state)), 18.0, 66.0, 0.90, 0.92, 0.95, 1.0)
     add_text(font_r, "ui", "Chunk: " + str(player_chunk["x"]) + ", " + str(player_chunk["y"]) + ", " + str(player_chunk["z"]) + " | Chunk size: " + str(voxel_chunk_size(voxel)) + " | Generated chunks: " + str(voxel_generated_chunk_count(voxel)) + " | Visible chunk draws: " + str(len(draws)), 18.0, 90.0, 0.72, 0.84, 0.92, 1.0)
     if mob_target != nil and (target_hit == nil or mob_target["distance"] <= target_hit["distance"]):

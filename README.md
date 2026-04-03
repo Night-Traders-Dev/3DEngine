@@ -16,7 +16,7 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 # Run the voxel sandbox demo
 ./run.sh examples/demo_voxel.sage
 
-# Run tests (58 suites, 1,700 checks)
+# Run tests (58 suites, 1,711 checks)
 ./tests/run_all.sh
 
 # Build distributable package
@@ -36,7 +36,7 @@ When you launch the editor, a **Project Browser** appears first:
 - **Preview area** — Shows selected template details and included features
 - **Keyboard** — Arrow keys to navigate, Enter to create, ESC to exit
 
-The voxel template is now backed by a real starter path: the editor seeds a first-class voxel world actor when you choose `Voxel`, and the shared sandbox gameplay loop lives in [examples/demo_voxel.sage](/home/kraken/Devel/3DEngine/examples/demo_voxel.sage) with inventory-backed mining/placement, world drops and magnetic pickup collection, a first crafting step for planks, hostile slime mobs with combat and wood drops, streamed chunk draws around the player, more saturated top/side/bottom block colors with procedural voxel detail instead of flat grayscale batches, a real hotbar/backpack/crafting overlay, chunked sandbox save/load, and longer runtime stability coverage so transient frame-loss events do not get treated like hard exits.
+The voxel template is now backed by a real starter path: the editor seeds a first-class voxel world actor when you choose `Voxel`, and the shared sandbox gameplay loop lives in [examples/demo_voxel.sage](/home/kraken/Devel/3DEngine/examples/demo_voxel.sage) with inventory-backed mining/placement, world drops and magnetic pickup collection, a first crafting step for planks, hostile slime mobs with combat and wood drops, streamed chunk draws around the player, a ten-block colorful palette with sand, azure clay, bloom, and crystal terrain accents, procedural voxel detail instead of flat grayscale batches, mouse-wheel palette cycling, a real hotbar/backpack/crafting overlay, chunked sandbox save/load, and longer runtime stability coverage so transient frame-loss events do not get treated like hard exits.
 
 ## Editor
 
@@ -56,7 +56,7 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 - **Directional shadows** — Dedicated sun shadow prepass in the editor, with texel-snapped light matrices to reduce shimmer and imported skinned meshes participating in the same shadow depth path as static meshes
 - **Render flags** — Mesh visibility plus `cast_shadows` / `receive_shadows` now affect the live editor viewport, shadow prepass, and exported runtime, with quick toggles in the Tools/context menus
 - **Voxel world actor** — The `Voxel` launcher path now seeds a first-class voxel world entity in the editor, and selected voxel worlds support inline brush inspection plus `SHIFT+LMB/RMB` block edits with `SHIFT+Z/X` brush cycling
-- **Voxel sandbox loop** — The shared voxel template now supports inventory-backed mining/placement, world drops with magnetic pickup collection, a first crafted plank block, hostile slime mobs with simple chase/attack behavior, lazy chunk generation, incremental streamed chunk uploads, more saturated textured top/side/bottom voxel faces with per-block procedural detail, a reusable Minecraft-style hotbar/backpack/crafting HUD, and chunked JSON save/load in the playable sandbox path
+- **Voxel sandbox loop** — The shared voxel template now supports inventory-backed mining/placement, world drops with magnetic pickup collection, a first crafted plank block, hostile slime mobs with simple chase/attack behavior, lazy chunk generation, incremental streamed chunk uploads, a ten-block textured voxel palette with colorful sand/clay/bloom/crystal biome accents, mouse-wheel palette cycling, a reusable Minecraft-style hotbar/backpack/crafting HUD, and chunked JSON save/load in the playable sandbox path
 - **Prefab system** — Save entities as reusable .prefab.json templates
 - **Undo/Redo** — CTRL+Z / CTRL+Y with full command history (100 levels)
 - **Modal dialogs** — Quit confirmation, About dialog
@@ -136,7 +136,7 @@ forge-engine/
 │   └── ...                  # 80+ more engine modules
 ├── shaders/                 # GLSL shader pairs + SPIR-V
 ├── examples/                # 9 demo programs
-├── tests/                   # 58 suites, 1,700 checks
+├── tests/                   # 58 suites, 1,711 checks
 ├── assets/                  # Fonts, models, scenes, prefabs
 │   └── prefabs/             # Saved entity templates
 └── build/                   # Distribution output
@@ -171,7 +171,7 @@ forge-engine/
 `ui_core` (**centralized theme system** with 40+ named colors, spacing constants, font sizing, border/shadow helpers, hover/active/disabled/pressed widget states, focus rings) · `ui_renderer` (batched quads) · `ui_widgets` (buttons, sliders, checkboxes, dropdowns, text input fields, number fields, tree views, scroll panels, section headers, **visible scrollbars**, **per-widget quad collection**) · `ui_window` (floating windows, context menus, modal dialogs, snap-to-edge) · `font` (TrueType via stb_truetype) · `launch_screen` (project browser with templates) · `hud` (health bar with 4-stage color transition, gapped crosshair, themed minimap, score display) · `voxel_hud` (**shared voxel hotbar/backpack/crafting HUD**) · `menu` (themed pause/main/game-over menus with visual hierarchy, button styles, fade animations) · `inspector` (entity property inspector with accent bars, color-coded booleans)
 
 ### World
-`terrain` (heightmap, procedural noise) · `water` (animated waves) · `foliage` (scatter rules) · `day_night` (sun cycle) · `scene` (scene graph, level streaming) · `voxel_world` (**shared voxel template terrain generation**, **exposed-face meshing**, **face-aware top/side/bottom material buckets**, **chunk-aware mesh builds**, **incremental streamed chunk draw cache**, **zero-face bucket culling**, **block picking/place-break**, **simple player collision helpers**, **chunked JSON world save/load**, **inventory helpers**, **basic crafting recipes**)
+`terrain` (heightmap, procedural noise) · `water` (animated waves) · `foliage` (scatter rules) · `day_night` (sun cycle) · `scene` (scene graph, level streaming) · `voxel_world` (**shared voxel template terrain generation**, **ten-block colorful biome palette**, **exposed-face meshing**, **face-aware top/side/bottom material buckets**, **chunk-aware mesh builds**, **incremental streamed chunk draw cache**, **zero-face bucket culling**, **block picking/place-break**, **simple player collision helpers**, **chunked JSON world save/load**, **inventory helpers**, **basic crafting recipes**)
 
 ### VFX & Post-Processing
 `particles` (CPU pool, emitter shapes) · `vfx_presets` (fire/smoke/sparks/rain/magic) · `particle_renderer` · `post_fx` (vignette, color grading, fade, presets) · `postprocess` (bloom extract/blur/composite, HDR tone mapping, fullscreen pass infrastructure)
@@ -210,14 +210,14 @@ forge-engine/
 ./run.sh examples/demo_ai.sage           # AI pathfinding + behavior trees
 ./run.sh examples/demo_ui.sage           # HUD + menus
 ./run.sh examples/demo_world.sage        # Terrain + water + day/night
-./run.sh examples/demo_voxel.sage        # Minecraft-style voxel sandbox slice with hotbar/backpack HUD + inventory + crafting + drops + slimes + textured block faces + streamed chunk bootstrap + chunked save/load
+./run.sh examples/demo_voxel.sage        # Minecraft-style voxel sandbox slice with colorful biome blocks + wheel palette cycling + hotbar/backpack HUD + inventory + crafting + drops + slimes + textured block faces + streamed chunk bootstrap + chunked save/load
 ./run.sh examples/demo_particles.sage    # Particles + VFX
 ```
 
 ## Testing
 
 ```bash
-./tests/run_all.sh            # 58 suites, 1,700 individual checks
+./tests/run_all.sh            # 58 suites, 1,711 individual checks
 ./run.sh tests/test_ecs.sage  # Run individual suite
 ```
 

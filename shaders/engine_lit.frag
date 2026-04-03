@@ -93,6 +93,22 @@ vec3 voxel_detail_color(vec3 baseColor, float blockIdValue, float faceIdValue, v
         float plankLine = step(0.5, fract((texel.y + float(faceId) * 2.0) / 4.0));
         color *= mix(0.94, 1.10, noiseA);
         color *= mix(0.94, 1.08, plankLine);
+    } else if (blockId == 7) {
+        float dune = sin((texel.x + texel.y * 0.5) * 0.7 + noiseB * 3.0);
+        color *= 0.95 + dune * 0.05;
+        color += vec3(0.04, 0.03, 0.00) * noiseA;
+    } else if (blockId == 8) {
+        float ripple = sin((texel.x * 0.8 + texel.y * 0.35) + noiseA * 4.0);
+        color *= 0.92 + ripple * 0.08;
+        color += vec3(0.00, 0.03, 0.06) * noiseB;
+    } else if (blockId == 9) {
+        float petals = step(0.82, noiseB) + step(0.90, noiseA);
+        color *= mix(0.90, 1.16, noiseA);
+        color += vec3(0.10, 0.02, 0.08) * petals;
+    } else if (blockId == 10) {
+        float shard = step(0.74, abs(sin((texel.x - texel.y) * 0.85 + noiseA * 5.0)));
+        color *= mix(0.92, 1.18, noiseB);
+        color += vec3(0.05, 0.10, 0.16) * shard;
     }
 
     return clamp(color, 0.0, 1.0);

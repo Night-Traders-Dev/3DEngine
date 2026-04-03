@@ -89,6 +89,10 @@ proc create_voxel_world(size_x, size_y, size_z):
     _register_block(vw, 4, "Wood", vec3(0.84, 0.66, 0.28), vec3(0.66, 0.42, 0.18), vec3(0.76, 0.56, 0.26))
     _register_block(vw, 5, "Leaf", vec3(0.24, 0.74, 0.16), vec3(0.19, 0.60, 0.14), vec3(0.16, 0.48, 0.12))
     _register_block(vw, 6, "Plank", vec3(0.90, 0.72, 0.36), vec3(0.80, 0.58, 0.24), vec3(0.68, 0.46, 0.20))
+    _register_block(vw, 7, "Sand", vec3(0.95, 0.86, 0.48), vec3(0.88, 0.76, 0.40), vec3(0.79, 0.67, 0.34))
+    _register_block(vw, 8, "Azure Clay", vec3(0.38, 0.72, 0.82), vec3(0.30, 0.58, 0.72), vec3(0.24, 0.46, 0.60))
+    _register_block(vw, 9, "Bloom", vec3(0.92, 0.42, 0.70), vec3(0.78, 0.28, 0.56), vec3(0.62, 0.22, 0.44))
+    _register_block(vw, 10, "Crystal", vec3(0.58, 0.88, 1.00), vec3(0.42, 0.70, 0.96), vec3(0.34, 0.54, 0.86))
     vw["mesh_data"] = {}
     vw["gpu_meshes"] = {}
     vw["draws"] = []
@@ -479,6 +483,52 @@ proc _set_voxel_if_in_chunk(vw, bounds, gx, gy, gz, block_id):
 proc _template_tree_metric(gx, gz, seed):
     return math.sin((gx + seed) * 0.73) + math.cos((gz - seed) * 0.61) + math.sin((gx * 0.19) + (gz * 0.27) + seed * 0.11)
 
+proc _template_biome_metric(gx, gz, seed):
+    return math.sin((gx + seed * 1.7) * 0.18) + math.cos((gz - seed * 1.3) * 0.16) + math.sin((gx + gz) * 0.05)
+
+proc _template_bloom_metric(gx, gz, seed):
+    return math.sin((gx - seed * 2.1) * 0.31) + math.cos((gz + seed * 1.1) * 0.27) + math.sin((gx - gz) * 0.12)
+
+proc _template_crystal_metric(gx, gz, seed):
+    return math.sin((gx + seed * 3.0) * 0.43) + math.cos((gz - seed * 2.7) * 0.37)
+
+proc _template_surface_block(vw, gx, gz, h, seed):
+    let biome = _template_biome_metric(gx, gz, seed)
+    if h <= 3 and biome > 1.05:
+        return 7
+    if biome < -1.15:
+        return 8
+    if h >= 6 and _template_crystal_metric(gx, gz, seed) > 1.68:
+        return 10
+    if h >= 4 and _template_bloom_metric(gx, gz, seed) > 1.72:
+        return 9
+    return 1
+
+proc _template_fill_block(surface_block, depth_from_surface):
+    if depth_from_surface <= 0:
+        return surface_block
+    if surface_block == 7:
+        if depth_from_surface <= 2:
+            return 7
+        return 2
+    if surface_block == 8:
+        if depth_from_surface <= 1:
+            return 8
+        return 3
+    if surface_block == 9:
+        if depth_from_surface == 1:
+            return 1
+        if depth_from_surface <= 2:
+            return 2
+        return 3
+    if surface_block == 10:
+        if depth_from_surface <= 2:
+            return 10
+        return 3
+    if depth_from_surface <= 2:
+        return 2
+    return 3
+
 proc _template_has_tree(vw, gx, gz, seed):
     if gx < 2 or gz < 2 or gx >= vw["size_x"] - 2 or gz >= vw["size_z"] - 2:
         return false
@@ -493,6 +543,8 @@ proc _apply_template_tree_chunk(vw, bounds, gx, gz, seed):
         return false
     let ground_y = _template_height(vw, gx, gz, seed) - 1
     if ground_y < 0:
+        return false
+    if get_voxel(vw, gx, ground_y, gz) != 1:
         return false
     let ty = ground_y + 1
     let i = 0
@@ -509,6 +561,25 @@ proc _apply_template_tree_chunk(vw, bounds, gx, gz, seed):
             lz = lz + 1
         lx = lx + 1
     _set_voxel_if_in_chunk(vw, bounds, gx, ty + 5, gz, 5)
+    return true
+
+proc _apply_template_color_feature_chunk(vw, bounds, gx, gz, seed):
+    let ground_y = _template_height(vw, gx, gz, seed) - 1
+    if ground_y < 0 or ground_y + 1 >= vw["size_y"]:
+        return false
+    let surface_block = get_voxel(vw, gx, ground_y, gz)
+    if surface_block != 10:
+        return false
+    let metric = _template_crystal_metric(gx, gz, seed)
+    let spike_height = 1 + math.floor((metric - 1.68) * 2.2)
+    if spike_height < 1:
+        spike_height = 1
+    if spike_height > 3:
+        spike_height = 3
+    let i = 1
+    while i <= spike_height and ground_y + i < vw["size_y"]:
+        _set_voxel_if_in_chunk(vw, bounds, gx, ground_y + i, gz, 10)
+        i = i + 1
     return true
 
 proc _add_template_tree(vw, gx, gz):
@@ -548,20 +619,25 @@ proc generate_voxel_template_chunk(vw, cx, cy, cz, seed):
         let gz = bounds["z0"]
         while gz < bounds["z1"]:
             let h = _template_height(vw, gx, gz, seed)
+            let surface_block = _template_surface_block(vw, gx, gz, h, seed)
             let y = bounds["y0"]
             while y < bounds["y1"]:
                 let block_id = 0
                 if y < h:
-                    block_id = 3
-                    if y == h - 1:
-                        block_id = 1
-                    else:
-                        if y >= h - 3:
-                            block_id = 2
+                    let depth_from_surface = (h - 1) - y
+                    block_id = _template_fill_block(surface_block, depth_from_surface)
                 _set_voxel_if_in_bounds(vw, gx, y, gz, block_id)
                 y = y + 1
             gz = gz + 1
         gx = gx + 1
+
+    let fx = bounds["x0"] - 1
+    while fx <= bounds["x1"]:
+        let fz = bounds["z0"] - 1
+        while fz <= bounds["z1"]:
+            _apply_template_color_feature_chunk(vw, bounds, fx, fz, seed)
+            fz = fz + 1
+        fx = fx + 1
 
     let tx = bounds["x0"] - 1
     while tx <= bounds["x1"]:
