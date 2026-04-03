@@ -18,11 +18,11 @@ from input import action_just_pressed, default_fps_bindings, scroll_value
 from math3d import vec3, mat4_identity, mat4_mul, radians
 from engine_math import make_transform, transform_to_matrix
 from lighting import create_light_scene, directional_light
-from lighting import add_light, set_ambient, set_view_position
+from lighting import add_light, set_ambient, set_fog, set_view_position
 from lighting import init_light_gpu, update_light_ubo
 from render_system import create_lit_material, draw_mesh_lit_surface_controlled
 from render_system import set_lit_material_shadow_source
-from sky import create_sky, init_sky_gpu, draw_sky, sky_preset_day
+from sky import create_sky, init_sky_gpu, draw_sky, sky_preset_vibrant_day
 from shadow_map import create_shadow_renderer, compute_light_vp_stable
 from shadow_map import begin_shadow_frame, end_shadow_frame, shadow_draw_mesh
 from mesh import cube_mesh, upload_mesh
@@ -76,11 +76,13 @@ print "GPU: " + gpu.device_name()
 let ls = create_light_scene()
 init_light_gpu(ls)
 let sun_dir = vec3(-0.45, -0.82, -0.35)
-add_light(ls, directional_light(sun_dir[0], sun_dir[1], sun_dir[2], 1.0, 0.98, 0.92, 1.6))
-set_ambient(ls, 0.16, 0.18, 0.22, 0.45)
+add_light(ls, directional_light(sun_dir[0], sun_dir[1], sun_dir[2], 1.0, 0.98, 0.92, 1.2))
+set_ambient(ls, 0.14, 0.18, 0.28, 0.24)
+set_fog(ls, true, 30.0, 140.0, 0.66, 0.78, 0.95)
+ls["fog_density"] = 0.004
 
 let sky = create_sky()
-sky_preset_day(sky)
+sky_preset_vibrant_day(sky)
 init_sky_gpu(sky, r["render_pass"])
 
 let lit_mat = create_lit_material(r["render_pass"], ls["desc_layout"], ls["desc_set"])

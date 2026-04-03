@@ -15,6 +15,8 @@ let SKIN_UBO_FLOATS = MAX_SKIN_JOINTS * 16
 let SKIN_UBO_BYTES = SKIN_UBO_FLOATS * 4
 let SHADOW_UBO_FLOATS = 20
 let SHADOW_UBO_BYTES = SHADOW_UBO_FLOATS * 4
+let LIT_MATERIAL_UBO_FLOATS = 8
+let LIT_MATERIAL_UBO_BYTES = LIT_MATERIAL_UBO_FLOATS * 4
 
 proc _create_skin_binding():
     let b0 = {}
@@ -88,6 +90,72 @@ proc _update_shadow_binding(binding):
     gpu.update_uniform(binding["ubo"], build_shadow_uniform_data(light_vp, enabled, resolution, light_index))
     return binding["ubo"]
 
+proc build_lit_material_uniform_data(base_color, receive_shadows, texture_info):
+    let color = [0.75, 0.75, 0.75, 1.0]
+    if base_color != nil:
+        color = base_color
+    let receive_flag = 1.0
+    if receive_shadows == false:
+        receive_flag = 0.0
+    let texture_enabled = 0.0
+    let texture_block_id = 0.0
+    let texture_face_id = 0.0
+    if texture_info != nil:
+        if len(texture_info) > 0:
+            texture_enabled = texture_info[0]
+        if len(texture_info) > 1:
+            texture_block_id = texture_info[1]
+        if len(texture_info) > 2:
+            texture_face_id = texture_info[2]
+    return [color[0], color[1], color[2], color[3], receive_flag, texture_enabled, texture_block_id, texture_face_id]
+
+proc _create_lit_material_binding():
+    let b0 = {}
+    b0["binding"] = 0
+    b0["type"] = gpu.DESC_UNIFORM_BUFFER
+    b0["stage"] = gpu.STAGE_FRAGMENT
+    b0["count"] = 1
+    let layout = gpu.create_descriptor_layout([b0])
+    let ps0 = {}
+    ps0["type"] = gpu.DESC_UNIFORM_BUFFER
+    ps0["count"] = 1
+    let pool = gpu.create_descriptor_pool(1, [ps0])
+    let desc_set = gpu.allocate_descriptor_set(pool, layout)
+    let ubo = gpu.create_uniform_buffer(LIT_MATERIAL_UBO_BYTES)
+    gpu.update_descriptor(desc_set, 0, gpu.DESC_UNIFORM_BUFFER, ubo)
+    gpu.update_uniform(ubo, build_lit_material_uniform_data(nil, true, nil))
+    return {"layout": layout, "pool": pool, "desc_set": desc_set, "ubo": ubo}
+
+proc _update_lit_material_binding(binding, base_color, receive_shadows, texture_info):
+    if binding == nil or dict_has(binding, "ubo") == false:
+        return nil
+    let data = build_lit_material_uniform_data(base_color, receive_shadows, texture_info)
+    gpu.update_uniform(binding["ubo"], data)
+    return binding["ubo"]
+
+proc _lit_material_binding_key(base_color, receive_shadows, texture_info):
+    let data = build_lit_material_uniform_data(base_color, receive_shadows, texture_info)
+    let key = ""
+    let i = 0
+    while i < len(data):
+        if i > 0:
+            key = key + "|"
+        key = key + str(data[i])
+        i = i + 1
+    return key
+
+proc _get_lit_material_binding(mat, base_color, receive_shadows, texture_info):
+    if dict_has(mat, "material_bindings") == false or mat["material_bindings"] == nil:
+        mat["material_bindings"] = {}
+    let key = _lit_material_binding_key(base_color, receive_shadows, texture_info)
+    if dict_has(mat["material_bindings"], key):
+        return mat["material_bindings"][key]
+    let binding = _create_lit_material_binding()
+    binding["material_key"] = key
+    _update_lit_material_binding(binding, base_color, receive_shadows, texture_info)
+    mat["material_bindings"][key] = binding
+    return binding
+
 # ============================================================================
 # Material registry
 # ============================================================================
@@ -115,11 +183,12 @@ proc create_lit_material(render_pass, desc_layout, desc_set):
         print "ERROR: Failed to load lit shaders"
         return nil
 
-    # Pipeline layout: push = 160 bytes (MVP + Model + baseColor + shadow flags), 1 descriptor set (SceneUBO)
+    # Keep lit push constants to the transform matrices only.
     let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
     let skin_binding = _create_skin_binding()
     let shadow_binding = _create_shadow_binding()
-    let pipe_layout = gpu.create_pipeline_layout([desc_layout, skin_binding["layout"], shadow_binding["layout"]], 160, stage_flags)
+    let material_binding = _create_lit_material_binding()
+    let pipe_layout = gpu.create_pipeline_layout([desc_layout, skin_binding["layout"], shadow_binding["layout"], material_binding["layout"]], 128, stage_flags)
 
     let cfg = {}
     cfg["layout"] = pipe_layout
@@ -154,9 +223,14 @@ proc create_lit_material(render_pass, desc_layout, desc_set):
     mat["shadow_dummy_image"] = shadow_binding["dummy_image"]
     mat["shadow_dummy_sampler"] = shadow_binding["dummy_sampler"]
     mat["shadow_source"] = nil
+    mat["material_layout"] = material_binding["layout"]
+    mat["material_bindings"] = {}
     mat["vert"] = vert
     mat["frag"] = frag
     _update_shadow_binding(mat)
+    let default_key = _lit_material_binding_key(nil, true, nil)
+    material_binding["material_key"] = default_key
+    mat["material_bindings"][default_key] = material_binding
     return mat
 
 proc set_lit_material_shadow_source(mat, shadow_renderer):
@@ -206,22 +280,6 @@ proc create_unlit_material(render_pass):
 # Draw helpers
 # ============================================================================
 proc _build_lit_push_data(mvp_data, model_data, base_color, receive_shadows, texture_info):
-    let color = [0.75, 0.75, 0.75, 1.0]
-    if base_color != nil:
-        color = base_color
-    let receive_flag = 1.0
-    if receive_shadows == false:
-        receive_flag = 0.0
-    let texture_enabled = 0.0
-    let texture_block_id = 0.0
-    let texture_face_id = 0.0
-    if texture_info != nil:
-        if len(texture_info) > 0:
-            texture_enabled = texture_info[0]
-        if len(texture_info) > 1:
-            texture_block_id = texture_info[1]
-        if len(texture_info) > 2:
-            texture_face_id = texture_info[2]
     let push_data = []
     let i = 0
     while i < 16:
@@ -231,14 +289,6 @@ proc _build_lit_push_data(mvp_data, model_data, base_color, receive_shadows, tex
     while i < 16:
         push(push_data, model_data[i])
         i = i + 1
-    push(push_data, color[0])
-    push(push_data, color[1])
-    push(push_data, color[2])
-    push(push_data, color[3])
-    push(push_data, receive_flag)
-    push(push_data, texture_enabled)
-    push(push_data, texture_block_id)
-    push(push_data, texture_face_id)
     return push_data
 
 proc build_lit_push_data(mvp_data, model_data, base_color, receive_shadows):
@@ -261,9 +311,11 @@ proc draw_mesh_lit_skinned_controlled(cmd, mat, mesh_gpu, mvp_data, model_data, 
         joint_palette = skin_draw["joint_palette"]
     _update_skin_binding(mat, joint_palette)
     _update_shadow_binding(mat)
+    let material_binding = _get_lit_material_binding(mat, nil, receive_shadows, nil)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 0, desc_set, 0)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 1, mat["skin_desc_set"], 0)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 2, mat["shadow_desc_set"], 0)
+    gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 3, material_binding["desc_set"], 0)
     let push_data = _build_lit_push_data(mvp_data, model_data, nil, receive_shadows, nil)
     gpu.cmd_push_constants(cmd, mat["pipe_layout"], stage_flags, push_data)
     gpu.cmd_bind_vertex_buffer(cmd, mesh_gpu["vbuf"])
@@ -301,9 +353,11 @@ proc draw_mesh_lit_surface_skinned_controlled(cmd, mat, mesh_gpu, mvp_data, mode
         joint_palette = skin_draw["joint_palette"]
     _update_skin_binding(mat, joint_palette)
     _update_shadow_binding(mat)
+    let material_binding = _get_lit_material_binding(mat, base_color, receive_shadows, texture_info)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 0, desc_set, 0)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 1, mat["skin_desc_set"], 0)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 2, mat["shadow_desc_set"], 0)
+    gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 3, material_binding["desc_set"], 0)
     let push_data = _build_lit_push_data(mvp_data, model_data, base_color, receive_shadows, texture_info)
     gpu.cmd_push_constants(cmd, mat["pipe_layout"], stage_flags, push_data)
     gpu.cmd_bind_vertex_buffer(cmd, mesh_gpu["vbuf"])

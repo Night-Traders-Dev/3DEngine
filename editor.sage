@@ -30,7 +30,7 @@ from math3d import vec3, v3_add, v3_sub, v3_scale, v3_normalize, v3_cross
 from math3d import mat4_mul, mat4_identity, radians, mat4_perspective, mat4_translate, mat4_scale
 from mesh import cube_mesh, sphere_mesh, plane_mesh, upload_mesh
 from lighting import create_light_scene, directional_light, point_light
-from lighting import add_light, set_ambient, set_view_position
+from lighting import add_light, set_ambient, set_fog, set_view_position
 from lighting import init_light_gpu, update_light_ubo
 from render_system import create_lit_material, draw_mesh_lit, draw_mesh_lit_surface
 from render_system import draw_mesh_lit_surface_skinned, draw_mesh_lit_controlled
@@ -40,7 +40,7 @@ from pbr_material import create_pbr_renderer, create_pbr_fallback_textures
 from pbr_material import create_pbr_material_from_imported, bind_pbr_material, draw_pbr
 from pbr_material import draw_pbr_skinned, draw_pbr_controlled, draw_pbr_skinned_controlled
 from pbr_material import set_pbr_shadow_source
-from sky import create_sky, sky_preset_day, init_sky_gpu, draw_sky
+from sky import create_sky, sky_preset_vibrant_day, init_sky_gpu, draw_sky
 from editor_grid import create_editor_grid, draw_editor_grid
 from ui_renderer import create_ui_renderer, draw_ui, build_ui_vertices
 from ui_core import create_widget, create_rect, create_panel, add_child, collect_quads, compute_layout
@@ -126,7 +126,7 @@ let r = create_renderer(_init_w, _init_h, editor_title())
 if r == nil:
     raise "Failed to create renderer"
 # Very dark viewport so lit 3D objects stand out clearly
-r["clear_color"] = [0.028, 0.028, 0.032, 1.0]
+r["clear_color"] = [0.012, 0.016, 0.030, 1.0]
 print "GPU: " + gpu.device_name()
 
 # ============================================================================
@@ -151,7 +151,9 @@ gpu.set_cursor_mode(gpu.CURSOR_NORMAL)
 # ============================================================================
 let ls = create_light_scene()
 init_light_gpu(ls)
-set_ambient(ls, 0.25, 0.25, 0.3, 0.5)
+set_ambient(ls, 0.16, 0.20, 0.30, 0.24)
+set_fog(ls, true, 34.0, 150.0, 0.66, 0.78, 0.95)
+ls["fog_density"] = 0.004
 # Force initial UBO upload
 set_view_position(ls, vec3(0.0, 5.0, 10.0))
 update_light_ubo(ls)
@@ -161,7 +163,7 @@ let pbr_sampler = gpu.create_sampler(gpu.FILTER_LINEAR, gpu.FILTER_LINEAR, gpu.A
 let pbr_fallbacks = create_pbr_fallback_textures()
 
 let sky = create_sky()
-sky_preset_day(sky)
+sky_preset_vibrant_day(sky)
 init_sky_gpu(sky, r["render_pass"])
 
 # Editor grid (Unreal-style ground grid)
@@ -283,13 +285,13 @@ proc _populate_voxel_template_scene(editor_ctx, w):
     sun_t["rotation"] = vec3(0.85, -0.65, 0.0)
     add_component(w, sun, "transform", sun_t)
     add_component(w, sun, "name", NameComponent("VoxelSun"))
-    add_component(w, sun, "light", DirectionalLightComponent(1.0, 0.97, 0.92, 1.8))
+    add_component(w, sun, "light", DirectionalLightComponent(1.0, 0.97, 0.92, 1.15))
     spawned = spawned + 1
 
     let lamp = spawn(w)
     add_component(w, lamp, "transform", TransformComponent(3.0, 5.0, 3.0))
     add_component(w, lamp, "name", NameComponent("VoxelLamp"))
-    add_component(w, lamp, "light", PointLightComponent(1.0, 0.78, 0.52, 3.2, 18.0))
+    add_component(w, lamp, "light", PointLightComponent(1.0, 0.78, 0.52, 1.8, 18.0))
     spawned = spawned + 1
 
     return spawned

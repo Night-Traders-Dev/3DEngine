@@ -6,57 +6,77 @@ layout(location = 2) in vec2 fragUV;
 
 layout(location = 0) out vec4 outColor;
 
-// Light types: 0 = point, 1 = directional, 2 = spot
 struct Light {
-    vec4 position;       // xyz = position/direction, w = type
-    vec4 color;          // rgb = color, w = intensity
-    vec4 params;         // x = radius/range, y = inner cone, z = outer cone, w = unused
+    vec4 position;
+    vec4 color;
+    vec4 params;
 };
 
 layout(set = 0, binding = 0) uniform SceneUBO {
     Light lights[16];
-    vec4 viewPos;        // xyz = camera pos, w = light count
-    vec4 ambient;        // rgb = ambient color, w = ambient intensity
-    vec4 fogParams;      // x = fog start, y = fog end, z = fog density, w = fog enable
-    vec4 fogColor;       // rgb = fog color, w = unused
+    vec4 viewPos;
+    vec4 ambient;
+    vec4 fogParams;
+    vec4 fogColor;
 } scene;
 
 layout(set = 2, binding = 0) uniform sampler2D shadowMap;
 
 layout(set = 2, binding = 1) uniform ShadowUBO {
     mat4 lightVP;
-    vec4 shadowParams;   // x=enabled, y=texel_size, z=bias, w=primary directional light index
+    vec4 shadowParams;
 } shadow_data;
+
+layout(set = 3, binding = 0) uniform MaterialUBO {
+    vec4 baseColor;
+    vec4 surfaceControl; // x = receive shadows, y = voxel detail, z = block id, w = face id
+} material_data;
 
 layout(push_constant) uniform PushConstants {
     mat4 mvp;
     mat4 model;
-    vec4 baseColor;
-    vec4 shadowControl;
 } pc;
 
 float hash21(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
 }
 
+vec3 saturate_color(vec3 color, float amount) {
+    float lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    return mix(vec3(lum), color, amount);
+}
+
+vec3 aces_filmic(vec3 x) {
+    float a = 2.51;
+    float b = 0.03;
+    float c = 2.43;
+    float d = 0.59;
+    float e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
+bool is_foliage_like(int blockId) {
+    return blockId == 1 || blockId == 5 || blockId == 9 || blockId == 10;
+}
+
 vec3 voxel_palette_color(int blockId, int faceId, vec3 fallbackColor) {
     if (blockId == 1) {
-        if (faceId == 0) return vec3(0.28, 0.86, 0.16);
-        if (faceId == 2) return vec3(0.56, 0.34, 0.16);
-        return vec3(0.52, 0.43, 0.18);
+        if (faceId == 0) return vec3(0.25, 0.76, 0.19);
+        if (faceId == 2) return vec3(0.44, 0.28, 0.12);
+        return vec3(0.55, 0.39, 0.16);
     }
-    if (blockId == 2) return vec3(0.58, 0.34, 0.16);
-    if (blockId == 3) return vec3(0.58, 0.66, 0.76);
+    if (blockId == 2) return vec3(0.56, 0.33, 0.15);
+    if (blockId == 3) return vec3(0.54, 0.61, 0.70);
     if (blockId == 4) {
-        if (faceId == 1) return vec3(0.66, 0.42, 0.18);
-        return vec3(0.82, 0.62, 0.28);
+        if (faceId == 1) return vec3(0.49, 0.31, 0.14);
+        return vec3(0.73, 0.55, 0.24);
     }
-    if (blockId == 5) return vec3(0.20, 0.68, 0.16);
-    if (blockId == 6) return vec3(0.88, 0.66, 0.30);
-    if (blockId == 7) return vec3(0.92, 0.82, 0.44);
-    if (blockId == 8) return vec3(0.34, 0.66, 0.78);
-    if (blockId == 9) return vec3(0.88, 0.34, 0.66);
-    if (blockId == 10) return vec3(0.46, 0.82, 0.98);
+    if (blockId == 5) return vec3(0.18, 0.56, 0.15);
+    if (blockId == 6) return vec3(0.78, 0.57, 0.27);
+    if (blockId == 7) return vec3(0.90, 0.79, 0.46);
+    if (blockId == 8) return vec3(0.34, 0.64, 0.82);
+    if (blockId == 9) return vec3(0.88, 0.30, 0.63);
+    if (blockId == 10) return vec3(0.46, 0.86, 1.00);
     return fallbackColor;
 }
 
@@ -67,31 +87,31 @@ vec3 voxel_detail_color(vec3 baseColor, float blockIdValue, float faceIdValue, v
     vec2 texel = floor(tileUV * 16.0);
     float noiseA = hash21(texel + vec2(float(blockId) * 17.0, float(faceId) * 29.0));
     float noiseB = hash21(texel.yx + vec2(float(blockId) * 11.0 + 5.0, float(faceId) * 13.0 + 3.0));
-    vec3 color = voxel_palette_color(blockId, faceId, baseColor) * mix(0.94, 1.08, noiseA);
+    vec3 color = voxel_palette_color(blockId, faceId, baseColor) * mix(0.93, 1.09, noiseA);
 
     if (blockId == 1) {
         if (faceId == 0) {
-            color *= mix(0.98, 1.18, noiseA);
-            if (noiseB > 0.86) {
-                color *= 1.10;
+            color *= mix(0.96, 1.22, noiseA);
+            if (noiseB > 0.84) {
+                color *= 1.08;
             }
         } else if (faceId == 1) {
             float grassBand = step(12.0, texel.y);
-            vec3 dirt = vec3(0.50, 0.40, 0.18) * mix(0.92, 1.06, noiseA);
-            vec3 grass = vec3(0.24, 0.74, 0.20) * mix(0.96, 1.20, noiseB);
+            vec3 dirt = vec3(0.49, 0.37, 0.16) * mix(0.90, 1.05, noiseA);
+            vec3 grass = vec3(0.22, 0.68, 0.18) * mix(0.96, 1.20, noiseB);
             color = mix(dirt, grass, grassBand);
         } else {
-            color *= mix(0.86, 1.00, noiseA);
+            color *= mix(0.86, 1.02, noiseA);
         }
     } else if (blockId == 2) {
-        color *= mix(0.88, 1.06, noiseA);
+        color *= mix(0.90, 1.05, noiseA);
         if (noiseB > 0.82) {
-            color *= 0.94;
+            color *= 0.95;
         }
     } else if (blockId == 3) {
         float crack = step(0.86, hash21(texel * vec2(1.0, 2.0) + vec2(7.0, 3.0)));
-        color *= mix(0.86, 1.08, noiseA);
-        color -= crack * 0.07;
+        color *= mix(0.84, 1.07, noiseA);
+        color -= crack * 0.06;
         color += vec3(0.01, 0.02, 0.04) * noiseB;
     } else if (blockId == 4) {
         if (faceId == 1) {
@@ -103,12 +123,12 @@ vec3 voxel_detail_color(vec3 baseColor, float blockIdValue, float faceIdValue, v
             color *= 0.98 + rings * 0.06;
         }
     } else if (blockId == 5) {
-        color *= mix(0.84, 1.18, noiseA);
+        color *= mix(0.86, 1.22, noiseA);
         if (noiseB > 0.74) {
-            color *= 1.12;
+            color *= 1.10;
         }
         if (noiseA < 0.16) {
-            color *= 0.86;
+            color *= 0.84;
         }
     } else if (blockId == 6) {
         float plankLine = step(0.5, fract((texel.y + float(faceId) * 2.0) / 4.0));
@@ -167,17 +187,22 @@ float sample_shadow(vec3 normal, vec3 lightDir) {
 }
 
 void main() {
-    vec3 baseColor = pc.baseColor.rgb;
-    if (pc.shadowControl.y > 0.5) {
-        baseColor = voxel_detail_color(baseColor, pc.shadowControl.z, pc.shadowControl.w, fragUV);
+    vec3 baseColor = material_data.baseColor.rgb;
+    int voxelBlockId = int(material_data.surfaceControl.z + 0.5);
+    if (material_data.surfaceControl.y > 0.5) {
+        baseColor = voxel_detail_color(baseColor, material_data.surfaceControl.z, material_data.surfaceControl.w, fragUV);
     }
 
     vec3 N = normalize(fragNormal);
     vec3 V = normalize(scene.viewPos.xyz - fragWorldPos);
     int lightCount = int(scene.viewPos.w);
+    float upness = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
+    bool foliageLike = is_foliage_like(voxelBlockId);
 
-    // Ambient
     vec3 result = scene.ambient.rgb * scene.ambient.w * baseColor;
+    vec3 skyBounce = mix(vec3(0.06, 0.05, 0.04), vec3(0.22, 0.40, 0.78), upness);
+    result += baseColor * skyBounce * mix(0.05, 0.12, upness);
+    result += baseColor * vec3(0.08, 0.05, 0.03) * (1.0 - upness) * 0.08;
 
     for (int i = 0; i < lightCount && i < 16; i++) {
         int lightType = int(scene.lights[i].position.w);
@@ -189,22 +214,18 @@ void main() {
         float atten = 1.0;
 
         if (lightType == 1) {
-            // Directional light
             L = normalize(-scene.lights[i].position.xyz);
         } else {
-            // Point or spot light
             vec3 lightPos = scene.lights[i].position.xyz;
             vec3 toLight = lightPos - fragWorldPos;
             float dist = length(toLight);
             L = toLight / max(dist, 0.001);
 
-            // Attenuation
             float r2 = range * range;
             atten = max(1.0 - (dist * dist) / r2, 0.0);
             atten *= atten;
 
             if (lightType == 2) {
-                // Spot light cone
                 vec3 spotDir = normalize(-scene.lights[i].position.xyz);
                 float theta = dot(L, spotDir);
                 float inner = scene.lights[i].params.y;
@@ -217,31 +238,48 @@ void main() {
 
         atten *= intensity;
         float visibility = 1.0;
-        if (pc.shadowControl.x > 0.5 && lightType == 1 && i == int(shadow_data.shadowParams.w + 0.5)) {
+        if (material_data.surfaceControl.x > 0.5 && lightType == 1 && i == int(shadow_data.shadowParams.w + 0.5)) {
             visibility = sample_shadow(N, L);
         }
 
-        // Diffuse
-        float diff = max(dot(N, L), 0.0);
-
-        // Specular (Blinn-Phong)
+        float ndotl = max(dot(N, L), 0.0);
+        float wrappedDiffuse = clamp(dot(N, L) * 0.65 + 0.35, 0.0, 1.0);
+        float diff = mix(ndotl, wrappedDiffuse, 0.18);
         vec3 H = normalize(L + V);
-        float spec = pow(max(dot(N, H), 0.0), 64.0);
+        float spec = pow(max(dot(N, H), 0.0), 40.0);
+        float fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.0);
 
-        result += baseColor * lightColor * diff * atten * visibility;
-        result += lightColor * spec * atten * 0.3 * visibility;
+        vec3 sunTint = mix(lightColor, vec3(1.0, 0.78, 0.48), lightType == 1 ? 0.25 : 0.10);
+        vec3 diffuseTerm = baseColor * sunTint * diff * atten * visibility;
+        vec3 specularTerm = sunTint * spec * atten * (0.10 + fresnel * 0.06) * visibility;
+
+        if (foliageLike && lightType == 1) {
+            float trans = pow(clamp(1.0 - ndotl, 0.0, 1.0), 1.5) * (0.35 + 0.65 * max(dot(-L, V), 0.0));
+            diffuseTerm += baseColor * vec3(1.0, 0.76, 0.44) * trans * atten * 0.10 * visibility;
+        }
+
+        result += diffuseTerm;
+        result += specularTerm;
     }
 
-    // Fog
+    result *= mix(0.82, 1.00, upness);
+    result = saturate_color(result, material_data.surfaceControl.y > 0.5 ? 1.12 : 1.03);
+
     if (scene.fogParams.w > 0.5) {
         float dist = length(scene.viewPos.xyz - fragWorldPos);
         float fogStart = scene.fogParams.x;
         float fogEnd = scene.fogParams.y;
-        float fogFactor = clamp((dist - fogStart) / (fogEnd - fogStart), 0.0, 1.0);
-        result = mix(result, scene.fogColor.rgb, fogFactor);
+        float linearFog = clamp((dist - fogStart) / max(fogEnd - fogStart, 0.0001), 0.0, 1.0);
+        float expFog = 1.0 - exp(-dist * scene.fogParams.z * 0.010);
+        float fogFactor = clamp(mix(linearFog, expFog, 0.35), 0.0, 1.0);
+        vec3 fogColor = scene.fogColor.rgb;
+        float horizonGlow = pow(clamp(1.0 - upness, 0.0, 1.0), 1.5);
+        fogColor = mix(fogColor, vec3(0.92, 0.78, 0.62), horizonGlow * 0.05);
+        result = mix(result, fogColor, fogFactor);
     }
 
-    // Gamma correction
+    result = max(result - vec3(0.01), vec3(0.0));
+    result = aces_filmic(result * 0.88);
     result = pow(result, vec3(1.0 / 2.2));
-    outColor = vec4(result, pc.baseColor.a);
+    outColor = vec4(result, material_data.baseColor.a);
 }

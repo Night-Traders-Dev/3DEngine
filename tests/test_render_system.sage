@@ -1,7 +1,8 @@
 # test_render_system.sage - Sanity checks for the render system (non-GPU parts)
 # Run: ./run.sh tests/test_render_system.sage
 
-from render_system import create_material_registry, register_material, get_material, build_lit_push_data
+from render_system import create_material_registry, register_material, get_material
+from render_system import build_lit_push_data, build_lit_material_uniform_data
 from mesh import normalize_mesh_vertices, build_skin_palette_uniform_data, MAX_SKIN_JOINTS
 
 let pass_count = 0
@@ -70,15 +71,22 @@ while i < 16:
     push(model, 100.0 + i)
     i = i + 1
 let lit_push = build_lit_push_data(mvp, model, [0.2, 0.4, 0.6, 0.8], true)
-check("lit push has 40 floats", len(lit_push) == 40)
+check("lit push has 32 floats", len(lit_push) == 32)
 check("lit push starts with mvp", lit_push[0] == 0.0 and lit_push[15] == 15.0)
 check("lit push includes model", lit_push[16] == 100.0 and lit_push[31] == 115.0)
-check("lit push includes base color", lit_push[32] == 0.2 and lit_push[35] == 0.8)
-check("lit push enables receiving shadows", lit_push[36] == 1.0)
 
 let default_push = build_lit_push_data(mvp, model, nil, false)
-check("default lit alpha is 1", default_push[35] == 1.0)
-check("default lit can disable receiving shadows", default_push[36] == 0.0)
+check("default lit push keeps transform payload", default_push[0] == 0.0 and default_push[31] == 115.0)
+
+let lit_uniform = build_lit_material_uniform_data([0.2, 0.4, 0.6, 0.8], false, [1.0, 7.0, 2.0])
+check("lit material uniform has 8 floats", len(lit_uniform) == 8)
+check("lit material uniform stores base color", lit_uniform[0] == 0.2 and lit_uniform[3] == 0.8)
+check("lit material uniform stores receive shadows", lit_uniform[4] == 0.0)
+check("lit material uniform stores voxel texture info", lit_uniform[5] == 1.0 and lit_uniform[6] == 7.0 and lit_uniform[7] == 2.0)
+
+let default_uniform = build_lit_material_uniform_data(nil, true, nil)
+check("default lit material alpha is 1", default_uniform[3] == 1.0)
+check("default lit material receives shadows", default_uniform[4] == 1.0)
 
 # --- Mesh vertex normalization ---
 let static_vertices = [1.0, 2.0, 3.0, 0.0, 1.0, 0.0, 0.25, 0.75]
