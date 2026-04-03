@@ -1,7 +1,7 @@
 # test_voxel_world.sage - Sanity checks for the voxel template world helpers
 
 from voxel_world import create_voxel_world, voxel_palette_ids, voxel_palette_entry
-from voxel_world import voxel_block_name, voxel_block_surface, voxel_block_face_surface, voxel_is_surface_block
+from voxel_world import voxel_block_name, voxel_block_surface, voxel_block_face_surface, voxel_block_hardness, voxel_is_surface_block
 from voxel_world import get_voxel, set_voxel, fill_voxel_box, build_voxel_meshes, generate_voxel_template_world
 from voxel_world import voxel_top_solid_y, sample_voxel_ground, sample_voxel_ground_radius
 from voxel_world import raycast_voxel_world, voxel_collides_player, resolve_player_voxel_collision
@@ -72,7 +72,7 @@ print "=== Voxel World Sanity Checks ==="
 
 let vw = create_voxel_world(8, 8, 8)
 check("voxel world created", vw != nil)
-check("palette has ten block types", len(voxel_palette_ids(vw)) == 10)
+check("palette has at least ten block types", len(voxel_palette_ids(vw)) >= 10)
 check("grass palette entry exists", voxel_palette_entry(vw, 1) != nil)
 check("plank palette entry exists", voxel_palette_entry(vw, 6) != nil)
 check("sand palette entry exists", voxel_palette_entry(vw, 7) != nil)
@@ -169,6 +169,8 @@ check("generated world includes sand biome blocks", _count_block(colorful_genera
 check("generated world now includes water blocks", _count_block(colorful_generated, 8) > 0)
 check("generated world keeps natural grass terrain", _count_block(colorful_generated, 1) > 0)
 check("generated world keeps bloom accents sparse", _count_block(colorful_generated, 9) < _count_block(colorful_generated, 1))
+check("generated world includes ore veins", _count_block(colorful_generated, 11) + _count_block(colorful_generated, 12) + _count_block(colorful_generated, 13) + _count_block(colorful_generated, 14) > 0)
+check("stone blocks report hardness values", voxel_block_hardness(generated, 3) == 2.5)
 check("generated world keeps crystal accents sparse", _count_block(colorful_generated, 10) < _count_block(colorful_generated, 3) + 1)
 
 let lazy_generated = create_voxel_world(48, 18, 48)

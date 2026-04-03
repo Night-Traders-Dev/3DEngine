@@ -58,7 +58,7 @@ proc _palette_key(block_id):
 proc _face_palette_key(block_id, face_group):
     return str(block_id) + ":" + face_group
 
-proc _register_block(vw, block_id, name, top_color, side_color, bottom_color):
+proc _register_block(vw, block_id, name, top_color, side_color, bottom_color, hardness, harvest_tier):
     let entry = {}
     entry["id"] = block_id
     entry["name"] = name
@@ -66,11 +66,37 @@ proc _register_block(vw, block_id, name, top_color, side_color, bottom_color):
     entry["top_color"] = top_color
     entry["side_color"] = side_color
     entry["bottom_color"] = bottom_color
+    entry["hardness"] = hardness
+    entry["harvest_tier"] = harvest_tier
     vw["palette"][_palette_key(block_id)] = entry
     push(vw["palette_ids"], block_id)
 
+proc voxel_block_hardness(vw, block_id):
+    let entry = voxel_palette_entry(vw, block_id)
+    if entry == nil or dict_has(entry, "hardness") == false:
+        return 1.0
+    return entry["hardness"]
+
+proc voxel_block_harvest_tier(vw, block_id):
+    let entry = voxel_palette_entry(vw, block_id)
+    if entry == nil or dict_has(entry, "harvest_tier") == false:
+        return 0
+    return entry["harvest_tier"]
+
 proc voxel_is_water_block(block_id):
     return block_id == 8
+
+proc voxel_can_harvest_block(tool_tier, block_id):
+    if block_id == 0:
+        return false
+    if block_id == 8:
+        # water cannot be mined directly with tools
+        return false
+    if block_id == 3 or block_id == 11 or block_id == 12:
+        return tool_tier >= 1
+    if block_id == 13 or block_id == 14:
+        return tool_tier >= 2
+    return true
 
 proc voxel_is_collision_block(block_id):
     return block_id != 0 and voxel_is_water_block(block_id) == false
@@ -104,16 +130,20 @@ proc create_voxel_world(size_x, size_y, size_z):
         i = i + 1
     vw["palette"] = {}
     vw["palette_ids"] = []
-    _register_block(vw, 1, "Grass", vec3(0.32, 0.65, 0.22), vec3(0.47, 0.34, 0.16), vec3(0.39, 0.25, 0.13))
-    _register_block(vw, 2, "Dirt", vec3(0.52, 0.33, 0.18), vec3(0.46, 0.28, 0.15), vec3(0.36, 0.20, 0.10))
-    _register_block(vw, 3, "Stone", vec3(0.56, 0.60, 0.66), vec3(0.44, 0.48, 0.54), vec3(0.33, 0.36, 0.42))
-    _register_block(vw, 4, "Wood", vec3(0.72, 0.56, 0.28), vec3(0.50, 0.33, 0.17), vec3(0.61, 0.45, 0.22))
-    _register_block(vw, 5, "Leaf", vec3(0.22, 0.48, 0.18), vec3(0.15, 0.36, 0.12), vec3(0.11, 0.27, 0.09))
-    _register_block(vw, 6, "Plank", vec3(0.76, 0.58, 0.28), vec3(0.65, 0.46, 0.20), vec3(0.53, 0.35, 0.15))
-    _register_block(vw, 7, "Sand", vec3(0.82, 0.76, 0.56), vec3(0.74, 0.67, 0.49), vec3(0.61, 0.55, 0.40))
-    _register_block(vw, 8, "Water", vec3(0.18, 0.42, 0.70), vec3(0.10, 0.25, 0.54), vec3(0.07, 0.16, 0.36))
-    _register_block(vw, 9, "Bloom", vec3(0.82, 0.29, 0.46), vec3(0.70, 0.22, 0.36), vec3(0.56, 0.17, 0.28))
-    _register_block(vw, 10, "Crystal", vec3(0.56, 0.84, 0.96), vec3(0.39, 0.67, 0.87), vec3(0.27, 0.50, 0.72))
+    _register_block(vw, 1, "Grass", vec3(0.32, 0.65, 0.22), vec3(0.47, 0.34, 0.16), vec3(0.39, 0.25, 0.13), 0.8, 0)
+    _register_block(vw, 2, "Dirt", vec3(0.52, 0.33, 0.18), vec3(0.46, 0.28, 0.15), vec3(0.36, 0.20, 0.10), 0.6, 0)
+    _register_block(vw, 3, "Stone", vec3(0.56, 0.60, 0.66), vec3(0.44, 0.48, 0.54), vec3(0.33, 0.36, 0.42), 2.5, 1)
+    _register_block(vw, 4, "Wood", vec3(0.72, 0.56, 0.28), vec3(0.50, 0.33, 0.17), vec3(0.61, 0.45, 0.22), 1.5, 0)
+    _register_block(vw, 5, "Leaf", vec3(0.22, 0.48, 0.18), vec3(0.15, 0.36, 0.12), vec3(0.11, 0.27, 0.09), 0.5, 0)
+    _register_block(vw, 6, "Plank", vec3(0.76, 0.58, 0.28), vec3(0.65, 0.46, 0.20), vec3(0.53, 0.35, 0.15), 1.2, 0)
+    _register_block(vw, 7, "Sand", vec3(0.82, 0.76, 0.56), vec3(0.74, 0.67, 0.49), vec3(0.61, 0.55, 0.40), 0.7, 0)
+    _register_block(vw, 8, "Water", vec3(0.18, 0.42, 0.70), vec3(0.10, 0.25, 0.54), vec3(0.07, 0.16, 0.36), 0.2, 0)
+    _register_block(vw, 9, "Bloom", vec3(0.82, 0.29, 0.46), vec3(0.70, 0.22, 0.36), vec3(0.56, 0.17, 0.28), 0.9, 0)
+    _register_block(vw, 10, "Crystal", vec3(0.56, 0.84, 0.96), vec3(0.39, 0.67, 0.87), vec3(0.27, 0.50, 0.72), 1.8, 0)
+    _register_block(vw, 11, "Coal Ore", vec3(0.18, 0.18, 0.18), vec3(0.18, 0.18, 0.18), vec3(0.16, 0.16, 0.16), 3.0, 1)
+    _register_block(vw, 12, "Iron Ore", vec3(0.58, 0.47, 0.34), vec3(0.58, 0.47, 0.34), vec3(0.50, 0.41, 0.34), 3.5, 1)
+    _register_block(vw, 13, "Gold Ore", vec3(0.88, 0.70, 0.23), vec3(0.88, 0.70, 0.23), vec3(0.74, 0.58, 0.20), 4.0, 2)
+    _register_block(vw, 14, "Diamond Ore", vec3(0.35, 0.87, 0.94), vec3(0.35, 0.87, 0.94), vec3(0.21, 0.72, 0.78), 4.5, 2)
     vw["mesh_data"] = {}
     vw["gpu_meshes"] = {}
     vw["draws"] = []
@@ -567,6 +597,28 @@ proc _template_fill_block(surface_block, depth_from_surface):
         return 2
     return 3
 
+proc _template_ore_metric(gx, gz, y, seed):
+    return (math.sin((gx + seed * 4.5) * 0.56 + y * 0.35) + math.cos((gz - seed * 3.1) * 0.61 + y * 0.41)) * 0.5 + 0.5
+
+proc _template_ore_block(vw, gx, gz, y, h, seed):
+    let depth_from_surface = h - y
+    if depth_from_surface <= 1 or depth_from_surface > 48:
+        return 0
+    let weight = _template_ore_metric(gx, gz, y, seed)
+    if depth_from_surface <= 16:
+        if weight > 0.88:
+            return 11
+    if depth_from_surface <= 32:
+        if weight > 0.95:
+            return 12
+    if depth_from_surface <= 42:
+        if weight > 0.98:
+            return 13
+    if depth_from_surface <= 48:
+        if weight > 0.995:
+            return 14
+    return 0
+
 proc _template_has_tree(vw, gx, gz, seed):
     if gx < 2 or gz < 2 or gx >= vw["size_x"] - 2 or gz >= vw["size_z"] - 2:
         return false
@@ -672,7 +724,12 @@ proc generate_voxel_template_chunk(vw, cx, cy, cz, seed):
                 let block_id = 0
                 if y < h:
                     let depth_from_surface = (h - 1) - y
-                    block_id = _template_fill_block(surface_block, depth_from_surface)
+                    let base_block = _template_fill_block(surface_block, depth_from_surface)
+                    let ore_block = _template_ore_block(vw, gx, gz, y, h, seed)
+                    if ore_block != 0 and base_block == 3:
+                        block_id = ore_block
+                    else:
+                        block_id = base_block
                 else:
                     if y <= water_level and surface_block != 10:
                         block_id = 8

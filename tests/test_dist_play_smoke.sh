@@ -42,18 +42,31 @@ else
     fi
 fi
 
-if rg -q "Runtime Error:|signal 11|killed|crash" "$play_log"; then
+if (command -v rg >/dev/null 2>&1 && rg -q "Runtime Error:|signal 11|killed|crash" "$play_log"); then
     cat "$play_log"
     check_fail "packaged editor emits no runtime error or crash markers"
 else
-    check_pass
+    if ! command -v rg >/dev/null 2>&1; then
+        if grep -q -E "Runtime Error:|signal 11|killed|crash" "$play_log"; then
+            cat "$play_log"
+            check_fail "packaged editor emits no runtime error or crash markers"
+        else
+            check_pass
+        fi
+    else
+        check_pass
+    fi
 fi
 
-if rg -F -q "Applied voxel template scene" "$play_log" && rg -F -q "Play mode started (auto)" "$play_log"; then
+if (command -v rg >/dev/null 2>&1 && rg -F -q "Applied voxel template scene" "$play_log" && rg -F -q "Play mode started (auto)" "$play_log"); then
     check_pass
 else
-    cat "$play_log"
-    check_fail "packaged editor boots the voxel template and enters Play-In-Editor"
+    if grep -F -q "Applied voxel template scene" "$play_log" && grep -F -q "Play mode started (auto)" "$play_log"; then
+        check_pass
+    else
+        cat "$play_log"
+        check_fail "packaged editor boots the voxel template and enters Play-In-Editor"
+    fi
 fi
 
 echo ""

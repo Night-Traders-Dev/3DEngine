@@ -86,14 +86,62 @@ proc _copy_health_data(health):
     out["last_damage_time"] = health["last_damage_time"]
     return out
 
+proc create_tool(name, tool_tier, durability):
+    let tool = {}
+    tool["name"] = name
+    tool["tier"] = tool_tier
+    tool["durability"] = durability
+    tool["max_durability"] = durability
+    return tool
+
 proc create_voxel_gameplay_state():
     let state = {}
     state["pickups"] = []
     state["mobs"] = []
+    state["tools"] = []
+    state["active_tool"] = 0
     state["next_pickup_id"] = 1
     state["next_mob_id"] = 1
     state["spawn_cursor"] = 0
     return state
+
+proc voxel_add_tool(state, tool):
+    if state == nil or tool == nil:
+        return false
+    if dict_has(state, "tools") == false:
+        state["tools"] = []
+    push(state["tools"], tool)
+    return true
+
+proc voxel_select_tool(state, index):
+    if state == nil or dict_has(state, "tools") == false:
+        return nil
+    if index < 0 or index >= len(state["tools"]):
+        return nil
+    state["active_tool"] = index
+    return state["tools"][index]
+
+proc voxel_active_tool(state):
+    if state == nil or dict_has(state, "tools") == false:
+        return nil
+    if len(state["tools"]) == 0:
+        return nil
+    let index = state["active_tool"]
+    if index < 0 or index >= len(state["tools"]):
+        state["active_tool"] = 0
+        index = 0
+    return state["tools"][index]
+
+proc voxel_durability_use(tool):
+    if tool == nil or tool["durability"] < 0:
+        return true
+    tool["durability"] = tool["durability"] - 1
+    if tool["durability"] <= 0:
+        return false
+    return true
+
+proc voxel_has_tools(state):
+    return state != nil and dict_has(state, "tools") and len(state["tools"]) > 0
 
 proc voxel_pickup_count(state):
     return len(state["pickups"])

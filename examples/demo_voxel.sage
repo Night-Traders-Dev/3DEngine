@@ -15,7 +15,7 @@ from renderer import create_renderer, begin_frame_commands, begin_swapchain_pass
 from renderer import shutdown_renderer, check_resize, update_title_fps
 from input import create_input, update_input, bind_action
 from input import action_just_pressed, default_fps_bindings, scroll_value
-from math3d import vec3, mat4_identity, mat4_mul, radians
+from math3d import vec3, v3_normalize, mat4_identity, mat4_mul, radians
 from engine_math import make_transform, transform_to_matrix
 from lighting import create_light_scene, directional_light
 from lighting import add_light, set_ambient, set_fog, set_view_position, set_scene_time
@@ -38,7 +38,7 @@ from voxel_world import create_voxel_world
 from voxel_world import voxel_palette_ids
 from voxel_world import voxel_block_name, voxel_block_surface, voxel_block_world_center, raycast_voxel_world
 from voxel_world import set_voxel, sample_voxel_ground_radius, voxel_collides_player
-from voxel_world import resolve_player_voxel_collision
+from voxel_world import resolve_player_voxel_collision, voxel_can_harvest_block
 from voxel_world import create_voxel_inventory, voxel_inventory_add, voxel_inventory_remove
 from voxel_world import voxel_inventory_count, voxel_inventory_to_sage, voxel_inventory_from_sage
 from voxel_world import voxel_world_to_sage, voxel_world_from_sage
@@ -47,7 +47,8 @@ from voxel_world import save_voxel_world_chunks, load_voxel_world_chunks, voxel_
 from voxel_world import voxel_chunk_coords_world, voxel_chunk_size
 from voxel_world import ensure_voxel_generated_radius, voxel_generated_chunk_count
 from voxel_hud import create_voxel_hud, update_voxel_hud
-from voxel_gameplay import create_voxel_gameplay_state, spawn_voxel_pickup
+from voxel_gameplay import create_tool, create_voxel_gameplay_state, spawn_voxel_pickup
+from voxel_gameplay import voxel_add_tool, voxel_active_tool, voxel_select_tool, voxel_has_tools, voxel_durability_use
 from voxel_gameplay import update_voxel_pickups, pickup_draw_position
 from voxel_gameplay import spawn_voxel_mob, ensure_voxel_mob_population, update_voxel_mobs
 from voxel_gameplay import find_target_voxel_mob, collect_dead_voxel_mobs
@@ -88,8 +89,13 @@ let postprocess = create_postprocess(r["width"], r["height"], r["render_pass"])
 pfx_shaderpack_day(postprocess)
 
 let sky = create_sky()
-sky_preset_vibrant_day(sky)
+sky_preset_sunset(sky)
 init_sky_gpu(sky, postprocess["scene_target"]["render_pass"])
+
+# Warm, cinematic sunset look like sample images
+set_ambient(ls, 0.65, 0.45, 0.30, 0.40)
+set_fog(ls, true, 20.0, 140.0, 0.72, 0.54, 0.44)
+ls["fog_density"] = 0.0036
 
 let lit_mat = create_lit_material(postprocess["scene_target"]["render_pass"], ls["desc_layout"], ls["desc_set"])
 let lit_water_mat = create_lit_material_transparent(postprocess["scene_target"]["load_render_pass"], ls["desc_layout"], ls["desc_set"])
@@ -150,6 +156,14 @@ let recipes = default_voxel_recipes()
 let voxel_hud = create_voxel_hud()
 let inventory_open = [false]
 let gameplay_state = create_voxel_gameplay_state()
+
+# Tools and progression
+let basic_hands = create_tool("Bare Hands", 0, -1)
+let stone_pickaxe = create_tool("Stone Pickaxe", 1, 120)
+let iron_pickaxe = create_tool("Iron Pickaxe", 2, 220)
+voxel_add_tool(gameplay_state, basic_hands)
+voxel_add_tool(gameplay_state, stone_pickaxe)
+voxel_add_tool(gameplay_state, iron_pickaxe)
 
 # ============================================================================
 # Input
@@ -323,6 +337,12 @@ while running:
         _select_palette_slot(4)
     if gpu.key_just_pressed(gpu.KEY_Z):
         _select_palette_slot(5)
+    if gpu.key_just_pressed(gpu.KEY_T):
+        if voxel_has_tools(gameplay_state):
+            let next_tool = (gameplay_state["active_tool"] + 1) % len(gameplay_state["tools"])
+            let tool = voxel_select_tool(gameplay_state, next_tool)
+            if tool != nil:
+                _set_status("Selected tool: " + tool["name"])
     let sv = scroll_value(inp)
     if sv[1] > 0.1:
         _cycle_selected_block(-1)
@@ -428,6 +448,10 @@ while running:
 
     if player["captured"] and gpu.mouse_just_pressed(gpu.MOUSE_LEFT):
         let attacked_mob = false
+        let active_tool = voxel_active_tool(gameplay_state)
+        let tool_tier = 0
+        if active_tool != nil:
+            tool_tier = active_tool["tier"]
         if mob_target != nil and (target_hit == nil or mob_target["distance"] <= target_hit["distance"]):
             let dealt = damage(mob_target["mob"]["health"], 10.0, ts["total"])
             if dealt > 0.0:
@@ -438,10 +462,25 @@ while running:
                     _set_status("Defeated " + mob_target["mob"]["name"])
         if attacked_mob == false and target_hit != nil and target_hit["y"] > 0:
             let mined_id = target_hit["block_id"]
-            if set_voxel(voxel, target_hit["x"], target_hit["y"], target_hit["z"], 0):
-                spawn_voxel_pickup(gameplay_state, mined_id, 1, voxel_block_world_center(voxel, target_hit["x"], target_hit["y"], target_hit["z"]))
-                _set_status("Mined " + voxel_block_name(voxel, mined_id) + " | Drop spawned")
-                target_hit = nil
+            if voxel_can_harvest_block(tool_tier, mined_id) == false:
+                _set_status("Tool too weak to mine " + voxel_block_name(voxel, mined_id))
+            else:
+                if set_voxel(voxel, target_hit["x"], target_hit["y"], target_hit["z"], 0):
+                    spawn_voxel_pickup(gameplay_state, mined_id, 1, voxel_block_world_center(voxel, target_hit["x"], target_hit["y"], target_hit["z"]))
+                    _set_status("Mined " + voxel_block_name(voxel, mined_id) + " with " + (active_tool != nil ? active_tool["name"] : "hand") + " | Drop spawned")
+                    if active_tool != nil and active_tool["durability"] >= 0:
+                        if voxel_durability_use(active_tool) == false:
+                            _set_status(active_tool["name"] + " broke")
+                            if voxel_has_tools(gameplay_state):
+                                let removed = []
+                                let i = 0
+                                while i < len(gameplay_state["tools"]):
+                                    if i != gameplay_state["active_tool"]:
+                                        push(removed, gameplay_state["tools"][i])
+                                    i = i + 1
+                                gameplay_state["tools"] = removed
+                                gameplay_state["active_tool"] = 0
+                    target_hit = nil
 
     if player["captured"] and target_hit != nil and dict_has(target_hit, "place_x") and gpu.mouse_just_pressed(gpu.MOUSE_RIGHT):
         if voxel_inventory_remove(inventory, selected_block[0], 1):
@@ -468,6 +507,21 @@ while running:
     ensure_voxel_mob_population(gameplay_state, voxel, player["position"], 3, world_seed)
 
     draws = voxel_visible_draws(voxel, player["position"][0], player["position"][1], player["position"][2], stream_chunk_radius)
+
+    # Dynamic day cycle lighting (sunset style)
+    let cycle = math.fmod(ts["total"] * 0.02, 1.0)
+    let sun_angle = cycle * 6.28318530718
+    let sun_vec = vec3(math.cos(sun_angle), -0.42 + math.sin(sun_angle) * 0.26, math.sin(sun_angle) * 0.60)
+    if len(ls["lights"]) > 0:
+        ls["lights"][0]["position"] = v3_normalize(sun_vec)
+        ls["lights"][0]["color"] = vec3(0.98, 0.75, 0.55) * (0.65 + 0.35 * max(math.sin(sun_angle), 0.0))
+        ls["lights"][0]["intensity"] = 0.95 + 0.45 * max(math.sin(sun_angle), 0.0)
+
+    # Slight animated ambient tone shift
+    set_ambient(ls, 0.45 + 0.12 * math.sin(ts["total"] * 0.14), 0.23 + 0.08 * math.sin(ts["total"] * 0.17 + 1.2), 0.18 + 0.05 * math.sin(ts["total"] * 0.11 + 0.8), 0.42)
+    set_fog(ls, true, 18.0, 140.0, 0.72, 0.54, 0.44)
+    ls["fog_density"] = 0.0037
+
     set_view_position(ls, eye)
     set_scene_time(ls, ts["total"])
     update_light_ubo(ls)
@@ -575,7 +629,17 @@ while running:
     begin_text(font_r)
     add_text(font_r, "ui", "VOXEL TEMPLATE SANDBOX", 18.0, 18.0, 0.94, 0.96, 0.98, 1.0)
     add_text(font_r, "ui", "LMB break / hit  RMB place  1-5 palette  Z planks  Wheel cycle  X craft  O inventory  C save  V load  TAB noclip  ESC mouse", 18.0, 42.0, 0.70, 0.74, 0.80, 1.0)
-    add_text(font_r, "ui", "Selected: [" + str(selected_block[0]) + "] " + voxel_block_name(voxel, selected_block[0]) + " x" + str(voxel_inventory_count(inventory, selected_block[0])) + " | Health: " + str(math.floor(player_health["current"] + 0.5)) + "/" + str(player_health["max"]) + " | Slimes: " + str(voxel_alive_mob_count(gameplay_state)) + " | Drops: " + str(voxel_pickup_count(gameplay_state)), 18.0, 66.0, 0.90, 0.92, 0.95, 1.0)
+    let active_tool = voxel_active_tool(gameplay_state)
+    let active_tool_name = "Hand"
+    if active_tool != nil:
+        let current_dur = 0
+        let max_dur = 0
+        if active_tool["durability"] >= 0:
+            current_dur = active_tool["durability"]
+        if active_tool["max_durability"] >= 0:
+            max_dur = active_tool["max_durability"]
+        active_tool_name = active_tool["name"] + " (" + str(current_dur) + "/" + str(max_dur) + ")"
+    add_text(font_r, "ui", "Selected: [" + str(selected_block[0]) + "] " + voxel_block_name(voxel, selected_block[0]) + " x" + str(voxel_inventory_count(inventory, selected_block[0])) + " | Tool: " + active_tool_name + " | Health: " + str(math.floor(player_health["current"] + 0.5)) + "/" + str(player_health["max"]) + " | Slimes: " + str(voxel_alive_mob_count(gameplay_state)) + " | Drops: " + str(voxel_pickup_count(gameplay_state)), 18.0, 66.0, 0.90, 0.92, 0.95, 1.0)
     add_text(font_r, "ui", "Chunk: " + str(player_chunk["x"]) + ", " + str(player_chunk["y"]) + ", " + str(player_chunk["z"]) + " | Chunk size: " + str(voxel_chunk_size(voxel)) + " | Generated chunks: " + str(voxel_generated_chunk_count(voxel)) + " | Visible chunk draws: " + str(len(draws)), 18.0, 90.0, 0.72, 0.84, 0.92, 1.0)
     if mob_target != nil and (target_hit == nil or mob_target["distance"] <= target_hit["distance"]):
         add_text(font_r, "ui", "Target Mob: " + mob_target["mob"]["name"] + " | HP " + str(math.floor(mob_target["mob"]["health"]["current"] + 0.5)) + " | Range " + str(math.floor(mob_target["distance"] * 10.0) / 10.0), 18.0, 114.0, 0.78, 0.94, 0.76, 1.0)
