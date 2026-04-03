@@ -122,7 +122,9 @@ proc run(eng):
         # Render
         let frame = begin_frame(r)
         if frame == nil:
-            loop_cfg["running"] = false
+            if gpu.window_should_close():
+                loop_cfg["running"] = false
+            # Transient resize/minimize/swapchain blip - skip this frame
             continue
 
         let cmd = frame["cmd"]
