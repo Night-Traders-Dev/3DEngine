@@ -655,6 +655,7 @@ proc generate_game_script(world, scene_name, settings):
     push(L, "    let sh = r[" + q + "height" + q + "] + 0.0")
     push(L, "    draw_ui(ui_r, cmd, hud[" + q + "root" + q + "], sw, sh)")
     push(L, "    end_frame(r, frame)")
+    push(L, "    gc_collect()")
     push(L, "    update_title_fps(r, " + q + scene_name + q + ")")
     push(L, "")
     push(L, "shutdown_renderer(r)")

@@ -190,6 +190,9 @@ chunk_world["max_stream_chunk_refresh"] = 8
 let all_chunk_draws = voxel_visible_draws(chunk_world, -7.0, 1.0, -7.0, 8)
 let local_chunk_draws = voxel_visible_draws(chunk_world, -7.0, 1.0, -7.0, 0)
 check("visible draws filter chunk meshes by radius", _unique_chunk_count(all_chunk_draws) == 2 and _unique_chunk_count(local_chunk_draws) == 1)
+check("visible draws cache current chunk window", chunk_world["stream_chunk_count"] == 1 and chunk_world["dirty_chunk_count"] == 0)
+let cached_chunk_draws = voxel_visible_draws(chunk_world, -7.0, 1.0, -7.0, 0)
+check("repeated visible draw query reuses current stream window", len(cached_chunk_draws) == len(local_chunk_draws) and chunk_world["stream_chunk_count"] == 1 and chunk_world["dirty_chunk_count"] == 0)
 let chunk_manifest_path = "/tmp/forge_test_voxel_chunks.json"
 save_voxel_world_chunks(chunk_world, chunk_manifest_path)
 check("chunk manifest saved", io.exists(chunk_manifest_path))

@@ -29,6 +29,7 @@ proc _destroy_voxel_gpu_mesh(gpu_mesh):
 
 proc _reset_voxel_stream_state(vw):
     vw["stream_chunks"] = {}
+    vw["stream_chunk_count"] = 0
     vw["stream_draws"] = []
     vw["stream_center_chunk"] = {"x": -9999, "y": -9999, "z": -9999}
     vw["stream_chunk_radius"] = -1
@@ -122,6 +123,7 @@ proc create_voxel_world(size_x, size_y, size_z):
     vw["chunk_size"] = 16
     vw["max_stream_chunk_refresh"] = 2
     vw["dirty_chunks"] = {}
+    vw["dirty_chunk_count"] = 0
     vw["generated_chunks"] = {}
     _reset_voxel_stream_state(vw)
     return vw
@@ -325,7 +327,9 @@ proc _mark_chunk_dirty(vw, cx, cy, cz):
     if _voxel_chunk_valid(vw, cx, cy, cz) == false:
         return
     let key = voxel_chunk_key(cx, cy, cz)
-    vw["dirty_chunks"][key] = {"x": cx, "y": cy, "z": cz}
+    if dict_has(vw["dirty_chunks"], key) == false:
+        vw["dirty_chunks"][key] = {"x": cx, "y": cy, "z": cz}
+        vw["dirty_chunk_count"] = vw["dirty_chunk_count"] + 1
 
 proc _mark_chunk_generated(vw, cx, cy, cz):
     if _voxel_chunk_valid(vw, cx, cy, cz) == false:
@@ -455,6 +459,7 @@ proc clear_voxel_world(vw):
         i = i + 1
     vw["solid_count"] = 0
     vw["dirty_chunks"] = {}
+    vw["dirty_chunk_count"] = 0
     vw["generated_chunks"] = {}
     vw["dirty"] = true
 
@@ -852,6 +857,7 @@ proc voxel_world_from_sage(data):
     vw["gpu_meshes"] = {}
     vw["draws"] = []
     vw["dirty_chunks"] = {}
+    vw["dirty_chunk_count"] = 0
     vw["generated_chunks"] = {}
     _reset_voxel_stream_state(vw)
     vw["dirty"] = true
@@ -1195,14 +1201,19 @@ proc _remove_stream_chunk(vw, chunk_key):
         _destroy_voxel_gpu_mesh(draws[di]["gpu_mesh"])
         di = di + 1
     dict_delete(vw["stream_chunks"], chunk_key)
+    if vw["stream_chunk_count"] > 0:
+        vw["stream_chunk_count"] = vw["stream_chunk_count"] - 1
 
 proc _refresh_stream_chunk(vw, cx, cy, cz):
     let chunk_key = voxel_chunk_key(cx, cy, cz)
     _remove_stream_chunk(vw, chunk_key)
     let uploaded = _build_uploaded_voxel_chunk_draws(vw, cx, cy, cz)
     vw["stream_chunks"][chunk_key] = uploaded["draws"]
+    vw["stream_chunk_count"] = vw["stream_chunk_count"] + 1
     if dict_has(vw["dirty_chunks"], chunk_key):
         dict_delete(vw["dirty_chunks"], chunk_key)
+        if vw["dirty_chunk_count"] > 0:
+            vw["dirty_chunk_count"] = vw["dirty_chunk_count"] - 1
 
 proc rebuild_voxel_world(vw):
     _clear_voxel_mesh_cache(vw)
@@ -1234,6 +1245,7 @@ proc rebuild_voxel_world(vw):
     vw["mesh_data"] = all_mesh_data
     vw["draws"] = draws
     vw["dirty_chunks"] = {}
+    vw["dirty_chunk_count"] = 0
     vw["dirty"] = false
     return draws
 
@@ -1244,6 +1256,10 @@ proc voxel_draws(vw):
 
 proc voxel_visible_draws(vw, wx, wy, wz, chunk_radius):
     let center_chunk = voxel_chunk_coords_world(vw, wx, wy, wz)
+    let same_center = chunk_radius == vw["stream_chunk_radius"] and center_chunk["x"] == vw["stream_center_chunk"]["x"] and center_chunk["y"] == vw["stream_center_chunk"]["y"] and center_chunk["z"] == vw["stream_center_chunk"]["z"]
+    if same_center and vw["dirty_chunk_count"] == 0 and vw["stream_chunk_count"] > 0:
+        vw["dirty"] = false
+        return vw["stream_draws"]
     let wanted = {}
     let cx = center_chunk["x"] - chunk_radius
     while cx <= center_chunk["x"] + chunk_radius:
@@ -1307,7 +1323,7 @@ proc voxel_visible_draws(vw, wx, wy, wz, chunk_radius):
     vw["stream_draws"] = visible
     vw["stream_center_chunk"] = center_chunk
     vw["stream_chunk_radius"] = chunk_radius
-    vw["dirty"] = pending_refresh or len(dict_keys(vw["dirty_chunks"])) > 0
+    vw["dirty"] = pending_refresh or vw["dirty_chunk_count"] > 0
     return visible
 
 proc raycast_voxel_world(vw, origin, direction, max_dist):

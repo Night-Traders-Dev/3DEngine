@@ -635,6 +635,7 @@ while running:
     flush_text(font_r, cmd, sw, sh)
 
     end_frame(r, frame)
+    gc_collect()
 
     let title = "Forge Engine | Voxel Template | " + voxel_block_name(voxel, selected_block[0])
     update_title_fps(r, title)
