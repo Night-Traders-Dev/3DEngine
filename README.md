@@ -16,7 +16,7 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 # Run the voxel sandbox demo
 ./run.sh examples/demo_voxel.sage
 
-# Run tests (57 suites, 1,688 checks)
+# Run tests (58 suites, 1,700 checks)
 ./tests/run_all.sh
 
 # Build distributable package
@@ -36,7 +36,7 @@ When you launch the editor, a **Project Browser** appears first:
 - **Preview area** — Shows selected template details and included features
 - **Keyboard** — Arrow keys to navigate, Enter to create, ESC to exit
 
-The voxel template is now backed by a real starter path: the editor seeds a first-class voxel world actor when you choose `Voxel`, and the shared sandbox gameplay loop lives in [examples/demo_voxel.sage](/home/kraken/Devel/3DEngine/examples/demo_voxel.sage) with inventory-backed mining/placement, world drops and magnetic pickup collection, a first crafting step for planks, hostile slime mobs with combat and wood drops, streamed chunk draws around the player, textured voxel block faces instead of flat grayscale batches, a real hotbar/backpack/crafting overlay, chunked sandbox save/load, and longer runtime stability coverage so transient frame-loss events do not get treated like hard exits.
+The voxel template is now backed by a real starter path: the editor seeds a first-class voxel world actor when you choose `Voxel`, and the shared sandbox gameplay loop lives in [examples/demo_voxel.sage](/home/kraken/Devel/3DEngine/examples/demo_voxel.sage) with inventory-backed mining/placement, world drops and magnetic pickup collection, a first crafting step for planks, hostile slime mobs with combat and wood drops, streamed chunk draws around the player, more saturated top/side/bottom block colors with procedural voxel detail instead of flat grayscale batches, a real hotbar/backpack/crafting overlay, chunked sandbox save/load, and longer runtime stability coverage so transient frame-loss events do not get treated like hard exits.
 
 ## Editor
 
@@ -56,11 +56,11 @@ The Forge Editor is a UE5-inspired visual scene editor for building 3D games. Pl
 - **Directional shadows** — Dedicated sun shadow prepass in the editor, with texel-snapped light matrices to reduce shimmer and imported skinned meshes participating in the same shadow depth path as static meshes
 - **Render flags** — Mesh visibility plus `cast_shadows` / `receive_shadows` now affect the live editor viewport, shadow prepass, and exported runtime, with quick toggles in the Tools/context menus
 - **Voxel world actor** — The `Voxel` launcher path now seeds a first-class voxel world entity in the editor, and selected voxel worlds support inline brush inspection plus `SHIFT+LMB/RMB` block edits with `SHIFT+Z/X` brush cycling
-- **Voxel sandbox loop** — The shared voxel template now supports inventory-backed mining/placement, world drops with magnetic pickup collection, a first crafted plank block, hostile slime mobs with simple chase/attack behavior, lazy chunk generation, incremental streamed chunk uploads, textured top/side/bottom voxel faces with per-block procedural detail, a reusable Minecraft-style hotbar/backpack/crafting HUD, and chunked JSON save/load in the playable sandbox path
+- **Voxel sandbox loop** — The shared voxel template now supports inventory-backed mining/placement, world drops with magnetic pickup collection, a first crafted plank block, hostile slime mobs with simple chase/attack behavior, lazy chunk generation, incremental streamed chunk uploads, more saturated textured top/side/bottom voxel faces with per-block procedural detail, a reusable Minecraft-style hotbar/backpack/crafting HUD, and chunked JSON save/load in the playable sandbox path
 - **Prefab system** — Save entities as reusable .prefab.json templates
 - **Undo/Redo** — CTRL+Z / CTRL+Y with full command history (100 levels)
 - **Modal dialogs** — Quit confirmation, About dialog
-- **Play-in-Editor** — Press ENTER to generate and run your game
+- **Play-in-Editor** — Press ENTER to jump into simulation, with a faster in-memory scene snapshot path for heavier voxel/editor scenes
 - **Save Screenshot** — Capture viewport to PNG from File menu
 - **Compile Native** — Generate LLVM-compiled standalone executables
 - **Keyboard shortcuts** — Press F1 to see all shortcuts
@@ -136,7 +136,7 @@ forge-engine/
 │   └── ...                  # 80+ more engine modules
 ├── shaders/                 # GLSL shader pairs + SPIR-V
 ├── examples/                # 9 demo programs
-├── tests/                   # 57 suites, 1,688 checks
+├── tests/                   # 58 suites, 1,700 checks
 ├── assets/                  # Fonts, models, scenes, prefabs
 │   └── prefabs/             # Saved entity templates
 └── build/                   # Distribution output
@@ -217,11 +217,11 @@ forge-engine/
 ## Testing
 
 ```bash
-./tests/run_all.sh            # 57 suites, 1,688 individual checks
+./tests/run_all.sh            # 58 suites, 1,700 individual checks
 ./run.sh tests/test_ecs.sage  # Run individual suite
 ```
 
-The suite now includes dedicated renderer sanity checks for startup helpers such as pipeline cache state, a focused shadow-map helper suite, the new voxel world logic suite, plus a runtime startup smoke suite that boots the editor, asset demo, and voxel sandbox under timeout and fails on startup regressions.
+The suite now includes dedicated renderer sanity checks for startup helpers such as pipeline cache state, a focused shadow-map helper suite, the new voxel world logic suite, a packaged voxel-template Play-In-Editor smoke that exercises the same dist path users launch locally, plus runtime startup/stability shells that boot the editor, asset demo, and voxel sandbox under timeout and fail on startup regressions.
 
 ## Building for Distribution
 
@@ -235,11 +235,15 @@ The suite now includes dedicated renderer sanity checks for startup helpers such
 # Run from dist:
 cd build/dist && ./forge_engine
 
+# Optional CI/QA shortcuts:
+FORGE_TEMPLATE=voxel ./forge_engine
+FORGE_TEMPLATE=voxel FORGE_AUTOPLAY=1 ./forge_engine
+
 # Package for sharing:
 tar -czf forge_engine-$(cat VERSION).tar.gz -C build dist
 ```
 
-The distribution build bundles the SageLang interpreter with all engine source, shaders, assets, and the root `VERSION` file into a portable directory. Native LLVM compilation is not yet supported for multi-module projects (the LLVM backend resolves GPU constants but not cross-module `from X import Y` imports).
+The distribution build bundles the SageLang interpreter with all engine source, shaders, assets, and the root `VERSION` file into a portable directory. `FORGE_TEMPLATE` can bypass the launcher for deterministic QA boots, and `FORGE_AUTOPLAY=1` enters Play-In-Editor automatically using the same in-memory snapshot path the editor uses at runtime. Native LLVM compilation is not yet supported for multi-module projects (the LLVM backend resolves GPU constants but not cross-module `from X import Y` imports).
 
 ## SageLang Features Used
 

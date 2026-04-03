@@ -70,14 +70,14 @@ forge-engine/
 ├── shaders/             # GLSL + SPIR-V shaders
 ├── assets/              # Fonts, textures, saved scenes
 ├── examples/            # 9 demo programs
-├── tests/               # 57 test suites, 1,688 checks
+├── tests/               # 58 test suites, 1,700 checks
 └── build/               # Distribution output
     └── dist/            # Self-contained distributable
 ```
 
 Runtime/editor version strings and distribution packaging are sourced from the repo-root `VERSION` file through `lib/forge_version.sage`.
 Forge uses `x.y.z` semantic versioning and intentionally remains on `0.y.z` until the engine is functionally complete enough to justify `1.0.0`. See [VERSIONING.md](VERSIONING.md) for the repo policy.
-The automated suite now includes a dedicated renderer sanity check for startup helpers like pipeline cache state, a focused shadow-map helper suite, the new voxel world and voxel gameplay suites, plus a runtime startup smoke suite that boots the editor, asset demo, and voxel sandbox under timeout alongside a longer runtime stability suite that verifies those paths stay alive through transient frame-loss conditions instead of force-closing early.
+The automated suite now includes a dedicated renderer sanity check for startup helpers like pipeline cache state, a focused shadow-map helper suite, the new voxel world and voxel gameplay suites, a packaged voxel-template Play-In-Editor smoke that exercises the real dist launch path, plus runtime startup and longer stability shells that verify those paths stay alive through transient frame-loss conditions instead of force-closing early.
 
 ---
 
@@ -120,7 +120,7 @@ The Forge Editor is a UE5-inspired visual scene editor with floating windows, a 
 
 Press **F1** at any time to see the full keyboard shortcuts overlay.
 
-Choosing the `Voxel` launcher template now seeds a first-class voxel world actor in the editor using the same shared voxel generation rules as the playable sandbox demo. Selected voxel worlds support `SHIFT+LMB/RMB` block editing plus `SHIFT+Z/X` brush cycling in the editor, and the playable voxel sandbox now supports inventory-backed mining/placement, world drops with magnetic pickup collection, a first plank-crafting loop, hostile slime mobs with simple chase/attack behavior, lazy chunk generation, incremental streamed chunk uploads, textured top/side/bottom voxel faces with per-block procedural detail, a shared hotbar/backpack/crafting HUD, plus chunked JSON save/load controls.
+Choosing the `Voxel` launcher template now seeds a first-class voxel world actor in the editor using the same shared voxel generation rules as the playable sandbox demo. Selected voxel worlds support `SHIFT+LMB/RMB` block editing plus `SHIFT+Z/X` brush cycling in the editor, and the playable voxel sandbox now supports inventory-backed mining/placement, world drops with magnetic pickup collection, a first plank-crafting loop, hostile slime mobs with simple chase/attack behavior, lazy chunk generation, incremental streamed chunk uploads, more saturated top/side/bottom voxel colors with procedural detail, a shared hotbar/backpack/crafting HUD, plus chunked JSON save/load controls.
 
 ### Editor Layout
 
@@ -906,6 +906,10 @@ barrier_compute_to_graphics(cmd)
 # Run:
 cd build/dist && ./forge_engine
 
+# Optional deterministic launch shortcuts:
+FORGE_TEMPLATE=voxel ./forge_engine
+FORGE_TEMPLATE=voxel FORGE_AUTOPLAY=1 ./forge_engine
+
 # Package for sharing:
 tar -czf forge_engine-$(cat VERSION).tar.gz -C build dist
 ```
@@ -916,7 +920,7 @@ tar -czf forge_engine-$(cat VERSION).tar.gz -C build dist
 | --- | --- |
 | `sage` | SageLang runtime binary (ELF x86-64, links Vulkan/GLFW/OpenGL) |
 | `VERSION` | Shared engine release version copied into the distributable |
-| `lib/` | 91 engine .sage modules |
+| `lib/` | 93 engine .sage modules |
 | `stdlib/` | 33 SageLang standard library modules |
 | `shaders/` | Compiled SPIR-V shaders |
 | `assets/` | Fonts (DejaVuSans), glTF models, textures, saved scenes |
