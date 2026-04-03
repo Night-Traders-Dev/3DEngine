@@ -68,6 +68,8 @@ let grass_side = voxel_block_face_surface(vw, 1, "side")
 let grass_bottom = voxel_block_face_surface(vw, 1, "bottom")
 check("grass top is greener than side", grass_top["albedo"][1] > grass_side["albedo"][1])
 check("grass bottom is earthier than top", grass_bottom["albedo"][0] > grass_top["albedo"][0] and grass_bottom["albedo"][1] < grass_top["albedo"][1])
+check("surface exports voxel texture metadata", grass_top["voxel_texture"] == true and grass_top["voxel_block_id"] == 1.0)
+check("face texture ids differ by group", grass_top["voxel_face_id"] == 0.0 and grass_side["voxel_face_id"] == 1.0 and grass_bottom["voxel_face_id"] == 2.0)
 
 let single_meshes = build_voxel_meshes(vw)
 check("single grass top mesh emitted", dict_has(single_meshes, "1:top"))

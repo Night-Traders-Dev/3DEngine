@@ -35,6 +35,68 @@ layout(push_constant) uniform PushConstants {
     vec4 shadowControl;
 } pc;
 
+float hash21(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+}
+
+vec3 voxel_detail_color(vec3 baseColor, float blockIdValue, float faceIdValue, vec2 uv) {
+    int blockId = int(blockIdValue + 0.5);
+    int faceId = int(faceIdValue + 0.5);
+    vec2 tileUV = clamp(uv, vec2(0.0), vec2(0.999));
+    vec2 texel = floor(tileUV * 16.0);
+    float noiseA = hash21(texel + vec2(float(blockId) * 17.0, float(faceId) * 29.0));
+    float noiseB = hash21(texel.yx + vec2(float(blockId) * 11.0 + 5.0, float(faceId) * 13.0 + 3.0));
+    vec3 color = baseColor * mix(0.84, 1.08, noiseA);
+
+    if (blockId == 1) {
+        if (faceId == 0) {
+            color *= mix(0.92, 1.14, noiseA);
+            if (noiseB > 0.86) {
+                color *= 1.08;
+            }
+        } else if (faceId == 1) {
+            float grassBand = step(12.0, texel.y);
+            vec3 dirt = baseColor * mix(0.84, 1.02, noiseA);
+            vec3 grass = vec3(0.22, 0.62, 0.20) * mix(0.92, 1.18, noiseB);
+            color = mix(dirt, grass, grassBand);
+        } else {
+            color *= mix(0.78, 0.95, noiseA);
+        }
+    } else if (blockId == 2) {
+        color *= mix(0.80, 1.02, noiseA);
+        if (noiseB > 0.82) {
+            color *= 0.90;
+        }
+    } else if (blockId == 3) {
+        float crack = step(0.86, hash21(texel * vec2(1.0, 2.0) + vec2(7.0, 3.0)));
+        color *= mix(0.78, 1.06, noiseA);
+        color -= crack * 0.07;
+    } else if (blockId == 4) {
+        if (faceId == 1) {
+            float grain = sin((texel.x + noiseB * 3.0) * 0.9);
+            color *= 0.92 + grain * 0.08;
+        } else {
+            vec2 centered = texel - vec2(7.5);
+            float rings = sin(length(centered) * 1.65 + noiseA * 3.0);
+            color *= 0.94 + rings * 0.06;
+        }
+    } else if (blockId == 5) {
+        color *= mix(0.72, 1.16, noiseA);
+        if (noiseB > 0.74) {
+            color *= 1.10;
+        }
+        if (noiseA < 0.16) {
+            color *= 0.80;
+        }
+    } else if (blockId == 6) {
+        float plankLine = step(0.5, fract((texel.y + float(faceId) * 2.0) / 4.0));
+        color *= mix(0.88, 1.05, noiseA);
+        color *= mix(0.94, 1.08, plankLine);
+    }
+
+    return clamp(color, 0.0, 1.0);
+}
+
 float sample_shadow(vec3 normal, vec3 lightDir) {
     if (shadow_data.shadowParams.x < 0.5) {
         return 1.0;
@@ -68,6 +130,9 @@ float sample_shadow(vec3 normal, vec3 lightDir) {
 
 void main() {
     vec3 baseColor = pc.baseColor.rgb;
+    if (pc.shadowControl.y > 0.5) {
+        baseColor = voxel_detail_color(baseColor, pc.shadowControl.z, pc.shadowControl.w, fragUV);
+    }
 
     vec3 N = normalize(fragNormal);
     vec3 V = normalize(scene.viewPos.xyz - fragWorldPos);

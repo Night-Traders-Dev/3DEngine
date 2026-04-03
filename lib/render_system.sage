@@ -205,13 +205,23 @@ proc create_unlit_material(render_pass):
 # ============================================================================
 # Draw helpers
 # ============================================================================
-proc build_lit_push_data(mvp_data, model_data, base_color, receive_shadows):
+proc _build_lit_push_data(mvp_data, model_data, base_color, receive_shadows, texture_info):
     let color = [0.75, 0.75, 0.75, 1.0]
     if base_color != nil:
         color = base_color
     let receive_flag = 1.0
     if receive_shadows == false:
         receive_flag = 0.0
+    let texture_enabled = 0.0
+    let texture_block_id = 0.0
+    let texture_face_id = 0.0
+    if texture_info != nil:
+        if len(texture_info) > 0:
+            texture_enabled = texture_info[0]
+        if len(texture_info) > 1:
+            texture_block_id = texture_info[1]
+        if len(texture_info) > 2:
+            texture_face_id = texture_info[2]
     let push_data = []
     let i = 0
     while i < 16:
@@ -226,10 +236,13 @@ proc build_lit_push_data(mvp_data, model_data, base_color, receive_shadows):
     push(push_data, color[2])
     push(push_data, color[3])
     push(push_data, receive_flag)
-    push(push_data, 0.0)
-    push(push_data, 0.0)
-    push(push_data, 0.0)
+    push(push_data, texture_enabled)
+    push(push_data, texture_block_id)
+    push(push_data, texture_face_id)
     return push_data
+
+proc build_lit_push_data(mvp_data, model_data, base_color, receive_shadows):
+    return _build_lit_push_data(mvp_data, model_data, base_color, receive_shadows, nil)
 
 proc draw_mesh_lit(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set):
     draw_mesh_lit_controlled(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, true)
@@ -251,7 +264,7 @@ proc draw_mesh_lit_skinned_controlled(cmd, mat, mesh_gpu, mvp_data, model_data, 
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 0, desc_set, 0)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 1, mat["skin_desc_set"], 0)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 2, mat["shadow_desc_set"], 0)
-    let push_data = build_lit_push_data(mvp_data, model_data, nil, receive_shadows)
+    let push_data = _build_lit_push_data(mvp_data, model_data, nil, receive_shadows, nil)
     gpu.cmd_push_constants(cmd, mat["pipe_layout"], stage_flags, push_data)
     gpu.cmd_bind_vertex_buffer(cmd, mesh_gpu["vbuf"])
     gpu.cmd_bind_index_buffer(cmd, mesh_gpu["ibuf"])
@@ -268,12 +281,19 @@ proc draw_mesh_lit_surface_skinned(cmd, mat, mesh_gpu, mvp_data, model_data, des
 
 proc draw_mesh_lit_surface_skinned_controlled(cmd, mat, mesh_gpu, mvp_data, model_data, desc_set, surface, skin_draw, receive_shadows):
     let base_color = [0.75, 0.75, 0.75, 1.0]
+    let texture_info = nil
     if surface != nil and dict_has(surface, "albedo"):
         base_color[0] = surface["albedo"][0]
         base_color[1] = surface["albedo"][1]
         base_color[2] = surface["albedo"][2]
         if dict_has(surface, "alpha"):
             base_color[3] = surface["alpha"]
+    if surface != nil and dict_has(surface, "voxel_texture") and surface["voxel_texture"]:
+        texture_info = [1.0, 0.0, 0.0]
+        if dict_has(surface, "voxel_block_id"):
+            texture_info[1] = surface["voxel_block_id"] + 0.0
+        if dict_has(surface, "voxel_face_id"):
+            texture_info[2] = surface["voxel_face_id"] + 0.0
     gpu.cmd_bind_graphics_pipeline(cmd, mat["pipeline"])
     let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
     let joint_palette = nil
@@ -284,7 +304,7 @@ proc draw_mesh_lit_surface_skinned_controlled(cmd, mat, mesh_gpu, mvp_data, mode
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 0, desc_set, 0)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 1, mat["skin_desc_set"], 0)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 2, mat["shadow_desc_set"], 0)
-    let push_data = build_lit_push_data(mvp_data, model_data, base_color, receive_shadows)
+    let push_data = _build_lit_push_data(mvp_data, model_data, base_color, receive_shadows, texture_info)
     gpu.cmd_push_constants(cmd, mat["pipe_layout"], stage_flags, push_data)
     gpu.cmd_bind_vertex_buffer(cmd, mesh_gpu["vbuf"])
     gpu.cmd_bind_index_buffer(cmd, mesh_gpu["ibuf"])

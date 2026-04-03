@@ -195,6 +195,13 @@ proc voxel_block_name(vw, block_id):
 proc voxel_block_surface(vw, block_id):
     return voxel_block_face_surface(vw, block_id, "top")
 
+proc _voxel_face_texture_id(face_group):
+    if face_group == "top":
+        return 0
+    if face_group == "bottom":
+        return 2
+    return 1
+
 proc voxel_block_face_surface(vw, block_id, face_group):
     let surface = {}
     surface["albedo"] = vec3(0.75, 0.75, 0.75)
@@ -211,6 +218,9 @@ proc voxel_block_face_surface(vw, block_id, face_group):
                     surface["albedo"] = entry["top_color"]
                 else:
                     surface["albedo"] = entry["color"]
+        surface["voxel_texture"] = true
+        surface["voxel_block_id"] = block_id + 0.0
+        surface["voxel_face_id"] = _voxel_face_texture_id(face_group) + 0.0
     return surface
 
 proc voxel_in_bounds(vw, gx, gy, gz):

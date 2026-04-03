@@ -70,7 +70,7 @@ forge-engine/
 ├── shaders/             # GLSL + SPIR-V shaders
 ├── assets/              # Fonts, textures, saved scenes
 ├── examples/            # 9 demo programs
-├── tests/               # 56 test suites, 1,671 checks
+├── tests/               # 56 test suites, 1,673 checks
 └── build/               # Distribution output
     └── dist/            # Self-contained distributable
 ```
@@ -120,7 +120,7 @@ The Forge Editor is a UE5-inspired visual scene editor with floating windows, a 
 
 Press **F1** at any time to see the full keyboard shortcuts overlay.
 
-Choosing the `Voxel` launcher template now seeds a first-class voxel world actor in the editor using the same shared voxel generation rules as the playable sandbox demo. Selected voxel worlds support `SHIFT+LMB/RMB` block editing plus `SHIFT+Z/X` brush cycling in the editor, and the playable voxel sandbox now supports inventory-backed mining/placement, a first plank-crafting loop, lazy chunk generation, incremental streamed chunk uploads, face-aware top/side/bottom block colors, a shared hotbar/backpack/crafting HUD, plus chunked JSON save/load controls.
+Choosing the `Voxel` launcher template now seeds a first-class voxel world actor in the editor using the same shared voxel generation rules as the playable sandbox demo. Selected voxel worlds support `SHIFT+LMB/RMB` block editing plus `SHIFT+Z/X` brush cycling in the editor, and the playable voxel sandbox now supports inventory-backed mining/placement, a first plank-crafting loop, lazy chunk generation, incremental streamed chunk uploads, textured top/side/bottom voxel faces with per-block procedural detail, a shared hotbar/backpack/crafting HUD, plus chunked JSON save/load controls.
 
 ### Editor Layout
 
