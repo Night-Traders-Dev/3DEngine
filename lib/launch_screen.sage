@@ -6,6 +6,7 @@ gc_disable()
 # -----------------------------------------
 
 import gpu
+import sys
 import ui_core
 from ui_core import rgba, color_with_alpha, _push_border_quads, _push_shadow_quads
 from ui_renderer import create_ui_renderer
@@ -45,6 +46,14 @@ proc _template_details(id):
         return ["Empty scene with grid", "Basic lighting setup", "No preset gameplay", "Full creative freedom"]
     return []
 
+proc _template_index_by_id(templates, id):
+    let i = 0
+    while i < len(templates):
+        if templates[i]["id"] == id:
+            return i
+        i = i + 1
+    return -1
+
 proc _in_rect(mx, my, x, y, w, h):
     return mx >= x and mx < x + w and my >= y and my < y + h
 
@@ -55,6 +64,15 @@ proc run_launch_screen(r):
     let orig_clear = r["clear_color"]
     r["clear_color"] = [0.055, 0.055, 0.063, 1.0]
 
+    let templates = _make_templates()
+    let template_override = sys.getenv("FORGE_TEMPLATE")
+    if template_override != nil and template_override != "":
+        let idx = _template_index_by_id(templates, template_override)
+        r["clear_color"] = orig_clear
+        if idx >= 0:
+            return {"action": "new", "template": templates[idx]["id"]}
+        print "WARNING: Unknown FORGE_TEMPLATE '" + template_override + "', showing launcher."
+
     let ui_r = create_ui_renderer(r["render_pass"])
     if ui_r == nil:
         r["clear_color"] = orig_clear
@@ -63,7 +81,6 @@ proc run_launch_screen(r):
     let font_r = create_font_renderer(r["render_pass"])
     load_font(font_r, "ui", "assets/DejaVuSans.ttf", 18.0)
 
-    let templates = _make_templates()
     let selected = 0
     let hovered_tpl = -1
     let hovered_btn = ""

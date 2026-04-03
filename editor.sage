@@ -292,6 +292,104 @@ proc _populate_voxel_template_scene(editor_ctx, w):
 # Menu bar state
 let menubar_active = -1
 
+proc _directional_light_dir_from_transform(transform):
+    let rot = transform["rotation"]
+    let has_rotation = math.abs(rot[0]) > 0.0001 or math.abs(rot[1]) > 0.0001 or math.abs(rot[2]) > 0.0001
+    if has_rotation == false:
+        return vec3(-0.3, -0.8, -0.5)
+    let pitch = rot[0]
+    let yaw = rot[1]
+    let cp = math.cos(pitch)
+    let sp = math.sin(pitch)
+    let cy = math.cos(yaw)
+    let sy = math.sin(yaw)
+    return vec3(0.0 - sy * cp, 0.0 - sp, 0.0 - cy * cp)
+
+proc _add_default_editor_lights(light_scene):
+    light_scene["lights"] = []
+    add_light(light_scene, directional_light(-0.3, -0.8, -0.5, 1.0, 0.98, 0.92, 1.8))
+    add_light(light_scene, point_light(8.0, 6.0, 5.0, 1.0, 0.95, 0.85, 4.5, 35.0))
+    add_light(light_scene, point_light(-5.0, 4.0, -3.0, 0.7, 0.8, 1.0, 3.0, 25.0))
+    add_light(light_scene, point_light(-8.0, 3.0, 6.0, 0.6, 0.65, 0.8, 2.0, 30.0))
+    add_light(light_scene, point_light(0.0, 8.0, -8.0, 0.9, 0.9, 1.0, 2.5, 40.0))
+
+proc _sync_world_lights(light_scene, w):
+    let authored = query(w, ["transform", "light"])
+    light_scene["lights"] = []
+    if len(authored) == 0:
+        _add_default_editor_lights(light_scene)
+        return 5
+    let i = 0
+    while i < len(authored):
+        let eid = authored[i]
+        let t = get_component(w, eid, "transform")
+        let light = get_component(w, eid, "light")
+        if t != nil and light != nil:
+            if light["type"] == "directional":
+                let dir = _directional_light_dir_from_transform(t)
+                let l = directional_light(dir[0], dir[1], dir[2], light["color"][0], light["color"][1], light["color"][2], light["intensity"])
+                if dict_has(light, "cast_shadows"):
+                    l["cast_shadows"] = light["cast_shadows"]
+                add_light(light_scene, l)
+            else:
+                let pos = t["position"]
+                let radius = 20.0
+                if dict_has(light, "radius"):
+                    radius = light["radius"]
+                let l = point_light(pos[0], pos[1], pos[2], light["color"][0], light["color"][1], light["color"][2], light["intensity"], radius)
+                if dict_has(light, "cast_shadows"):
+                    l["cast_shadows"] = light["cast_shadows"]
+                add_light(light_scene, l)
+        i = i + 1
+    return len(light_scene["lights"])
+
+proc _ensure_entity_mesh_renderer(w, eid, material_id):
+    let mesh_handle = nil
+    if has_component(w, eid, "mesh_id"):
+        let mi = get_component(w, eid, "mesh_id")
+        if mi != nil and dict_has(mi, "mesh"):
+            mesh_handle = mi["mesh"]
+    if has_component(w, eid, "mesh_renderer"):
+        let mr = get_component(w, eid, "mesh_renderer")
+        mr["mesh"] = mesh_handle
+        if dict_has(mr, "material") == false or mr["material"] == nil or mr["material"] == "":
+            mr["material"] = material_id
+        if dict_has(mr, "visible") == false:
+            mr["visible"] = true
+        if dict_has(mr, "cast_shadows") == false:
+            mr["cast_shadows"] = true
+        if dict_has(mr, "receive_shadows") == false:
+            mr["receive_shadows"] = true
+        return mr
+    let mr = MeshRendererComponent(mesh_handle, material_id)
+    add_component(w, eid, "mesh_renderer", mr)
+    return mr
+
+proc _mesh_visible(w, eid):
+    if has_component(w, eid, "mesh_renderer"):
+        let mr = get_component(w, eid, "mesh_renderer")
+        if mr != nil and dict_has(mr, "visible"):
+            return mr["visible"]
+    return true
+
+proc _mesh_casts_shadows(w, eid):
+    if _mesh_visible(w, eid) == false:
+        return false
+    if has_component(w, eid, "mesh_renderer"):
+        let mr = get_component(w, eid, "mesh_renderer")
+        if mr != nil and dict_has(mr, "cast_shadows"):
+            return mr["cast_shadows"]
+    return true
+
+proc _mesh_receives_shadows(w, eid):
+    if _mesh_visible(w, eid) == false:
+        return false
+    if has_component(w, eid, "mesh_renderer"):
+        let mr = get_component(w, eid, "mesh_renderer")
+        if mr != nil and dict_has(mr, "receive_shadows"):
+            return mr["receive_shadows"]
+    return true
+
 # ============================================================================
 # ECS World (editor scene)
 # ============================================================================
@@ -467,104 +565,6 @@ proc _ensure_imported_pbr_materials(asset):
         i = i + 1
     asset["pbr_materials"] = built
     return built
-
-proc _ensure_entity_mesh_renderer(w, eid, material_id):
-    let mesh_handle = nil
-    if has_component(w, eid, "mesh_id"):
-        let mi = get_component(w, eid, "mesh_id")
-        if mi != nil and dict_has(mi, "mesh"):
-            mesh_handle = mi["mesh"]
-    if has_component(w, eid, "mesh_renderer"):
-        let mr = get_component(w, eid, "mesh_renderer")
-        mr["mesh"] = mesh_handle
-        if dict_has(mr, "material") == false or mr["material"] == nil or mr["material"] == "":
-            mr["material"] = material_id
-        if dict_has(mr, "visible") == false:
-            mr["visible"] = true
-        if dict_has(mr, "cast_shadows") == false:
-            mr["cast_shadows"] = true
-        if dict_has(mr, "receive_shadows") == false:
-            mr["receive_shadows"] = true
-        return mr
-    let mr = MeshRendererComponent(mesh_handle, material_id)
-    add_component(w, eid, "mesh_renderer", mr)
-    return mr
-
-proc _mesh_visible(w, eid):
-    if has_component(w, eid, "mesh_renderer"):
-        let mr = get_component(w, eid, "mesh_renderer")
-        if mr != nil and dict_has(mr, "visible"):
-            return mr["visible"]
-    return true
-
-proc _mesh_casts_shadows(w, eid):
-    if _mesh_visible(w, eid) == false:
-        return false
-    if has_component(w, eid, "mesh_renderer"):
-        let mr = get_component(w, eid, "mesh_renderer")
-        if mr != nil and dict_has(mr, "cast_shadows"):
-            return mr["cast_shadows"]
-    return true
-
-proc _mesh_receives_shadows(w, eid):
-    if _mesh_visible(w, eid) == false:
-        return false
-    if has_component(w, eid, "mesh_renderer"):
-        let mr = get_component(w, eid, "mesh_renderer")
-        if mr != nil and dict_has(mr, "receive_shadows"):
-            return mr["receive_shadows"]
-    return true
-
-proc _directional_light_dir_from_transform(transform):
-    let rot = transform["rotation"]
-    let has_rotation = math.abs(rot[0]) > 0.0001 or math.abs(rot[1]) > 0.0001 or math.abs(rot[2]) > 0.0001
-    if has_rotation == false:
-        return vec3(-0.3, -0.8, -0.5)
-    let pitch = rot[0]
-    let yaw = rot[1]
-    let cp = math.cos(pitch)
-    let sp = math.sin(pitch)
-    let cy = math.cos(yaw)
-    let sy = math.sin(yaw)
-    return vec3(0.0 - sy * cp, 0.0 - sp, 0.0 - cy * cp)
-
-proc _add_default_editor_lights(light_scene):
-    light_scene["lights"] = []
-    add_light(light_scene, directional_light(-0.3, -0.8, -0.5, 1.0, 0.98, 0.92, 1.8))
-    add_light(light_scene, point_light(8.0, 6.0, 5.0, 1.0, 0.95, 0.85, 4.5, 35.0))
-    add_light(light_scene, point_light(-5.0, 4.0, -3.0, 0.7, 0.8, 1.0, 3.0, 25.0))
-    add_light(light_scene, point_light(-8.0, 3.0, 6.0, 0.6, 0.65, 0.8, 2.0, 30.0))
-    add_light(light_scene, point_light(0.0, 8.0, -8.0, 0.9, 0.9, 1.0, 2.5, 40.0))
-
-proc _sync_world_lights(light_scene, w):
-    let authored = query(w, ["transform", "light"])
-    light_scene["lights"] = []
-    if len(authored) == 0:
-        _add_default_editor_lights(light_scene)
-        return 5
-    let i = 0
-    while i < len(authored):
-        let eid = authored[i]
-        let t = get_component(w, eid, "transform")
-        let light = get_component(w, eid, "light")
-        if t != nil and light != nil:
-            if light["type"] == "directional":
-                let dir = _directional_light_dir_from_transform(t)
-                let l = directional_light(dir[0], dir[1], dir[2], light["color"][0], light["color"][1], light["color"][2], light["intensity"])
-                if dict_has(light, "cast_shadows"):
-                    l["cast_shadows"] = light["cast_shadows"]
-                add_light(light_scene, l)
-            else:
-                let pos = t["position"]
-                let radius = 20.0
-                if dict_has(light, "radius"):
-                    radius = light["radius"]
-                let l = point_light(pos[0], pos[1], pos[2], light["color"][0], light["color"][1], light["color"][2], light["intensity"], radius)
-                if dict_has(light, "cast_shadows"):
-                    l["cast_shadows"] = light["cast_shadows"]
-                add_light(light_scene, l)
-        i = i + 1
-    return len(light_scene["lights"])
 
 proc _update_imported_animation_states(w, dt):
     let animated = query(w, ["imported_asset", "animation_state"])
