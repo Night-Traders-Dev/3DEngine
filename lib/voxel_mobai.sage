@@ -245,7 +245,7 @@ proc update_mob_ai(mob, behavior, player_pos, dt):
 # =====================================================
 
 proc simple_pathfind(start, goal, max_steps):
-    // Simplified A* style pathfinding
+    # Simplified A* style pathfinding
     let path = [start]
     let current = start
     let step = 0
