@@ -89,7 +89,7 @@ let running = true
 let frame_count = 0
 let dt = 0.016
 
-while running and frame_count < 1:
+while running:
     update_input(inp)
     
     if action_just_pressed(inp, "escape"):
@@ -122,28 +122,28 @@ while running and frame_count < 1:
         player["yaw"] = player["yaw"] + mdelta[0] * 0.005
         player["pitch"] = player["pitch"] + mdelta[1] * 0.005
     
-    update_weather_system(weather, dt)
-    update_voxel_pickups(gameplay, dt)
+    # Temporarily disable heavy updates to prevent errors
+    # update_weather_system(weather, dt)
+    # update_voxel_pickups(gameplay, dt)
     
-    let mi = 0
-    while mi < len(gameplay["mobs"]):
-        if gameplay["mobs"][mi] != nil and not gameplay["mobs"][mi]["dead"]:
-            if dict_has(gameplay["mobs"][mi], "behavior"):
-                update_mob_ai(gameplay["mobs"][mi], gameplay["mobs"][mi]["behavior"], player_pos, dt)
-        mi = mi + 1
-    update_voxel_mobs(gameplay, player_pos, dt)
+    # let mi = 0
+    # while mi < len(gameplay["mobs"]):
+    #     if gameplay["mobs"][mi] != nil and not gameplay["mobs"][mi]["dead"]:
+    #         if dict_has(gameplay["mobs"][mi], "behavior"):
+    #             update_mob_ai(gameplay["mobs"][mi], gameplay["mobs"][mi]["behavior"], player_pos, dt)
+    #     mi = mi + 1
+    # update_voxel_mobs(gameplay, player_pos, dt)
     
-    if frame_count % 120 == 0:
-        ensure_voxel_mob_population(gameplay, player_pos, 64)
+    # if frame_count % 120 == 0:
+    #     ensure_voxel_mob_population(gameplay, player_pos, 64)
+    
+    let weather_mod = get_weather_light_modifier(weather)
+    r["clear_color"] = [0.52 * weather_mod, 0.76 * weather_mod, 0.95 * weather_mod, 1.0]
     
     let frame = begin_frame(r)
     if frame == nil:
         frame_count = frame_count + 1
         continue
-    
-    let weather_mod = get_weather_light_modifier(weather)
-    gpu.clear_color(0.52 * weather_mod, 0.76 * weather_mod, 0.95 * weather_mod, 1.0)
-    gpu.clear()
     
     update_title_fps(r, "Voxel Sandbox [Fluids|Biomes|Weather|AI] Mobs:" + str(voxel_alive_mob_count(gameplay)))
     

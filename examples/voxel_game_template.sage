@@ -214,15 +214,14 @@ while running:
     # RENDERING - Customize rendering here
     # ============================================================================
 
+    # Set sky color based on weather
+    let weather_mod = ENABLE_WEATHER ? get_weather_light_modifier(weather) : 1.0
+    r["clear_color"] = [0.52 * weather_mod, 0.76 * weather_mod, 0.95 * weather_mod, 1.0]
+    
     let frame = begin_frame(r)
     if frame == nil:
         frame_count = frame_count + 1
         continue
-
-    # Set sky color based on weather
-    let weather_mod = ENABLE_WEATHER ? get_weather_light_modifier(weather) : 1.0
-    gpu.clear_color(0.52 * weather_mod, 0.76 * weather_mod, 0.95 * weather_mod, 1.0)
-    gpu.clear()
 
     # Update window title with game stats
     let mob_count = ENABLE_MOBS ? voxel_alive_mob_count(gameplay) : 0
