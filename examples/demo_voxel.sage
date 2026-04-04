@@ -15,7 +15,7 @@ from renderer import create_renderer, begin_frame_commands, begin_swapchain_pass
 from renderer import shutdown_renderer, check_resize, update_title_fps
 from input import create_input, update_input, bind_action
 from input import action_just_pressed, default_fps_bindings, scroll_value
-from math3d import vec3, v3_normalize, v3_length, mat4_identity, mat4_mul, mat4_inverse, radians
+from math3d import vec3, v3_sub, v3_normalize, v3_length, mat4_identity, mat4_mul, mat4_inverse, radians
 from engine_math import make_transform, transform_to_matrix
 from lighting import create_light_scene, directional_light
 from lighting import add_light, set_ambient, set_fog, set_view_position, set_scene_time
