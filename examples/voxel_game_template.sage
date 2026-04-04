@@ -2,7 +2,6 @@
 # Copy this file and customize it for your voxel game project
 
 import gpu
-import math
 from renderer import create_renderer, begin_frame, end_frame, shutdown_renderer, check_resize, update_title_fps
 from input import create_input, update_input, action_just_pressed, action_held, default_fps_bindings, mouse_delta, scroll_value
 from math3d import vec3, v3_add, v3_sub, v3_scale, v3_normalize, v3_length
@@ -18,6 +17,8 @@ from voxel_fluids import create_fluid_system
 from voxel_biomes import default_biomes
 from voxel_weather import create_weather_system, update_weather_system, get_weather_light_modifier
 from voxel_mobai import create_behavior_state, update_mob_ai
+
+import math  # Import math after voxel modules
 
 # ============================================================================
 # GAME CONFIGURATION - Customize these values for your game
@@ -66,8 +67,8 @@ voxel_inventory_add(inventory, 1, 32)  # Dirt blocks
 voxel_inventory_add(inventory, 2, 16)  # Stone blocks
 
 # Add tools
-let basic_hands = create_tool("Bare Hands", 0, -1)
-let stone_pickaxe = create_tool("Stone Pickaxe", 1, 120)
+let basic_hands = create_tool("Bare Hands", 0, -1, 1.0, 0)
+let stone_pickaxe = create_tool("Stone Pickaxe", 1, 120, 2.0, 1)
 voxel_add_tool(gameplay, basic_hands)
 voxel_add_tool(gameplay, stone_pickaxe)
 
@@ -180,8 +181,8 @@ while running:
 
     # Handle vertical movement
     let scroll = scroll_value(inp)
-    if scroll != 0.0:
-        player_pos = v3_add(player_pos, vec3(0.0, scroll * 2.0, 0.0))
+    if scroll[1] != 0.0:
+        player_pos = v3_add(player_pos, vec3(0.0, scroll[1] * 2.0, 0.0))
 
     # Handle mouse look
     let mdelta = mouse_delta(inp)
