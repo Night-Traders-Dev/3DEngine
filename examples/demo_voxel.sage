@@ -11,73 +11,36 @@
 import gpu
 import math
 import io
-from renderer import create_renderer, begin_frame_commands, begin_swapchain_pass, end_frame
-from renderer import shutdown_renderer, check_resize, update_title_fps
-from input import create_input, update_input, bind_action
-from input import action_just_pressed, default_fps_bindings, scroll_value
-from math3d import vec3, v3_sub, v3_normalize, v3_length, mat4_identity, mat4_mul, mat4_inverse, radians
+from renderer import create_renderer, begin_frame, end_frame, shutdown_renderer, check_resize, update_title_fps
+from input import create_input, update_input, action_just_pressed, action_held, default_fps_bindings, mouse_delta
+from math3d import vec3, v3_sub, v3_normalize, v3_length, v3_add, v3_scale
 from engine_math import make_transform, transform_to_matrix
-from lighting import create_light_scene, directional_light
-from lighting import add_light, set_ambient, set_fog, set_view_position, set_scene_time
-from lighting import init_light_gpu, update_light_ubo
-from render_system import create_lit_material, create_lit_material_transparent, draw_mesh_lit_surface_controlled
-from render_system import set_lit_material_shadow_source, set_lit_material_scene_color_source
-from sky import create_sky, init_sky_gpu, draw_sky, sky_preset_vibrant_day, sky_preset_sunset
-from shadow_map import create_shadow_renderer, compute_light_vp_stable
-from shadow_map import begin_shadow_frame, end_shadow_frame, shadow_draw_mesh
 from mesh import cube_mesh, upload_mesh
-from player_controller import create_player_controller, update_player
-from player_controller import player_view_matrix, player_eye_position
+from player_controller import create_player_controller, update_player, player_view_matrix, player_eye_position
 from player_controller import player_projection, player_forward
 from game_loop import create_time_state, update_time
-from font import create_font_renderer, load_font, begin_text, add_text, flush_text
-from ui_renderer import create_ui_renderer, draw_ui
 from json import cJSON_Parse, cJSON_Print, cJSON_Delete, cJSON_FromSage, cJSON_ToSage
-from gameplay import HealthComponent, damage, health_percent, revive, update_health_regen, HungerComponent, eat_food, update_hunger, hunger_percent
 from voxel_world import create_voxel_world
-from voxel_world import voxel_palette_ids
-from voxel_world import voxel_block_name, voxel_block_surface, voxel_block_world_center, raycast_voxel_world
-from voxel_world import set_voxel, sample_voxel_ground_radius, voxel_collides_player
-from voxel_world import resolve_player_voxel_collision, voxel_can_harvest_block
+from voxel_world import voxel_palette_ids, voxel_block_name, voxel_block_surface, voxel_block_world_center, raycast_voxel_world
+from voxel_world import set_voxel, get_voxel, voxel_collides_player
 from voxel_world import create_voxel_inventory, voxel_inventory_add, voxel_inventory_remove
-from voxel_world import voxel_inventory_count, voxel_inventory_to_sage, voxel_inventory_from_sage
-from voxel_world import voxel_world_to_sage, voxel_world_from_sage
+from voxel_world import voxel_inventory_count
 from voxel_world import default_voxel_recipes, try_craft_voxel_recipe
-from voxel_world import save_voxel_world_chunks, load_voxel_world_chunks, voxel_visible_draws
-from voxel_world import voxel_chunk_coords_world, voxel_chunk_size
-from voxel_world import ensure_voxel_generated_radius, voxel_generated_chunk_count
+from voxel_world import voxel_visible_draws
 from voxel_hud import create_voxel_hud, update_voxel_hud
 from voxel_gameplay import create_tool, create_voxel_gameplay_state, spawn_voxel_pickup
 from voxel_gameplay import voxel_add_tool, voxel_active_tool, voxel_select_tool, voxel_has_tools, voxel_durability_use
 from voxel_gameplay import update_voxel_pickups, pickup_draw_position
 from voxel_gameplay import spawn_voxel_mob, ensure_voxel_mob_population, update_voxel_mobs
-from voxel_gameplay import find_target_voxel_mob, collect_dead_voxel_mobs
 from voxel_gameplay import voxel_pickup_count, voxel_alive_mob_count, mob_draw_position
-from voxel_gameplay import voxel_gameplay_to_sage, voxel_gameplay_from_sage
-from postprocess import create_postprocess, recreate_postprocess, begin_scene_pass, end_scene_pass
-from postprocess import begin_transparent_scene_pass, end_transparent_scene_pass, copy_scene_color
-from postprocess import run_bloom_chain, run_ssao_chain, draw_tonemap, pfx_shaderpack_day
-from particles import create_particle_system, add_emitter_to_system
-from particles import update_particle_system, total_alive_particles
-from particles import seed_particles, get_emitter, reset_emitter
-from particle_renderer import create_particle_renderer, render_particles
-from vfx_presets import vfx_dust
+from voxel_fluids import create_fluid_system, update_fluid_system
+from voxel_biomes import default_biomes
+from voxel_weather import create_weather_system, update_weather_system, get_weather_light_modifier
+from voxel_mobai import create_behavior_state, update_mob_ai
 
 print "=== Forge Engine - Voxel Template Sandbox ==="
-
-let save_state_file = "/tmp/forge_voxel_template_save.json"
-let save_world_file = "/tmp/forge_voxel_template_world.json"
-let world_seed = 7.0
-let generation_chunk_radius = 2
-let stream_chunk_radius = 1
-
-# ============================================================================
-# Renderer
-# ============================================================================
-let r = create_renderer(1280, 720, "Forge Engine - Voxel Template")
-if r == nil:
-    raise "Failed to create renderer"
-print "GPU: " + gpu.device_name()
+print "Enhanced with fluid physics, biomes, weather, and advanced mob AI"
+print ""
 
 # ============================================================================
 # Lighting / sky / shadows
