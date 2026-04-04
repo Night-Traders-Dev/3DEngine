@@ -170,7 +170,7 @@ build_module_string() {
     if [ -d "$SRC_DIR" ]; then
         for file in "${SAGE_FILES[@]}"; do
             if [[ "$file" == "$SRC_DIR"* ]]; then
-                SAGE_MODULES="$SAGE_MODULES -i $file"
+                SAGE_MODULES="$SAGE_MODULES $file"
             fi
         done
     fi
@@ -198,7 +198,7 @@ build_target() {
     print_status "Building target: $output_name from $main_file"
     
     # Run sagec compiler with discovered modules
-    local cmd="sagec"
+    local cmd="sage"
     
     # Add module includes
     if [ ! -z "$SAGE_MODULES" ]; then
