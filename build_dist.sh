@@ -57,14 +57,36 @@ if [ -d "$SAGE_DIR/lib" ]; then
     cp "$SAGE_DIR"/lib/*.sage "$DIST/stdlib/"
 fi
 
-# Copy engine library modules
+# Copy engine library modules (both legacy lib/ and new src/ structure)
 echo "Copying engine libraries..."
-cp "$ENGINE_DIR"/lib/*.sage "$DIST/lib/"
+# Copy from lib/ (legacy structure) if it exists
+if [ -d "$ENGINE_DIR/lib" ]; then
+    cp "$ENGINE_DIR"/lib/*.sage "$DIST/lib/" 2>/dev/null || true
+fi
+# Copy from src/ (new structure) if it exists
+if [ -d "$ENGINE_DIR/src" ]; then
+    mkdir -p "$DIST/src"
+    # Copy recursively from src/
+    find "$ENGINE_DIR/src" -name "*.sage" -type f | while read -r file; do
+        relative_path="${file#$ENGINE_DIR/src/}"
+        target_dir="$DIST/src/$(dirname "$relative_path")"
+        mkdir -p "$target_dir"
+        cp "$file" "$target_dir/"
+    done
+fi
 
-# Copy engine entry points
-cp "$ENGINE_DIR/editor.sage" "$DIST/"
-cp "$ENGINE_DIR/VERSION" "$DIST/"
-cp "$ENGINE_DIR"/examples/*.sage "$DIST/examples/" 2>/dev/null || true
+# Copy engine entry points (from root or src/)
+if [ -f "$ENGINE_DIR/editor.sage" ]; then
+    cp "$ENGINE_DIR/editor.sage" "$DIST/"
+elif [ -f "$ENGINE_DIR/src/editor.sage" ]; then
+    cp "$ENGINE_DIR/src/editor.sage" "$DIST/"
+fi
+# Copy examples from either location
+if [ -d "$ENGINE_DIR/examples" ]; then
+    cp "$ENGINE_DIR"/examples/*.sage "$DIST/examples/" 2>/dev/null || true
+elif [ -d "$ENGINE_DIR/src/examples" ]; then
+    cp "$ENGINE_DIR"/src/examples/*.sage "$DIST/examples/" 2>/dev/null || true
+fi
 
 # Copy assets
 echo "Copying assets..."

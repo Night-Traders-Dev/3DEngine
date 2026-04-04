@@ -23,7 +23,7 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 ./build_dist.sh
 ```
 
-The engine release version is sourced from the repo-root `VERSION` file and exposed in runtime UI/build paths through `lib/forge_version.sage`.
+The engine release version is sourced from the repo-root `VERSION` file via `lib/forge_version.sage` (legacy support) or future modular src/ structure.
 Forge stays on `0.y.z` while we are still building toward a fully functional Unreal-style engine release; `1.0.0` is intentionally reserved for when the core workflows are truly there.
 SageLang itself is currently on the March 2026 `v2.0.0` specification-lock line, with stable core semantics/module behavior plus new REPL `:runtime jit` / `:runtime aot` modes, while its roadmap still keeps native module/class/GPU codegen on the future-work list. Forge therefore continues to validate editor/runtime/export flows against the local Sage runtime rather than assuming native parity is done everywhere.
 
