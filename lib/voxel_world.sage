@@ -83,12 +83,25 @@ proc create_voxel_world(size_x, size_y, size_z):
         i = i + 1
     vw["palette"] = {}
     vw["palette_ids"] = []
+    # Natural Blocks
     _register_block(vw, 1, "Grass", vec3(0.34, 0.76, 0.22), vec3(0.54, 0.62, 0.25), vec3(0.50, 0.33, 0.19))
     _register_block(vw, 2, "Dirt", vec3(0.60, 0.40, 0.24), vec3(0.52, 0.34, 0.20), vec3(0.44, 0.28, 0.17))
     _register_block(vw, 3, "Stone", vec3(0.68, 0.70, 0.74), vec3(0.56, 0.58, 0.62), vec3(0.40, 0.42, 0.46))
     _register_block(vw, 4, "Wood", vec3(0.78, 0.64, 0.38), vec3(0.60, 0.40, 0.20), vec3(0.70, 0.55, 0.31))
     _register_block(vw, 5, "Leaf", vec3(0.34, 0.70, 0.28), vec3(0.27, 0.57, 0.23), vec3(0.22, 0.46, 0.19))
     _register_block(vw, 6, "Plank", vec3(0.84, 0.69, 0.40), vec3(0.74, 0.56, 0.29), vec3(0.62, 0.45, 0.22))
+    # Ore Blocks
+    _register_block(vw, 7, "Coal Ore", vec3(0.51, 0.51, 0.51), vec3(0.48, 0.48, 0.48), vec3(0.40, 0.40, 0.40))
+    _register_block(vw, 8, "Iron Ore", vec3(0.65, 0.52, 0.41), vec3(0.60, 0.48, 0.38), vec3(0.55, 0.44, 0.35))
+    _register_block(vw, 9, "Gold Ore", vec3(0.85, 0.78, 0.41), vec3(0.80, 0.73, 0.38), vec3(0.75, 0.68, 0.35))
+    _register_block(vw, 10, "Diamond Ore", vec3(0.61, 0.87, 0.94), vec3(0.56, 0.82, 0.89), vec3(0.51, 0.77, 0.84))
+    # Processed Materials
+    _register_block(vw, 11, "Cobblestone", vec3(0.45, 0.45, 0.45), vec3(0.42, 0.42, 0.42), vec3(0.38, 0.38, 0.38))
+    _register_block(vw, 12, "Sand", vec3(0.92, 0.88, 0.70), vec3(0.90, 0.86, 0.68), vec3(0.88, 0.84, 0.66))
+    _register_block(vw, 13, "Gravel", vec3(0.68, 0.64, 0.60), vec3(0.65, 0.61, 0.57), vec3(0.62, 0.58, 0.54))
+    # Water & Lava (semi-transparent handling)
+    _register_block(vw, 14, "Water", vec3(0.25, 0.68, 0.98), vec3(0.25, 0.68, 0.98), vec3(0.20, 0.58, 0.88))
+    _register_block(vw, 15, "Lava", vec3(0.98, 0.48, 0.15), vec3(0.98, 0.48, 0.15), vec3(0.88, 0.38, 0.08))
     vw["mesh_data"] = {}
     vw["gpu_meshes"] = {}
     vw["draws"] = []
@@ -1248,3 +1261,125 @@ proc resolve_player_voxel_collision(vw, prev_pos, next_pos, radius, height):
     if voxel_collides_player(vw, resolved, radius, height):
         return vec3(prev_pos[0], prev_pos[1], prev_pos[2])
     return resolved
+
+# =====================================================
+# Ore & Cave Generation
+# =====================================================
+
+proc _simple_noise_2d(x, y, seed):
+    let n = math.sin(x * 12.9898 + y * 78.233 + seed) * 43758.5453
+    return n - math.floor(n)
+
+proc _simple_noise_3d(x, y, z, seed):
+    let n = math.sin(x * 12.9898 + y * 78.233 + z * 45.164 + seed) * 43758.5453
+    return n - math.floor(n)
+
+proc _generate_ore_vein(vw, center_x, center_y, center_z, ore_block, vein_size, seed):
+    let i = 0
+    while i < vein_size:
+        let offset_x = int(_simple_noise_3d(center_x + i, center_y, center_z, seed) * 4.0 - 2.0)
+        let offset_y = int(_simple_noise_3d(center_x, center_y + i, center_z, seed) * 4.0 - 2.0)
+        let offset_z = int(_simple_noise_3d(center_x, center_y, center_z + i, seed) * 4.0 - 2.0)
+        let x = center_x + offset_x
+        let y = center_y + offset_y
+        let z = center_z + offset_z
+        if voxel_in_bounds(vw, x, y, z) and get_voxel(vw, x, y, z) == 3:  # Stone
+            set_voxel(vw, x, y, z, ore_block)
+        i = i + 1
+
+proc _generate_ore_deposits(vw, seed):
+    # Coal ore - common, high density
+    let coal_deposits = 20
+    let i = 0
+    while i < coal_deposits:
+        let x = int(_simple_noise_2d(i, 0.0, seed) * vw["size_x"])
+        let y = int(_simple_noise_2d(i, 1.0, seed) * vw["size_y"] * 0.8)
+        let z = int(_simple_noise_2d(i, 2.0, seed) * vw["size_z"])
+        _generate_ore_vein(vw, x, y, z, 7, 12, seed)  # Coal ore
+        i = i + 1
+    
+    # Iron ore - less common
+    let iron_deposits = 12
+    let j = 0
+    while j < iron_deposits:
+        let x = int(_simple_noise_2d(100 + j, 0.0, seed) * vw["size_x"])
+        let y = int(_simple_noise_2d(100 + j, 1.0, seed) * vw["size_y"] * 0.6)
+        let z = int(_simple_noise_2d(100 + j, 2.0, seed) * vw["size_z"])
+        _generate_ore_vein(vw, x, y, z, 8, 8, seed)  # Iron ore
+        j = j + 1
+    
+    # Gold ore - rare, deep
+    let gold_deposits = 6
+    let k = 0
+    while k < gold_deposits:
+        let x = int(_simple_noise_2d(200 + k, 0.0, seed) * vw["size_x"])
+        let y = int(_simple_noise_2d(200 + k, 1.0, seed) * vw["size_y"] * 0.4)
+        let z = int(_simple_noise_2d(200 + k, 2.0, seed) * vw["size_z"])
+        _generate_ore_vein(vw, x, y, z, 9, 6, seed)  # Gold ore
+        k = k + 1
+    
+    # Diamond ore - very rare, deepest
+    let diamond_deposits = 3
+    let m = 0
+    while m < diamond_deposits:
+        let x = int(_simple_noise_2d(300 + m, 0.0, seed) * vw["size_x"])
+        let y = int(_simple_noise_2d(300 + m, 1.0, seed) * vw["size_y"] * 0.2)
+        let z = int(_simple_noise_2d(300 + m, 2.0, seed) * vw["size_z"])
+        _generate_ore_vein(vw, x, y, z, 10, 4, seed)  # Diamond ore
+        m = m + 1
+
+proc _generate_cave_tunnel(vw, start_x, start_y, start_z, length, seed):
+    let x = start_x
+    let y = start_y
+    let z = start_z
+    let i = 0
+    while i < length:
+        # Carve sphere of cave at current position
+        let radius = 2
+        let cx = x - radius
+        while cx <= x + radius:
+            let cy = y - radius
+            while cy <= y + radius:
+                let cz = z - radius
+                while cz <= z + radius:
+                    if voxel_in_bounds(vw, cx, cy, cz):
+                        let dist = (cx - x) * (cx - x) + (cy - y) * (cy - y) + (cz - z) * (cz - z)
+                        if dist <= radius * radius:
+                            let current = get_voxel(vw, cx, cy, cz)
+                            if current == 3 or current == 2 or current == 11:  # Stone, dirt, cobblestone
+                                set_voxel(vw, cx, cy, cz, 0)  # Carve out
+                    cz = cz + 1
+                cy = cy + 1
+            cx = cx + 1
+        
+        # Move to next position
+        let angle = _simple_noise_3d(x, y, z, seed + i) * 2.0 * math.PI
+        let pitch = (_simple_noise_3d(x + 100, y + 100, z + 100, seed + i) - 0.5) * 0.5
+        x = x + int(math.cos(angle) * 3.0)
+        z = z + int(math.sin(angle) * 3.0)
+        y = y + int(math.sin(pitch) * 2.0)
+        
+        i = i + 1
+        
+        # Stop if reached surface or below ground
+        if y < 5 or y > vw["size_y"] - 5:
+            i = length
+
+proc _generate_caves(vw, seed):
+    let cave_count = 8
+    let i = 0
+    while i < cave_count:
+        let start_x = int(_simple_noise_2d(400 + i, 0.0, seed) * vw["size_x"])
+        let start_y = int(_simple_noise_2d(400 + i, 1.0, seed) * vw["size_y"] * 0.6)
+        let start_z = int(_simple_noise_2d(400 + i, 2.0, seed) * vw["size_z"])
+        let length = int(40 + _simple_noise_2d(450 + i, 3.0, seed) * 30.0)
+        _generate_cave_tunnel(vw, start_x, start_y, start_z, length, seed)
+        i = i + 1
+
+proc enhance_voxel_world_with_features(vw, seed):
+    _generate_ore_deposits(vw, seed)
+    _generate_caves(vw, seed)
+
+
+# =====================================================# =====================================================
+# Ore & Cave Generation
