@@ -16,6 +16,10 @@ cd ../sagelang && ./build.sh --skip-tests && cd ../3DEngine
 # Run the voxel sandbox demo
 ./run.sh examples/demo_voxel.sage
 
+# Create a new voxel game from template
+cp examples/voxel_game_template.sage my_game.sage
+# Then edit my_game.sage and run: ./run.sh my_game.sage
+
 # Run tests (59 suites, 1,752 checks)
 ./tests/run_all.sh
 
