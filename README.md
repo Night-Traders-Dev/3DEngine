@@ -27,6 +27,29 @@ The engine release version is sourced from the repo-root `VERSION` file and expo
 Forge stays on `0.y.z` while we are still building toward a fully functional Unreal-style engine release; `1.0.0` is intentionally reserved for when the core workflows are truly there.
 SageLang itself is currently on the March 2026 `v2.0.0` specification-lock line, with stable core semantics/module behavior plus new REPL `:runtime jit` / `:runtime aot` modes, while its roadmap still keeps native module/class/GPU codegen on the future-work list. Forge therefore continues to validate editor/runtime/export flows against the local Sage runtime rather than assuming native parity is done everywhere.
 
+## Build System
+
+The `build.sh` script provides a modern, scalable build system supporting both legacy (`lib/`) and new (`src/`) module organization:
+
+```bash
+# Basic usage (uses lib/ modules)
+./build.sh engine              # Build engine binary
+./build.sh editor              # Build editor binary
+./build.sh all                 # Build both
+./build.sh clean               # Clean build artifacts
+
+# Advanced options
+./build.sh -v engine           # Verbose module discovery
+./build.sh -d engine           # Debug build with symbols
+./build.sh -j 8 all            # Use 8 parallel jobs
+./build.sh -o dist/ engine     # Output to custom directory
+
+# Combined options
+./build.sh -v -d -j 4 all      # Verbose, debug, 4 jobs
+```
+
+The build system automatically discovers all `.sage` module files from `lib/` (legacy) and `src/` (new structure), making it easy to scale from a single directory to a modular architecture. See [BUILD_REFACTORING.md](BUILD_REFACTORING.md) for migration guides, [BUILD_TECHNICAL_REFERENCE.md](BUILD_TECHNICAL_REFERENCE.md) for implementation details, and [BUILD_MIGRATION_EXAMPLES.md](BUILD_MIGRATION_EXAMPLES.md) for practical examples.
+
 ## Project Browser
 
 When you launch the editor, a **Project Browser** appears first:
