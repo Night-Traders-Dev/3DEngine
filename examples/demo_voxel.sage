@@ -15,7 +15,7 @@ from renderer import create_renderer, begin_frame_commands, begin_swapchain_pass
 from renderer import shutdown_renderer, check_resize, update_title_fps
 from input import create_input, update_input, bind_action
 from input import action_just_pressed, default_fps_bindings, scroll_value
-from math3d import vec3, v3_normalize, mat4_identity, mat4_mul, mat4_inverse, radians
+from math3d import vec3, v3_normalize, v3_length, mat4_identity, mat4_mul, mat4_inverse, radians
 from engine_math import make_transform, transform_to_matrix
 from lighting import create_light_scene, directional_light
 from lighting import add_light, set_ambient, set_fog, set_view_position, set_scene_time
@@ -126,9 +126,9 @@ let ui_renderer = create_ui_renderer(r["render_pass"])
 # Particles
 # ============================================================================
 seed_particles(world_seed)
-let particle_system = create_particle_system(1000)
-let dust_emitter = vfx_dust()
-add_emitter_to_system(particle_system, dust_emitter)
+let particle_system = create_particle_system()
+let dust_emitter = vfx_dust(vec3(0.0, 0.0, 0.0))
+add_emitter_to_system(particle_system, "dust", dust_emitter)
 let particle_renderer = create_particle_renderer(ui_renderer)
 
 proc _rebuild_scene_postprocess():
@@ -169,7 +169,7 @@ voxel_inventory_add(inventory, 10, 8)
 voxel_inventory_add(inventory, 15, 5)  # Apples
 voxel_inventory_add(inventory, 16, 3)  # Bread
 let recipes = default_voxel_recipes()
-let recipes = default_voxel_recipes()
+let selected_recipe_index = [0]
 let voxel_hud = create_voxel_hud()
 let inventory_open = [false]
 let gameplay_state = create_voxel_gameplay_state()
@@ -319,7 +319,7 @@ let running = true
 print ""
 print "Controls:"
 print "  WASD = Move  Mouse = Look  ESC = Capture mouse  TAB = Noclip"
-print "  Left Mouse = Break block / hit slime  Right Mouse = Place block / eat food  1-5 = Palette  Z = Planks  Wheel = Cycle palette  X = Craft planks  E = Cycle tools  O = Inventory"
+print "  Left Mouse = Break block / hit slime  Right Mouse = Place block / eat food  1-5 = Palette  Z = Planks  Wheel = Cycle palette  X = Craft selected recipe  R = Cycle recipes  E = Cycle tools  O = Inventory"
 print ""
 
 while running:
@@ -362,6 +362,10 @@ while running:
             let tool = voxel_select_tool(gameplay_state, next_tool)
             if tool != nil:
                 _set_status("Selected tool: " + tool["name"])
+    if gpu.key_just_pressed(gpu.KEY_R):
+        if len(recipes) > 0:
+            selected_recipe_index[0] = (selected_recipe_index[0] + 1) % len(recipes)
+            _set_status("Recipe: " + recipes[selected_recipe_index[0]]["name"])
     let sv = scroll_value(inp)
     if sv[1] > 0.1:
         _cycle_selected_block(-1)
@@ -369,11 +373,12 @@ while running:
         if sv[1] < -0.1:
             _cycle_selected_block(1)
     if gpu.key_just_pressed(gpu.KEY_X):
-        if try_craft_voxel_recipe(inventory, recipes[0]):
-            selected_block[0] = recipes[0]["output_block"]
-            _set_status("Crafted " + str(recipes[0]["output_count"]) + " " + voxel_block_name(voxel, recipes[0]["output_block"]) + " from " + voxel_block_name(voxel, recipes[0]["input_block"]))
+        let recipe = recipes[selected_recipe_index[0]]
+        if try_craft_voxel_recipe(inventory, recipe):
+            selected_block[0] = recipe["output_block"]
+            _set_status("Crafted " + str(recipe["output_count"]) + " " + voxel_block_name(voxel, recipe["output_block"]) + " from " + voxel_block_name(voxel, recipe["input_block"]))
         else:
-            _set_status("Need " + str(recipes[0]["input_count"]) + " " + voxel_block_name(voxel, recipes[0]["input_block"]) + " to craft " + voxel_block_name(voxel, recipes[0]["output_block"]))
+            _set_status("Need " + str(recipe["input_count"]) + " " + voxel_block_name(voxel, recipe["input_block"]) + " to craft " + voxel_block_name(voxel, recipe["output_block"]))
 
     if gpu.key_just_pressed(gpu.KEY_C):
         if save_voxel_world_chunks(voxel, save_world_file) == false:
@@ -565,8 +570,8 @@ while running:
     let sun_vec = vec3(math.cos(sun_angle), -0.42 + math.sin(sun_angle) * 0.26, math.sin(sun_angle) * 0.60)
     if len(ls["lights"]) > 0:
         ls["lights"][0]["position"] = v3_normalize(sun_vec)
-        ls["lights"][0]["color"] = vec3(0.98, 0.75, 0.55) * (0.65 + 0.35 * max(math.sin(sun_angle), 0.0))
-        ls["lights"][0]["intensity"] = 0.95 + 0.45 * max(math.sin(sun_angle), 0.0)
+        ls["lights"][0]["color"] = vec3(0.98, 0.75, 0.55) * (0.65 + 0.35 * math.max(math.sin(sun_angle), 0.0))
+        ls["lights"][0]["intensity"] = 0.95 + 0.45 * math.max(math.sin(sun_angle), 0.0)
 
     # Slight animated ambient tone shift
     set_ambient(ls, 0.45 + 0.12 * math.sin(ts["total"] * 0.14), 0.23 + 0.08 * math.sin(ts["total"] * 0.17 + 1.2), 0.18 + 0.05 * math.sin(ts["total"] * 0.11 + 0.8), 0.42)
@@ -614,6 +619,7 @@ while running:
     let world_mvp = mat4_mul(vp, identity)
     let sw = r["width"] + 0.0
     let sh = r["height"] + 0.0
+    voxel_hud["craft_recipe_index"] = selected_recipe_index[0]
     update_voxel_hud(voxel_hud, voxel, inventory, selected_block[0], inventory_open[0], recipes, sw, sh)
 
     begin_scene_pass(postprocess, cmd, r["clear_color"])
@@ -728,6 +734,8 @@ while running:
     let craft_recipe = voxel_hud["craft_recipe"]
     add_text(font_r, "ui", "CRAFTING", craft_panel["computed_x"] + 14.0, craft_panel["computed_y"] + 10.0, 0.94, 0.96, 0.98, 1.0)
     if craft_recipe != nil:
+        add_text(font_r, "ui", craft_recipe["name"], craft_panel["computed_x"] + 14.0, craft_panel["computed_y"] + 28.0, 0.76, 0.82, 0.96, 1.0)
+        add_text(font_r, "ui", "Press R to cycle", craft_panel["computed_x"] + 14.0, craft_panel["computed_y"] + 40.0, 0.65, 0.70, 0.75, 0.9)
         let craft_ready_alpha = 0.82
         let craft_ready_r = 0.90
         let craft_ready_g = 0.82

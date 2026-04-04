@@ -36,8 +36,14 @@ check("selected hotbar border widened", hud["hotbar_slots"][1]["panel"]["border_
 check("extended hotbar shows later palette entries", hud["hotbar_slots"][8]["block_id"] == 9 and hud["hotbar_slots"][9]["block_id"] == 10)
 check("inventory hidden when toggle off", hud["inventory_panel"]["visible"] == false)
 check("craft recipe loaded", hud["craft_recipe"] != nil and hud["craft_input"]["block_id"] == 4 and hud["craft_output"]["block_id"] == 6)
+check("craft recipe index defaults to first recipe", hud["craft_recipe_index"] == 0)
 check("craft panel ready when wood count is enough", hud["craft_ready"] == true and hud["craft_fill"]["width"] > 0.0)
 check("slot layout computed", hud["hotbar_slots"][0]["panel"]["computed_y"] > 0.0)
+
+hud["craft_recipe_index"] = 1
+update_voxel_hud(hud, voxel, inventory, 1, true, recipes, 1920.0, 1080.0)
+check("craft recipe selection index updates recipe", hud["craft_recipe"]["name"] == recipes[1]["name"] and hud["craft_input"]["block_id"] == recipes[1]["input_block"] and hud["craft_output"]["block_id"] == recipes[1]["output_block"])
+check("craft panel not ready when recipe input is insufficient", hud["craft_ready"] == false)
 
 update_voxel_hud(hud, voxel, inventory, 1, true, recipes, 1920.0, 1080.0)
 check("inventory shown when toggle on", hud["inventory_panel"]["visible"] == true)

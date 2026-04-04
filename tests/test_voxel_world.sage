@@ -238,7 +238,12 @@ check("inventory remove rejects insufficient stock", voxel_inventory_remove(inve
 let inv_copy = voxel_inventory_from_sage(voxel_inventory_to_sage(inventory))
 check("inventory roundtrip preserves counts", voxel_inventory_count(inv_copy, 3) == 3 and voxel_inventory_count(inv_copy, 4) == 2)
 let recipes = default_voxel_recipes()
-check("default voxel recipe exists", len(recipes) == 1 and recipes[0]["output_block"] == 6)
+check("default voxel recipes exist", len(recipes) >= 10)
+check("default stone pickaxe recipe exists", recipes[1]["name"] == "Stone Pickaxe" and recipes[1]["output_block"] == 19)
+let stone_recipe = recipes[1]
+let stone_before = voxel_inventory_count(inv_copy, 3)
+let stone_tools_before = voxel_inventory_count(inv_copy, 19)
+check("crafting stone pickaxe consumes stone and produces tool", try_craft_voxel_recipe(inv_copy, stone_recipe) == true and voxel_inventory_count(inv_copy, 3) == stone_before - stone_recipe["input_count"] and voxel_inventory_count(inv_copy, 19) == stone_tools_before + 1)
 check("crafting consumes inputs and creates planks", try_craft_voxel_recipe(inv_copy, recipes[0]) == true and voxel_inventory_count(inv_copy, 4) == 1 and voxel_inventory_count(inv_copy, 6) == 4)
 
 print ""

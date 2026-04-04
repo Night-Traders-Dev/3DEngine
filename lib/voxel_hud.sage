@@ -123,6 +123,7 @@ proc create_voxel_hud():
     add_child(hud["craft_panel"], hud["craft_track"])
     add_child(hud["craft_panel"], hud["craft_fill"])
     hud["craft_recipe"] = nil
+    hud["craft_recipe_index"] = 0
     hud["craft_ready"] = false
 
     return hud
@@ -222,7 +223,13 @@ proc update_voxel_hud(hud, voxel, inventory, selected_block, inventory_open, rec
 
     let recipe = nil
     if recipes != nil and len(recipes) > 0:
-        recipe = recipes[0]
+        let recipe_index = 0
+        if dict_has(hud, "craft_recipe_index"):
+            recipe_index = hud["craft_recipe_index"]
+        if recipe_index < 0 or recipe_index >= len(recipes):
+            recipe_index = 0
+            hud["craft_recipe_index"] = 0
+        recipe = recipes[recipe_index]
     hud["craft_recipe"] = recipe
     hud["craft_ready"] = false
     if recipe != nil:
