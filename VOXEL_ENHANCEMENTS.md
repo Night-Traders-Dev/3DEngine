@@ -4,7 +4,7 @@
 Enhanced the 3D Engine's voxel world system to be on par with Minecraft and Realism mods. This document outlines all new features, systems, and capabilities.
 
 ## Date
-April 4, 2026
+April 4, 2026 - Updated to use native Sage math functions (math.PI, math.random(), int())
 
 ## Major Enhancements
 

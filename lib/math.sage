@@ -131,3 +131,37 @@ proc normalize(value, min_val, max_val):
     if max_val == min_val:
         return 0
     return (value - min_val) / (max_val - min_val)
+
+# ============================================================================
+# Constants
+# ============================================================================
+
+let PI = 3.14159265358979323846
+let E = 2.71828182845904523536
+
+# ============================================================================
+# Random number generation (using native math functions)
+# ============================================================================
+
+# Use native math.random() instead of importing from random module
+proc random():
+    return math.random()
+
+proc random_range(min_val, max_val):
+    return min_val + (max_val - min_val) * math.random()
+
+proc random_int(min_val, max_val):
+    return int(min_val + (max_val - min_val + 1) * math.random())
+
+# Use native functions where available
+proc int(x):
+    return int(x)
+
+proc floor(x):
+    return math.floor(x)
+
+proc ceil(x):
+    return math.ceil(x)
+
+proc round(x):
+    return math.round(x)

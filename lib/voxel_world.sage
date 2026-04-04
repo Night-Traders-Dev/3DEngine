@@ -1353,7 +1353,7 @@ proc _generate_cave_tunnel(vw, start_x, start_y, start_z, length, seed):
             cx = cx + 1
         
         # Move to next position
-        let angle = _simple_noise_3d(x, y, z, seed + i) * 2.0 * math.PI
+        let angle = _simple_noise_3d(x, y, z, seed + i) * 2.0 * 3.14159265358979323846
         let pitch = (_simple_noise_3d(x + 100, y + 100, z + 100, seed + i) - 0.5) * 0.5
         x = x + int(math.cos(angle) * 3.0)
         z = z + int(math.sin(angle) * 3.0)
