@@ -174,11 +174,11 @@ proc _skeleton_behavior(mob, behavior, player_pos, dt):
     
     if dist < behavior["search_radius"]:
         if dist > 8.0:
-            // Move closer
+            # Move closer
             mob["direction"] = v3_normalize(to_player)
             mob["velocity"] = v3_scale(mob["direction"], 3.0)
         else:
-            // Strafe while shooting
+            # Strafe while shooting
             let angle = math.sin(behavior["behavior_time"]) * 0.5
             mob["direction"] = vec3(math.cos(angle), 0.0, math.sin(angle))
             mob["velocity"] = v3_scale(mob["direction"], 2.0)
@@ -191,12 +191,12 @@ proc _skeleton_behavior(mob, behavior, player_pos, dt):
     return "idle"
 
 proc _spider_behavior(mob, behavior, player_pos, dt):
-    // Spiders circle prey
+    # Spiders circle prey
     let to_player = v3_sub(player_pos, mob["position"])
     let dist = v3_length(to_player)
     
     if dist < 16.0:
-        // Circle around player at mid-range
+        # Circle around player at mid-range
         let circumference = dist * 6.28
         let orbital_angle = behavior["behavior_time"] * (2.0 / circumference)
         let angle = math.atan2(to_player[2], to_player[0]) + orbital_angle
@@ -204,9 +204,8 @@ proc _spider_behavior(mob, behavior, player_pos, dt):
         mob["direction"] = vec3(math.cos(angle), 0.0, math.sin(angle))
         mob["velocity"] = v3_scale(mob["direction"], 6.0)
         
-        if dist < 3.0 {
+        if dist < 3.0:
             mob["attacking"] = true
-        }
     
     return "idle"
 
