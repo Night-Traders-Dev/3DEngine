@@ -150,12 +150,12 @@ discover_modules() {
     
     print_status "Scanning $search_dir for module files..."
     
-    # Find all .sage files in the directory (excluding examples and tests)
+    # Find all .sage files in the directory and subdirectories (excluding examples and tests)
     while IFS= read -r -d '' file; do
         found_any=1
         SAGE_FILES+=("$file")
         print_info "  Found: $file"
-    done < <(find "$search_dir" -maxdepth 1 -name "*.sage" -type f -print0 | sort -z)
+    done < <(find "$search_dir" -name "*.sage" -type f -print0 | sort -z)
     
     if [ "$found_any" = "0" ]; then
         print_warning "No .sage files found in $search_dir"

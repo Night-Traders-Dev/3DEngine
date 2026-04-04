@@ -1,0 +1,242 @@
+gc_disable()
+# -----------------------------------------
+# renderer.sage - High-level Vulkan render loop for SageLang
+# Manages window, depth buffer, render pass, framebuffers, sync, and frame lifecycle
+# -----------------------------------------
+
+import gpu
+
+let MAX_FRAMES = 2
+
+# ============================================================================
+# Pipeline cache
+# ============================================================================
+let _pipeline_cache = [false]
+
+proc _store_pipeline_cache_result(result):
+    _pipeline_cache[0] = result == true
+    return _pipeline_cache[0]
+
+proc init_pipeline_cache():
+    let ready = _store_pipeline_cache_result(gpu.create_pipeline_cache())
+    if ready:
+        print "Pipeline cache initialized"
+
+proc get_pipeline_cache():
+    return _pipeline_cache[0]
+
+# ============================================================================
+# Create a renderer context dict
+# ============================================================================
+proc create_renderer(width, height, title):
+    let ok = gpu.init_windowed("SageLang", width, height, title, false)
+    if ok == false:
+        return nil
+
+    let ext = gpu.swapchain_extent()
+    let w = ext["width"]
+    let h = ext["height"]
+
+    # Depth buffer
+    let depth = gpu.create_depth_buffer(w, h)
+
+    # Render pass with color + depth
+    let color_attach = {}
+    color_attach["format"] = gpu.FORMAT_SWAPCHAIN
+    color_attach["load_op"] = gpu.LOAD_CLEAR
+    color_attach["store_op"] = gpu.STORE_STORE
+    color_attach["initial_layout"] = gpu.LAYOUT_UNDEFINED
+    color_attach["final_layout"] = gpu.LAYOUT_PRESENT
+
+    let depth_attach = {}
+    depth_attach["format"] = gpu.FORMAT_DEPTH32F
+    depth_attach["load_op"] = gpu.LOAD_CLEAR
+    depth_attach["store_op"] = gpu.STORE_DONTCARE
+    depth_attach["initial_layout"] = gpu.LAYOUT_UNDEFINED
+    depth_attach["final_layout"] = gpu.LAYOUT_DEPTH_ATTACH
+
+    let rp = gpu.create_render_pass([color_attach, depth_attach])
+
+    init_pipeline_cache()
+
+    # Framebuffers (color + depth)
+    let framebuffers = gpu.create_swapchain_framebuffers_depth(rp, depth)
+
+    # Command pool and per-image command buffers
+    let cmd_pool = gpu.create_command_pool()
+    let cmd_bufs = []
+    let i = 0
+    while i < len(framebuffers):
+        push(cmd_bufs, gpu.create_command_buffer(cmd_pool))
+        i = i + 1
+
+    # Per-frame sync objects
+    let img_sems = []
+    let rdr_sems = []
+    let fences = []
+    let fi = 0
+    while fi < MAX_FRAMES:
+        push(img_sems, gpu.create_semaphore())
+        push(rdr_sems, gpu.create_semaphore())
+        push(fences, gpu.create_fence(true))
+        fi = fi + 1
+
+    let r = {}
+    r["width"] = w
+    r["height"] = h
+    r["depth_image"] = depth
+    r["render_pass"] = rp
+    r["framebuffers"] = framebuffers
+    r["cmd_pool"] = cmd_pool
+    r["cmd_bufs"] = cmd_bufs
+    r["img_sems"] = img_sems
+    r["rdr_sems"] = rdr_sems
+    r["fences"] = fences
+    r["frame"] = 0
+    r["start_time"] = clock()
+    r["clear_color"] = [0.02, 0.02, 0.06, 1.0]
+    return r
+
+# ============================================================================
+# Internal frame acquisition - returns dict with cmd, image_index, time, or nil
+# ============================================================================
+proc begin_frame_commands(r):
+    if gpu.window_should_close():
+        return nil
+    gpu.poll_events()
+
+    let cf = r["frame"] % MAX_FRAMES
+    gpu.wait_fence(r["fences"][cf])
+    gpu.reset_fence(r["fences"][cf])
+
+    let img_idx = gpu.acquire_next_image(r["img_sems"][cf])
+    if img_idx < 0:
+        # Swapchain out of date (resize happened) - recreate and retry
+        check_resize(r)
+        # Re-wait the fence since we reset it
+        gpu.wait_fence(r["fences"][cf])
+        gpu.reset_fence(r["fences"][cf])
+        img_idx = gpu.acquire_next_image(r["img_sems"][cf])
+        if img_idx < 0:
+            return nil
+
+    let cmd = r["cmd_bufs"][img_idx]
+    let t = clock() - r["start_time"]
+
+    gpu.begin_commands(cmd)
+
+    # Clear color (configurable via r["clear_color"]) + depth 1.0
+    gpu.cmd_begin_render_pass(cmd, r["render_pass"], r["framebuffers"][img_idx], [r["clear_color"], [1.0, 0.0, 0.0, 0.0]])
+
+    gpu.cmd_set_viewport(cmd, 0, 0, r["width"], r["height"], 0.0, 1.0)
+    gpu.cmd_set_scissor(cmd, 0, 0, r["width"], r["height"])
+
+    let frame = {}
+    frame["cmd"] = cmd
+    frame["image_index"] = img_idx
+    frame["time"] = t
+    frame["current_frame"] = cf
+    return frame
+
+proc begin_swapchain_pass(r, frame):
+    if frame == nil:
+        return nil
+    let cmd = frame["cmd"]
+    let img_idx = frame["image_index"]
+    gpu.cmd_begin_render_pass(cmd, r["render_pass"], r["framebuffers"][img_idx], [r["clear_color"], [1.0, 0.0, 0.0, 0.0]])
+    gpu.cmd_set_viewport(cmd, 0, 0, r["width"], r["height"], 0.0, 1.0)
+    gpu.cmd_set_scissor(cmd, 0, 0, r["width"], r["height"])
+    return cmd
+
+# ============================================================================
+# Begin frame - returns dict with cmd, image_index, time, or nil if should close
+# ============================================================================
+proc begin_frame(r):
+    let frame = begin_frame_commands(r)
+    if frame == nil:
+        return nil
+    begin_swapchain_pass(r, frame)
+    return frame
+
+# ============================================================================
+# End frame - present the rendered image
+# ============================================================================
+proc end_frame(r, frame):
+    let cmd = frame["cmd"]
+    let cf = frame["current_frame"]
+    let img_idx = frame["image_index"]
+
+    gpu.cmd_end_render_pass(cmd)
+    gpu.end_commands(cmd)
+
+    gpu.submit_with_sync(cmd, r["img_sems"][cf], r["rdr_sems"][cf], r["fences"][cf])
+    gpu.present(img_idx, r["rdr_sems"][cf])
+
+    r["frame"] = r["frame"] + 1
+
+# ============================================================================
+# Shutdown renderer
+# ============================================================================
+proc shutdown_renderer(r):
+    gpu.device_wait_idle()
+    let elapsed = clock() - r["start_time"]
+    let frames = r["frame"]
+    if elapsed > 0:
+        print "Rendered " + str(frames) + " frames (" + str(frames / elapsed) + " FPS)"
+    gpu.shutdown_windowed()
+
+# ============================================================================
+# Convenience: aspect ratio
+# ============================================================================
+proc aspect_ratio(r):
+    return r["width"] / r["height"]
+
+# ============================================================================
+# Feature 12: Resize handling
+# ============================================================================
+proc check_resize(r):
+    if gpu.window_resized():
+        gpu.device_wait_idle()
+        gpu.recreate_swapchain()
+        let ext = gpu.swapchain_extent()
+        let new_w = ext["width"]
+        let new_h = ext["height"]
+        # Skip if minimized (0x0 dimensions)
+        if new_w < 1 or new_h < 1:
+            return false
+        r["width"] = new_w
+        r["height"] = new_h
+        # Recreate depth buffer + framebuffers
+        r["depth_image"] = gpu.create_depth_buffer(r["width"], r["height"])
+        r["framebuffers"] = gpu.create_swapchain_framebuffers_depth(r["render_pass"], r["depth_image"])
+        # Resize command buffers if needed
+        let new_count = len(r["framebuffers"])
+        while len(r["cmd_bufs"]) < new_count:
+            push(r["cmd_bufs"], gpu.create_command_buffer(r["cmd_pool"]))
+        return true
+    return false
+
+# ============================================================================
+# Feature 13: FPS in window title
+# ============================================================================
+proc update_title_fps(r, base_title):
+    let frames = r["frame"]
+    let elapsed = clock() - r["start_time"]
+    if elapsed > 0:
+        let fps = frames / elapsed
+        # Update every 30 frames
+        let m = frames - (frames / 30) * 30
+        if m == 0:
+            gpu.set_title(base_title + " | " + str(fps) + " FPS")
+
+# ============================================================================
+# Secondary command buffers
+# ============================================================================
+proc create_secondary_cmd(r):
+    return gpu.create_secondary_command_buffer(r["cmd_pool"])
+
+proc begin_secondary(cmd, render_pass, framebuffer):
+    gpu.begin_secondary(cmd, render_pass, framebuffer)
+
+proc execute_secondary(primary_cmd, secondary_cmds):
+    gpu.cmd_execute_commands(primary_cmd, secondary_cmds)
