@@ -1,8 +1,6 @@
-# demo_voxel.sage - Simplified working voxel demo with all enhancements
-# Minecraft-style sandbox with fluid physics, biomes, weather, and advanced mob AI
-
+# demo_voxel_init_only.sage - Just initialization, no main loop
 import gpu
-# import math  # Moved after voxel_world import
+import math
 from renderer import create_renderer, begin_frame, end_frame, shutdown_renderer, check_resize, update_title_fps
 from input import create_input, update_input, action_just_pressed, action_held, default_fps_bindings, mouse_delta, scroll_value
 from math3d import vec3, v3_add, v3_sub, v3_scale, v3_normalize, v3_length
@@ -19,10 +17,7 @@ from voxel_biomes import default_biomes
 from voxel_weather import create_weather_system, update_weather_system, get_weather_light_modifier
 from voxel_mobai import create_behavior_state, update_mob_ai
 
-import math  # Import math after voxel modules
-
-print "=== Forge Engine - Voxel Template Sandbox ==="
-print "With: Fluid Physics | Biome System | Dynamic Weather | Advanced Mob AI"
+print "=== Forge Engine - Voxel Template Sandbox (Init Only) ==="
 print ""
 
 # Initialize systems
@@ -82,78 +77,55 @@ print "✓ World: 64x48x64 | Mobs: " + str(voxel_alive_mob_count(gameplay))
 print "✓ Fluids: Water & Lava | Biomes: Plains, Forest, Desert, Mountains, Swamp"
 print "✓ Weather: Dynamic transitions | Mob AI: Advanced behavior trees"
 print ""
-print "Controls: WASD=Move | Mouse=Look | Scroll=Up/Down | ESC=Quit"
-print ""
+print "Testing one frame..."
 
-let running = true
-let frame_count = 0
-let dt = 0.016
+update_input(inp)
 
-while running and frame_count < 1:
-    update_input(inp)
-    
-    if action_just_pressed(inp, "escape"):
-        running = false
-    
-    player["position"] = player_pos
-    let move_dir = vec3(0.0, 0.0, 0.0)
-    
-    if action_held(inp, "forward"):
-        move_dir = v3_add(move_dir, player_forward(player))
-    if action_held(inp, "backward"):
-        move_dir = v3_add(move_dir, v3_scale(player_forward(player), -1.0))
-    if action_held(inp, "left"):
-        let right = vec3(-player_forward(player)[2], 0.0, player_forward(player)[0])
-        move_dir = v3_add(move_dir, v3_scale(right, -1.0))
-    if action_held(inp, "right"):
-        let right = vec3(-player_forward(player)[2], 0.0, player_forward(player)[0])
-        move_dir = v3_add(move_dir, right)
-    
-    if v3_length(move_dir) > 0.0:
-        move_dir = v3_normalize(move_dir)
-        player_pos = v3_add(player_pos, v3_scale(move_dir, 12.0 * dt))
-    
-    let scroll = scroll_value(inp)
-    if scroll[1] != 0.0:
-        player_pos = v3_add(player_pos, vec3(0.0, scroll[1] * 2.0, 0.0))
-    
-    let mdelta = mouse_delta(inp)
-    if mdelta[0] != 0.0 or mdelta[1] != 0.0:
-        player["yaw"] = player["yaw"] + mdelta[0] * 0.005
-        player["pitch"] = player["pitch"] + mdelta[1] * 0.005
-    
-    update_weather_system(weather, dt)
-    update_voxel_pickups(gameplay, dt)
-    
-    let mi = 0
-    while mi < len(gameplay["mobs"]):
-        if gameplay["mobs"][mi] != nil and not gameplay["mobs"][mi]["dead"]:
-            if dict_has(gameplay["mobs"][mi], "behavior"):
-                update_mob_ai(gameplay["mobs"][mi], gameplay["mobs"][mi]["behavior"], player_pos, dt)
-        mi = mi + 1
-    update_voxel_mobs(gameplay, player_pos, dt)
-    
-    if frame_count % 120 == 0:
-        ensure_voxel_mob_population(gameplay, player_pos, 64)
-    
-    let frame = begin_frame(r)
-    if frame == nil:
-        frame_count = frame_count + 1
-        continue
-    
-    let weather_mod = get_weather_light_modifier(weather)
-    gpu.clear_color(0.52 * weather_mod, 0.76 * weather_mod, 0.95 * weather_mod, 1.0)
-    gpu.clear()
-    
-    update_title_fps(r, "Voxel Sandbox [Fluids|Biomes|Weather|AI] Mobs:" + str(voxel_alive_mob_count(gameplay)))
-    
-    end_frame(r, frame)
-    
-    frame_count = frame_count + 1
-    check_resize(r)
+print "Player yaw before: " + str(player["yaw"])
+print "Player pitch before: " + str(player["pitch"])
 
-print ""
-print "Session Complete | Frames: " + str(frame_count) + " | Mobs: " + str(voxel_alive_mob_count(gameplay))
+if action_just_pressed(inp, "escape"):
+    print "Escape pressed"
 
-shutdown_renderer(r)
-print "✓ Demo closed"
+player["position"] = player_pos
+let move_dir = vec3(0.0, 0.0, 0.0)
+
+print "Move dir initial: " + str(move_dir)
+
+if action_held(inp, "forward"):
+    let pf = player_forward(player)
+    print "Player forward: " + str(pf)
+    move_dir = v3_add(move_dir, pf)
+    print "Move dir after forward: " + str(move_dir)
+
+print "About to check v3_length..."
+let move_len = v3_length(move_dir)
+print "Move length: " + str(move_len)
+
+if move_len > 0.0:
+    print "Normalizing move_dir..."
+    move_dir = v3_normalize(move_dir)
+    print "Scaling move_dir..."
+    let scaled = v3_scale(move_dir, 12.0 * 0.016)
+    print "Adding to player_pos..."
+    player_pos = v3_add(player_pos, scaled)
+    print "Player pos updated"
+
+print "Checking scroll..."
+let scroll = scroll_value(inp)
+print "Scroll: " + str(scroll)
+
+if scroll != 0.0:
+    let scroll_vec = vec3(0.0, scroll * 2.0, 0.0)
+    player_pos = v3_add(player_pos, scroll_vec)
+
+print "Checking mouse delta..."
+let mdelta = mouse_delta(inp)
+print "Mouse delta: " + str(mdelta)
+
+if mdelta[0] != 0.0 or mdelta[1] != 0.0:
+    print "Updating yaw and pitch..."
+    player["yaw"] = player["yaw"] + mdelta[0] * 0.005
+    player["pitch"] = player["pitch"] + mdelta[1] * 0.005
+
+print "Player movement test complete"
