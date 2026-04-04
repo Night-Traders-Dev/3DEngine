@@ -6,7 +6,7 @@ import gpu
 import math
 from renderer import create_renderer, begin_frame, end_frame, shutdown_renderer, check_resize, update_title_fps
 from input import create_input, update_input, action_just_pressed, action_held, default_fps_bindings, mouse_delta, scroll_value
-from math3d import vec3, v3_add, v3_sub, v3_scale, v3_normalize, v3_length, mat4_identity, mat4_mul
+from math3d import vec3, v3_add, v3_sub, v3_scale, v3_normalize, v3_length, mat4_identity, mat4_mul, mat4_zero, mat4_translate, radians
 from player_controller import create_player_controller, player_forward, player_view_matrix, player_projection
 from voxel_world import create_voxel_world, set_voxel, voxel_visible_draws, voxel_block_name
 from voxel_world import create_voxel_inventory, voxel_inventory_add
@@ -29,7 +29,7 @@ let inp = create_input()
 default_fps_bindings(inp)
 
 let player = create_player_controller()
-let player_pos = vec3(32.0, 30.0, 32.0)
+let player_pos = vec3(0.0, 30.0, 0.0)
 
 # Create world systems
 let voxel = create_voxel_world(64, 48, 64)
@@ -40,6 +40,13 @@ let weather = create_weather_system()
 let inventory = create_voxel_inventory()
 voxel_inventory_add(inventory, 1, 64)
 voxel_inventory_add(inventory, 2, 64)
+
+# Create unlit material for voxel rendering
+let unlit_mat = create_unlit_material(r["render_pass"])
+if unlit_mat == nil:
+    print "WARNING: Failed to create unlit material"
+else:
+    print "✓ Unlit material created"
 
 # Generate terrain
 print "Generating terrain..."
@@ -58,6 +65,8 @@ while lz < 8:
         set_voxel(voxel, lx, 15, lz, 15)
         lx = lx + 1
     lz = lz + 1
+
+print "✓ Terrain blocks set: " + str((10*16) + (8*8))  # 160 + 64 = 224 blocks
 
 # Spawn mobs
 ensure_voxel_mob_population(gameplay, player_pos, 64)
@@ -131,31 +140,62 @@ while running:
     # Setup camera
     player["position"] = player_pos
     let view_mat = player_view_matrix(player)
-    let proj_mat = player_projection(player, r["width"] / r["height"])
+    
+    # Custom projection matrix for Vulkan (no Y flip)
+    let fov_y = radians(player["fov"])
+    let aspect = r["width"] / r["height"]
+    let near = player["near"]
+    let far = player["far"]
+    let f = 1.0 / math.tan(fov_y / 2.0)
+    let proj_mat = mat4_zero()
+    proj_mat[0] = f / aspect
+    proj_mat[5] = f  # Positive Y (no flip for Vulkan)
+    proj_mat[10] = far / (near - far)
+    proj_mat[11] = -1.0
+    proj_mat[14] = (near * far) / (near - far)
     
     # Get visible voxel chunks
     let visible_chunks = voxel_visible_draws(voxel, player_pos[0], player_pos[1], player_pos[2], 3)
     
+    # Debug: Check chunk data
+    if frame_count % 60 == 0:  # Every second at 60fps
+        print "Visible chunks: " + str(len(visible_chunks))
+        if len(visible_chunks) > 0:
+            let first_draw = visible_chunks[0]
+            if first_draw != nil:
+                print "First chunk has gpu_mesh: " + str(dict_has(first_draw, "gpu_mesh"))
+                if dict_has(first_draw, "gpu_mesh"):
+                    print "gpu_mesh is nil: " + str(first_draw["gpu_mesh"] == nil)
+    
     # RENDER VOXEL MESHES
     let di = 0
+    let rendered_chunks = 0
     while di < len(visible_chunks):
         let draw = visible_chunks[di]
-        if draw != nil and dict_has(draw, "gpu_mesh"):
+        if draw != nil and dict_has(draw, "gpu_mesh") and dict_has(draw, "chunk_center"):
             let mesh = draw["gpu_mesh"]
             if mesh != nil:
-                # Calculate MVP matrix for this chunk
-                let model = mat4_identity()
+                # Get chunk world position
+                let chunk_pos = draw["chunk_center"]
+                
+                # Create model matrix (translate to chunk position)
+                let model = mat4_translate(chunk_pos[0], chunk_pos[1], chunk_pos[2])
+                
+                # Calculate MVP matrix
                 let mvp = mat4_mul(proj_mat, mat4_mul(view_mat, model))
                 
                 # Draw the chunk mesh
                 draw_mesh_unlit(cmd, unlit_mat, mesh, mvp, [1.0, 1.0, 1.0, 1.0])
+                rendered_chunks = rendered_chunks + 1
+                if rendered_chunks == 1 and frame_count % 60 == 0:
+                    print "Drew first chunk mesh at: " + str(chunk_pos)
         di = di + 1
     
     let chunk_count = len(visible_chunks)
     
     # Update title with rendering info
     let mobs = voxel_alive_mob_count(gameplay)
-    update_title_fps(r, "Voxel Sandbox | Chunks: " + str(chunk_count) + " | Mobs: " + str(mobs))
+    update_title_fps(r, "Voxel Sandbox | Chunks: " + str(chunk_count) + " | Rendered: " + str(rendered_chunks) + " | Mobs: " + str(mobs))
     
     end_frame(r, frame)
     
