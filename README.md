@@ -1,6 +1,6 @@
 # Forge Engine
 
-A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Features a project launcher with 7 game templates (FPS, RPG, Top-Down, Voxel, Racing, Survival, Sandbox), a visual editor with floating windows, TrueType font rendering, PBR lighting, 122 engine modules (28K lines) spanning GPU instancing, occlusion culling, navmesh pathfinding, convex collision (GJK), ragdoll physics, animation blend trees, terrain splatmaps, level streaming, runtime profiling, visual scripting (blueprints), material editor, depth of field, motion blur, crowd simulation, reverb zones, client prediction, inventory, quests, vehicle physics, destruction, volumetric effects, cutscenes, decals, networking, and content pipelines.
+A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Features a project launcher with 7 game templates (FPS, RPG, Top-Down, Voxel, Racing, Survival, Sandbox), a visual editor with floating windows, TrueType font rendering, PBR lighting, 133 engine modules (30K lines) with Unreal-level feature completeness: GPU instancing, occlusion culling, navmesh pathfinding, convex collision (GJK), ragdoll physics, cloth simulation, CCD, animation blend trees + montages + retargeting, terrain splatmaps, level streaming, runtime profiling, visual scripting (blueprints), material editor, depth of field, motion blur, crowd simulation, AI perception + EQS, gameplay ability system (GAS), reverb zones, client prediction + lag compensation, GPU particle system, UI data binding, splines, replay system, developer console, inventory, quests, vehicle physics, destruction, volumetric effects, cutscenes, decals, networking, and content pipelines.
 
 For the complete engine guide, see **[GUIDE.md](GUIDE.md)**. For release numbering rules, see **[VERSIONING.md](VERSIONING.md)**.
 
@@ -151,7 +151,7 @@ forge-engine/
 ├── run.sh                   # Script runner
 ├── build_dist.sh            # Distribution builder
 ├── VERSION                  # Single source of truth for engine version
-├── lib/                     # Engine modules (122 files, 28K lines)
+├── lib/                     # Engine modules (133 files, 30K lines)
 │   ├── ui_core.sage         # Centralized theme + widget system
 │   ├── ui_widgets.sage      # Advanced widgets (sliders, checkboxes, dropdowns, text fields)
 │   ├── ui_window.sage       # Floating windows, menus, modals
@@ -172,7 +172,7 @@ forge-engine/
 └── build/                   # Distribution output
 ```
 
-**Total codebase:** ~28,000 lines of SageLang + ~700 lines of GLSL
+**Total codebase:** ~30,000 lines of SageLang + ~700 lines of GLSL
 
 ## Engine Systems
 
