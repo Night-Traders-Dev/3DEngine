@@ -1,11 +1,11 @@
 gc_disable()
-# demo_nbody.sage — N-Body Gravitational Simulation
-# Universe Sandbox-style astrophysics with real solar system data
+# demo_nbody.sage — Realistic N-Body Gravitational Simulation
+# Universe Sandbox-style rendering with glow, atmosphere, rings, starfield
 #
 # Controls:
 #   Mouse = Orbit camera | Scroll = Zoom
 #   SPACE = Pause/Resume | Up/Down = Time scale
-#   1 = Solar System | 2 = Binary Star | 3 = Random cluster
+#   1 = Solar System | 2 = Binary Star | 3 = Star cluster
 #   ESC = Quit
 
 import gpu
@@ -13,31 +13,29 @@ import math
 from renderer import create_renderer, begin_frame, end_frame, shutdown_renderer, check_resize, update_title_fps
 from input import create_input, update_input, action_just_pressed, action_held, default_fps_bindings, mouse_delta, scroll_value, bind_action
 from math3d import vec3, v3_add, v3_sub, v3_scale, v3_normalize, v3_length
-from math3d import mat4_identity, mat4_mul, mat4_perspective, mat4_look_at, mat4_translate, mat4_scale, radians
-from mesh import sphere_mesh, upload_mesh
+from math3d import mat4_identity, mat4_mul, mat4_perspective, mat4_look_at, mat4_translate, mat4_scale, mat4_rotate_y, mat4_rotate_x, radians
+from mesh import sphere_mesh, plane_mesh, upload_mesh
 from render_system import create_unlit_material, draw_mesh_unlit
 from nbody import create_nbody_sim, add_body, add_solar_system, add_binary_star
-from nbody import step_simulation, compute_total_energy, alive_body_count, simulation_info
+from nbody import step_simulation, alive_body_count, simulation_info
 from nbody import compute_gravitational_forces
 from star_renderer import temperature_to_color
 from game_loop import create_time_state, update_time
 
-print "=== N-Body Gravitational Simulation ==="
-print "Universe Sandbox-style astrophysics"
+print "=== Realistic N-Body Simulation ==="
 print ""
 
 # ============================================================================
-# Renderer — use UNLIT material for guaranteed color visibility
+# Renderer
 # ============================================================================
 let r = create_renderer(1280, 720, "N-Body Simulation")
 if r == nil:
     raise "Failed to create renderer"
 print "GPU: " + gpu.device_name()
 
-let unlit_mat = create_unlit_material(r["render_pass"])
-if unlit_mat == nil:
-    raise "Failed to create unlit material"
-print "✓ Unlit material ready"
+let mat = create_unlit_material(r["render_pass"])
+if mat == nil:
+    raise "Failed to create material"
 
 # ============================================================================
 # Input
@@ -52,32 +50,102 @@ bind_action(inp, "preset_2", [gpu.KEY_2])
 bind_action(inp, "preset_3", [gpu.KEY_3])
 
 # ============================================================================
-# Camera — orbit around origin
+# Camera
 # ============================================================================
-# Start camera above and angled to see the XZ orbital plane in 3D
 let cam_distance = 12.0
 let cam_yaw = 0.6
-let cam_pitch = -0.85   # Looking down at ~48 degrees to see orbits as ellipses
+let cam_pitch = -0.7
 
 # ============================================================================
-# Meshes
+# Meshes — multiple LODs for quality at different distances
 # ============================================================================
-let sphere_hi = upload_mesh(sphere_mesh(16, 16))
-let sphere_lo = upload_mesh(sphere_mesh(8, 8))
+let sphere_ultra = upload_mesh(sphere_mesh(32, 32))  # Stars and close planets
+let sphere_hi = upload_mesh(sphere_mesh(16, 16))     # Medium distance
+let sphere_lo = upload_mesh(sphere_mesh(8, 8))       # Far/trails/glow
+
+# ============================================================================
+# Background starfield — static random stars
+# ============================================================================
+let starfield = []
+let star_i = 0
+while star_i < 200:
+    let theta = math.random() * 6.2831853
+    let phi = math.random() * 3.1415926 - 1.5707963
+    let dist = 80.0 + math.random() * 120.0
+    let sx = math.cos(phi) * math.cos(theta) * dist
+    let sy = math.sin(phi) * dist
+    let sz = math.cos(phi) * math.sin(theta) * dist
+    let brightness = 0.3 + math.random() * 0.7
+    # Star color temperature variation
+    let temp_rand = math.random()
+    let sr = brightness
+    let sg = brightness
+    let sb = brightness
+    if temp_rand < 0.15:
+        # Blue-white hot star
+        sr = brightness * 0.7
+        sg = brightness * 0.8
+        sb = brightness * 1.0
+    elif temp_rand > 0.85:
+        # Red cool star
+        sr = brightness * 1.0
+        sg = brightness * 0.6
+        sb = brightness * 0.4
+    let star_size = 0.02 + math.random() * 0.04
+    push(starfield, {"pos": vec3(sx, sy, sz), "color": [sr, sg, sb, 1.0], "size": star_size})
+    star_i = star_i + 1
 
 # ============================================================================
 # Simulation
 # ============================================================================
 let sim = create_nbody_sim()
 sim["dt"] = 0.0005
+sim["trail_enabled"] = true
 add_solar_system(sim)
 compute_gravitational_forces(sim)
 
-print "✓ Solar system: " + str(alive_body_count(sim)) + " bodies"
-print ""
+print "✓ " + str(alive_body_count(sim)) + " bodies | " + str(len(starfield)) + " background stars"
 print "Controls: Mouse=Orbit | Scroll=Zoom | SPACE=Pause"
 print "  Up/Down=Speed | 1=Solar | 2=Binary | 3=Cluster | ESC=Quit"
 print ""
+
+# ============================================================================
+# Rendering helpers
+# ============================================================================
+
+proc draw_sphere(cmd, vp, position, radius, color, mesh):
+    let m = mat4_mul(mat4_translate(position[0], position[1], position[2]), mat4_scale(radius, radius, radius))
+    let mvp = mat4_mul(vp, m)
+    draw_mesh_unlit(cmd, mat, mesh, mvp, color)
+
+# Draw a soft glow shell (larger transparent sphere around the body)
+proc draw_glow(cmd, vp, position, inner_radius, glow_size, color, alpha):
+    let glow_r = inner_radius * glow_size
+    let glow_color = [color[0] * 0.6, color[1] * 0.6, color[2] * 0.5, alpha]
+    draw_sphere(cmd, vp, position, glow_r, glow_color, sphere_lo)
+
+# Draw atmosphere halo (thin shell slightly larger than planet)
+proc draw_atmosphere(cmd, vp, position, planet_radius, atm_color, atm_thickness):
+    let atm_r = planet_radius * (1.0 + atm_thickness)
+    let atm_alpha = 0.15 + atm_thickness * 0.2
+    draw_sphere(cmd, vp, position, atm_r, [atm_color[0], atm_color[1], atm_color[2], atm_alpha], sphere_lo)
+
+# Draw ring system (flattened sphere as a disc)
+proc draw_rings(cmd, vp, position, inner_r, outer_r, color, time):
+    let ring_r = outer_r
+    let m_trans = mat4_translate(position[0], position[1], position[2])
+    let m_tilt = mat4_rotate_x(0.4)  # Ring tilt ~23 degrees
+    let m_scale = mat4_scale(ring_r, ring_r * 0.02, ring_r)  # Flatten Y to make disc
+    let model = mat4_mul(mat4_mul(m_trans, m_tilt), m_scale)
+    let mvp = mat4_mul(vp, model)
+    let ring_color = [color[0], color[1], color[2], 0.4]
+    draw_mesh_unlit(cmd, mat, sphere_lo, mvp, ring_color)
+    # Second ring slightly offset
+    let m_scale2 = mat4_scale(ring_r * 0.8, ring_r * 0.015, ring_r * 0.8)
+    let model2 = mat4_mul(mat4_mul(m_trans, m_tilt), m_scale2)
+    let mvp2 = mat4_mul(vp, model2)
+    let ring_color2 = [color[0] * 0.8, color[1] * 0.8, color[2] * 0.7, 0.3]
+    draw_mesh_unlit(cmd, mat, sphere_lo, mvp2, ring_color2)
 
 # ============================================================================
 # Game Loop
@@ -85,9 +153,12 @@ print ""
 let ts = create_time_state()
 let running = true
 let frame_count = 0
+let sim_time = 0.0
 
 while running:
     update_time(ts)
+    let dt = ts["dt"]
+    sim_time = sim_time + dt
     update_input(inp)
 
     if action_just_pressed(inp, "escape"):
@@ -105,41 +176,51 @@ while running:
         if sim["time_scale"] < 0.0625:
             sim["time_scale"] = 0.0625
 
-    # Preset switching
+    # Presets
     if action_just_pressed(inp, "preset_1"):
         sim = create_nbody_sim()
+        sim["trail_enabled"] = true
         add_solar_system(sim)
         compute_gravitational_forces(sim)
         cam_distance = 12.0
-        cam_pitch = -0.9
+        cam_pitch = -0.7
     if action_just_pressed(inp, "preset_2"):
         sim = create_nbody_sim()
+        sim["trail_enabled"] = true
         add_binary_star(sim, 0.5, 0.7)
         compute_gravitational_forces(sim)
-        cam_distance = 2.0
+        cam_distance = 3.0
+        cam_pitch = -0.5
     if action_just_pressed(inp, "preset_3"):
         sim = create_nbody_sim()
+        sim["trail_enabled"] = true
         let ci = 0
-        while ci < 30:
-            let px = (math.random() - 0.5) * 4.0
+        while ci < 40:
+            let angle = math.random() * 6.2831853
+            let dist = 1.0 + math.random() * 5.0
+            let px = math.cos(angle) * dist
+            let pz = math.sin(angle) * dist
             let py = (math.random() - 0.5) * 0.5
-            let pz = (math.random() - 0.5) * 4.0
-            let mass = 0.001 + math.random() * 0.01
-            let vx = (math.random() - 0.5) * 2.0
-            let vz = (math.random() - 0.5) * 2.0
-            let cr = 0.5 + math.random() * 0.5
-            let cg = 0.5 + math.random() * 0.5
-            let cb = 0.5 + math.random() * 0.5
-            add_body(sim, "S" + str(ci), mass, 50000.0, vec3(px, py, pz), vec3(vx, 0.0, vz), [cr, cg, cb])
+            let speed = math.sqrt(39.478 / dist) * (0.8 + math.random() * 0.4)
+            let vx = 0.0 - math.sin(angle) * speed
+            let vz = math.cos(angle) * speed
+            let mass = 0.0005 + math.random() * 0.005
+            let cr = 0.4 + math.random() * 0.6
+            let cg = 0.4 + math.random() * 0.6
+            let cb = 0.4 + math.random() * 0.6
+            add_body(sim, "S" + str(ci), mass, 30000.0 + math.random() * 70000.0, vec3(px, py, pz), vec3(vx, 0.0, vz), [cr, cg, cb])
             ci = ci + 1
-        add_body(sim, "Central", 1.0, 696340.0, vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), [1.0, 0.9, 0.5])
+        let central = add_body(sim, "Central", 1.0, 696340.0, vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), [1.0, 0.9, 0.5])
+        central["type"] = "star"
+        central["temperature"] = 5778.0
         compute_gravitational_forces(sim)
-        cam_distance = 6.0
+        cam_distance = 10.0
+        cam_pitch = -0.8
 
     # Camera orbit
     let mdelta = mouse_delta(inp)
-    cam_yaw = cam_yaw + mdelta[0] * 0.005
-    cam_pitch = cam_pitch + mdelta[1] * 0.005
+    cam_yaw = cam_yaw + mdelta[0] * 0.004
+    cam_pitch = cam_pitch + mdelta[1] * 0.004
     if cam_pitch > 1.5:
         cam_pitch = 1.5
     if cam_pitch < -1.5:
@@ -147,28 +228,28 @@ while running:
 
     let scroll = scroll_value(inp)
     if scroll[1] != 0.0:
-        cam_distance = cam_distance - scroll[1] * cam_distance * 0.1
-        if cam_distance < 0.1:
-            cam_distance = 0.1
+        cam_distance = cam_distance * (1.0 - scroll[1] * 0.08)
+        if cam_distance < 0.3:
+            cam_distance = 0.3
         if cam_distance > 200.0:
             cam_distance = 200.0
 
-    # Simulation steps
+    # Simulation
+    let steps = 4
     let si = 0
-    while si < 4:
+    while si < steps:
         step_simulation(sim, sim["dt"])
         si = si + 1
 
-    # Camera position
+    # Camera
     let cam_x = math.cos(cam_yaw) * math.cos(cam_pitch) * cam_distance
     let cam_y = math.sin(cam_pitch) * cam_distance
     let cam_z = math.sin(cam_yaw) * math.cos(cam_pitch) * cam_distance
     let cam_pos = vec3(cam_x, cam_y, cam_z)
 
-    # Dark space background
-    r["clear_color"] = [0.005, 0.005, 0.015, 1.0]
+    # Deep space background
+    r["clear_color"] = [0.002, 0.002, 0.008, 1.0]
 
-    # Render
     let frame = begin_frame(r)
     if frame == nil:
         frame_count = frame_count + 1
@@ -178,68 +259,124 @@ while running:
 
     let aspect = r["width"] / r["height"]
     let view = mat4_look_at(cam_pos, vec3(0.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0))
-    let proj = mat4_perspective(radians(60.0), aspect, 0.001, 500.0)
+    let proj = mat4_perspective(radians(60.0), aspect, 0.01, 500.0)
     let vp = mat4_mul(proj, view)
 
-    # Draw each body as unlit colored sphere
+    # ---- Background starfield ----
+    let sfi = 0
+    while sfi < len(starfield):
+        let sf = starfield[sfi]
+        # Twinkling
+        let twinkle = 0.8 + math.sin(sim_time * 3.0 + sfi * 1.7) * 0.2
+        let sc = [sf["color"][0] * twinkle, sf["color"][1] * twinkle, sf["color"][2] * twinkle, 1.0]
+        draw_sphere(cmd, vp, sf["pos"], sf["size"], sc, sphere_lo)
+        sfi = sfi + 4  # Draw every 4th star for performance
+
+    # ---- Draw celestial bodies ----
     let bi = 0
     while bi < len(sim["bodies"]):
         let body = sim["bodies"][bi]
-        if body["alive"]:
-            let pos = body["position"]
+        if not body["alive"]:
+            bi = bi + 1
+            continue
 
-            # Visual size — exaggerated for visibility
-            let vis_r = 0.1 + math.log(body["radius"] + 1.0) * 0.02
-            if body["type"] == "star":
-                vis_r = vis_r * 5.0
-            else:
-                vis_r = vis_r * 2.5
+        let pos = body["position"]
+        let dist_to_cam = v3_length(v3_sub(pos, cam_pos))
 
-            # Model matrix
-            let model = mat4_mul(mat4_translate(pos[0], pos[1], pos[2]), mat4_scale(vis_r, vis_r, vis_r))
-            let mvp = mat4_mul(vp, model)
+        # Visual radius — logarithmic scale for huge range
+        let vis_r = 0.08 + math.log(body["radius"] + 1.0) * 0.025
 
-            # Color — stars use temperature, planets use defined color
-            let color = [body["color"][0], body["color"][1], body["color"][2], 1.0]
-            if body["type"] == "star" and body["temperature"] > 0:
-                let tc = temperature_to_color(body["temperature"])
-                color = [tc[0] * 2.0, tc[1] * 2.0, tc[2] * 1.8, 1.0]
+        # Choose mesh LOD
+        let body_mesh = sphere_hi
+        if dist_to_cam < cam_distance * 0.3:
+            body_mesh = sphere_ultra
+        elif dist_to_cam > cam_distance * 2.0:
+            body_mesh = sphere_lo
 
-            # LOD
-            let dist_to_cam = v3_length(v3_sub(pos, cam_pos))
-            let mesh = sphere_hi
-            if dist_to_cam > 15.0:
-                mesh = sphere_lo
+        if body["type"] == "star":
+            # ---- STAR RENDERING ----
+            let star_r = vis_r * 4.0
 
-            draw_mesh_unlit(cmd, unlit_mat, mesh, mvp, color)
+            # Core color from temperature
+            let tc = [1.0, 0.95, 0.7]
+            if body["temperature"] > 0:
+                tc = temperature_to_color(body["temperature"])
 
-            # Draw trail points
+            # Bright core (overexposed center)
+            let core_color = [tc[0] * 2.5, tc[1] * 2.5, tc[2] * 2.2, 1.0]
+            draw_sphere(cmd, vp, pos, star_r, core_color, body_mesh)
+
+            # Inner glow (warm halo)
+            draw_glow(cmd, vp, pos, star_r, 1.8, tc, 0.25)
+
+            # Outer glow (faint corona)
+            draw_glow(cmd, vp, pos, star_r, 3.0, tc, 0.08)
+
+            # Very faint extended glow
+            draw_glow(cmd, vp, pos, star_r, 5.0, tc, 0.03)
+
+        else:
+            # ---- PLANET RENDERING ----
+            let planet_r = vis_r * 2.0
+
+            # Base planet color — slight shading variation
+            let bc = body["color"]
+            # Day side (facing camera/sun) brighter, night side darker
+            let sun_dir = v3_normalize(v3_scale(pos, -1.0))
+            let cam_dir = v3_normalize(v3_sub(cam_pos, pos))
+            let sun_dot = sun_dir[0] * cam_dir[0] + sun_dir[1] * cam_dir[1] + sun_dir[2] * cam_dir[2]
+            let shade = 0.4 + 0.6 * ((sun_dot + 1.0) * 0.5)  # 0.4 to 1.0
+
+            let planet_color = [bc[0] * shade * 1.3, bc[1] * shade * 1.3, bc[2] * shade * 1.3, 1.0]
+            draw_sphere(cmd, vp, pos, planet_r, planet_color, body_mesh)
+
+            # Atmosphere halo
+            if body["atmosphere"]:
+                let atm_color = [0.3, 0.5, 0.9]  # Default blue
+                if body["name"] == "Mars":
+                    atm_color = [0.8, 0.5, 0.3]
+                elif body["name"] == "Venus":
+                    atm_color = [0.9, 0.8, 0.5]
+                elif body["name"] == "Jupiter" or body["name"] == "Saturn":
+                    atm_color = [0.7, 0.6, 0.4]
+                elif body["name"] == "Uranus":
+                    atm_color = [0.5, 0.7, 0.85]
+                elif body["name"] == "Neptune":
+                    atm_color = [0.3, 0.4, 0.9]
+                draw_atmosphere(cmd, vp, pos, planet_r, atm_color, 0.15)
+
+            # Ring system
+            if body["rings"]:
+                draw_rings(cmd, vp, pos, planet_r * 1.3, planet_r * 2.5, [0.85, 0.78, 0.6], sim_time)
+
+        # ---- Orbit trail ----
+        let trail = body["trail"]
+        let trail_len = len(trail)
+        if trail_len > 2:
             let ti = 0
-            while ti < len(body["trail"]):
-                let tp = body["trail"][ti]
-                let trail_size = 0.008
-                let t_model = mat4_mul(mat4_translate(tp[0], tp[1], tp[2]), mat4_scale(trail_size, trail_size, trail_size))
-                let t_mvp = mat4_mul(vp, t_model)
-                let fade = (ti + 1) / (len(body["trail"]) + 1)
-                let t_color = [body["color"][0] * fade, body["color"][1] * fade, body["color"][2] * fade, fade]
-                draw_mesh_unlit(cmd, unlit_mat, sphere_lo, t_mvp, t_color)
-                ti = ti + 12  # Skip for performance
+            while ti < trail_len:
+                let tp = trail[ti]
+                let fade = (ti + 1.0) / trail_len
+                let trail_size = 0.006 * fade
+                let trail_color = [body["color"][0] * fade * 0.7, body["color"][1] * fade * 0.7, body["color"][2] * fade * 0.7, fade * 0.6]
+                draw_sphere(cmd, vp, vec3(tp[0], tp[1], tp[2]), trail_size, trail_color, sphere_lo)
+                ti = ti + 16  # Skip points for performance
+
         bi = bi + 1
 
     # Title
     let info = simulation_info(sim)
     let time_str = str(int(info["time_years"] * 100.0) / 100.0)
-    let paused_str = ""
+    let paused = ""
     if sim["paused"]:
-        paused_str = " [PAUSED]"
-    update_title_fps(r, "N-Body | " + str(info["bodies"]) + " bodies | " + time_str + " yr | " + str(sim["time_scale"]) + "x" + paused_str)
+        paused = " [PAUSED]"
+    update_title_fps(r, "N-Body | " + str(info["bodies"]) + " bodies | " + time_str + " yr | x" + str(sim["time_scale"]) + paused)
 
     end_frame(r, frame)
     frame_count = frame_count + 1
     check_resize(r)
 
-# Shutdown
 print ""
-print "Frames: " + str(frame_count) + " | Collisions: " + str(sim["collision_count"])
+print "Frames: " + str(frame_count)
 shutdown_renderer(r)
 print "✓ Done"
