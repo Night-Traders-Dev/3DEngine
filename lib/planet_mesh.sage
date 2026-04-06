@@ -285,59 +285,33 @@ proc upload_planet_mesh(name, segments):
 proc draw_planet_detailed(cmd, mat, vp, position, radius, name, base_mesh, segments):
     let color_fn = get_planet_color_fn(name)
 
-    if color_fn == nil:
-        # Fallback: single color draw
-        let m = mat4_mul(mat4_translate(position[0], position[1], position[2]), mat4_scale(radius, radius, radius))
-        let mvp = mat4_mul(vp, m)
-        draw_mesh_unlit(cmd, mat, base_mesh, mvp, [0.5, 0.5, 0.5, 1.0])
-        return nil
+    # Sample procedural color across the visible hemisphere and average
+    # This gives each planet its characteristic overall color
+    let r_sum = 0.0
+    let g_sum = 0.0
+    let b_sum = 0.0
+    let total_samples = 16
+    let si = 0
+    while si < total_samples:
+        let u = (si % 4) / 4.0 + 0.125
+        let v = (si / 4) / 4.0 + 0.125
+        let c = color_fn(u, v)
+        r_sum = r_sum + c[0]
+        g_sum = g_sum + c[1]
+        b_sum = b_sum + c[2]
+        si = si + 1
+    let avg_color = [r_sum / total_samples, g_sum / total_samples, b_sum / total_samples, 1.0]
+    if avg_color[0] > 1.0:
+        avg_color[0] = 1.0
+    if avg_color[1] > 1.0:
+        avg_color[1] = 1.0
+    if avg_color[2] > 1.0:
+        avg_color[2] = 1.0
 
-    # Draw the sphere in latitude bands, each with sampled color
-    let bands = 8
-    if segments > 16:
-        bands = 12
-    let bi = 0
-    while bi < bands:
-        let v_center = (bi + 0.5) / bands
-        # Sample color at multiple longitudes and average
-        let r_sum = 0.0
-        let g_sum = 0.0
-        let b_sum = 0.0
-        let samples = 6
-        let si = 0
-        while si < samples:
-            let u_sample = si / samples
-            let c = color_fn(u_sample, v_center)
-            r_sum = r_sum + c[0]
-            g_sum = g_sum + c[1]
-            b_sum = b_sum + c[2]
-            si = si + 1
-        let avg_r = r_sum / samples
-        let avg_g = g_sum / samples
-        let avg_b = b_sum / samples
-
-        # Draw a thin band of the sphere
-        let band_offset = (v_center - 0.5) * 2.0 * radius * 0.95
-        let band_scale_y = radius / bands * 1.1  # Slight overlap
-        let band_scale_xz = radius * math.sin(v_center * 3.14159)
-        if band_scale_xz < radius * 0.15:
-            band_scale_xz = radius * 0.15
-
-        let m = mat4_mul(
-            mat4_translate(position[0], position[1] + band_offset, position[2]),
-            mat4_scale(band_scale_xz, band_scale_y, band_scale_xz)
-        )
-        let mvp = mat4_mul(vp, m)
-        let band_color = [avg_r, avg_g, avg_b, 1.0]
-        # Clamp
-        if band_color[0] > 1.0:
-            band_color[0] = 1.0
-        if band_color[1] > 1.0:
-            band_color[1] = 1.0
-        if band_color[2] > 1.0:
-            band_color[2] = 1.0
-        draw_mesh_unlit(cmd, mat, base_mesh, mvp, band_color)
-        bi = bi + 1
+    # Draw as single sphere with averaged procedural color
+    let m = mat4_mul(mat4_translate(position[0], position[1], position[2]), mat4_scale(radius, radius, radius))
+    let mvp = mat4_mul(vp, m)
+    draw_mesh_unlit(cmd, mat, base_mesh, mvp, avg_color)
 
 from math3d import mat4_mul, mat4_translate, mat4_scale
 from render_system import draw_mesh_unlit
