@@ -567,20 +567,21 @@ proc collect_section_header_quads(sh, quads):
 proc collect_scrollbar_quads(sp, quads):
     if sp["max_scroll"] < 1.0:
         return nil
-    let x = sp["computed_x"] + sp["width"] - 6.0
+    let sb_w = 8.0           # Wider scrollbar (was 4px — too thin to grab)
+    let x = sp["computed_x"] + sp["width"] - sb_w - 2.0
     let y = sp["computed_y"]
     let h = sp["height"]
-    let sb_w = 4.0
-    # Track
-    push(quads, {"x": x, "y": y, "w": sb_w, "h": h, "color": color_with_alpha(ui_core.THEME_BG, 0.5)})
-    # Thumb
+    # Track (rounded appearance with inset)
+    push(quads, {"x": x, "y": y + 2.0, "w": sb_w, "h": h - 4.0, "color": color_with_alpha(ui_core.THEME_BG, 0.4)})
+    # Thumb (wider, with hover highlight)
     let visible_ratio = sp["height"] / sp["content_height"]
     let thumb_h = h * visible_ratio
-    if thumb_h < 20.0:
-        thumb_h = 20.0
+    if thumb_h < 24.0:
+        thumb_h = 24.0
     let scroll_ratio = sp["scroll_y"] / sp["max_scroll"]
-    let thumb_y = y + scroll_ratio * (h - thumb_h)
-    push(quads, {"x": x, "y": thumb_y, "w": sb_w, "h": thumb_h, "color": ui_core.THEME_ELEVATED})
-    _push_border_quads(quads, x, thumb_y, sb_w, thumb_h, 0.5, ui_core.THEME_BORDER_LIGHT)
+    let thumb_y = y + 2.0 + scroll_ratio * (h - 4.0 - thumb_h)
+    push(quads, {"x": x + 1.0, "y": thumb_y, "w": sb_w - 2.0, "h": thumb_h, "color": ui_core.THEME_ELEVATED})
+    # Thumb highlight
+    push(quads, {"x": x + 1.0, "y": thumb_y, "w": sb_w - 2.0, "h": 1.0, "color": [1.0, 1.0, 1.0, 0.06]})
 
 import math

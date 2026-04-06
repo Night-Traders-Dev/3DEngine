@@ -7,7 +7,7 @@ gc_disable()
 
 import gpu
 import ui_core
-from ui_core import rgba, color_with_alpha, _push_border_quads, _push_shadow_quads
+from ui_core import rgba, color_with_alpha, _push_border_quads, _push_shadow_quads, _push_elevation_shadow
 from ui_renderer import create_ui_renderer
 from font import create_font_renderer, load_font, begin_text, add_text, flush_text
 from renderer import begin_frame, end_frame, check_resize
@@ -184,8 +184,8 @@ proc run_launch_screen(r):
         push(q, {"x": cx, "y": cy_base, "w": cw, "h": title_h, "color": [0.072, 0.072, 0.082, 1.0]})
         push(q, {"x": cx, "y": cy_base + title_h - 2.0, "w": cw, "h": 2.0, "color": color_with_alpha(ui_core.THEME_ACCENT, 0.30)})
 
-        # --- Templates panel ---
-        _push_shadow_quads(q, tpl_x, tpl_y, tpl_w, tpl_h)
+        # --- Templates panel (professional elevation shadow) ---
+        _push_elevation_shadow(q, tpl_x, tpl_y, tpl_w, tpl_h, 3)
         push(q, {"x": tpl_x, "y": tpl_y, "w": tpl_w, "h": tpl_h, "color": ui_core.THEME_PANEL})
         _push_border_quads(q, tpl_x, tpl_y, tpl_w, tpl_h, 1.0, ui_core.THEME_BORDER)
         push(q, {"x": tpl_x, "y": tpl_y, "w": tpl_w, "h": 44.0, "color": ui_core.THEME_HEADER})

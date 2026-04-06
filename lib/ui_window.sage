@@ -8,7 +8,7 @@ gc_disable()
 import gpu
 import math
 import ui_core
-from ui_core import rgba, color_with_alpha, _push_border_quads
+from ui_core import rgba, color_with_alpha, _push_border_quads, _push_elevation_shadow
 
 let _next_window_id = [1]
 let _windows = []
@@ -180,9 +180,8 @@ proc build_window_quads(win):
     if win["collapsed"]:
         h = WIN_TITLE_H
 
-    # Drop shadow (multi-layer soft shadow)
-    push(quads, {"x": x + 5.0, "y": y + 5.0, "w": w, "h": h, "color": ui_core.THEME_SHADOW})
-    push(quads, {"x": x + 2.0, "y": y + 2.0, "w": w + 1.0, "h": h + 1.0, "color": ui_core.THEME_SHADOW_SOFT})
+    # Professional elevation shadow (5-level depth system)
+    _push_elevation_shadow(quads, x, y, w, h, 4)
 
     # Window body
     push(quads, {"x": x, "y": y, "w": w, "h": h, "color": ui_core.THEME_PANEL})

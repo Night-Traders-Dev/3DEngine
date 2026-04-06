@@ -68,8 +68,11 @@ let SP_XXL = 24.0
 let BORDER_THIN = 1.0
 let BORDER_NORMAL = 2.0
 
-let RADIUS_SM = 3.0
-let RADIUS_MD = 6.0
+let RADIUS_SM = 4.0
+let RADIUS_MD = 8.0
+let RADIUS_LG = 12.0
+let RADIUS_XL = 16.0
+let RADIUS_PILL = 999.0    # Fully rounded (pill shape)
 
 # --- Panel & surface colors (wider spread for contrast) ---
 let THEME_BG = rgba(0.098, 0.098, 0.106, 1.0)
@@ -120,8 +123,52 @@ let THEME_SELECT = rgba(0.302, 0.573, 0.859, 0.20)
 let THEME_HIGHLIGHT = rgba(1.0, 1.0, 1.0, 0.04)
 
 # --- Shadows ---
+# Elevation shadows (5 levels — Unreal/Material Design style)
 let THEME_SHADOW = rgba(0.0, 0.0, 0.0, 0.40)
 let THEME_SHADOW_SOFT = rgba(0.0, 0.0, 0.0, 0.20)
+let ELEVATION_0 = {"offset": 0, "blur": 0, "alpha": 0.0}
+let ELEVATION_1 = {"offset": 1, "blur": 3, "alpha": 0.15}
+let ELEVATION_2 = {"offset": 2, "blur": 6, "alpha": 0.22}
+let ELEVATION_3 = {"offset": 4, "blur": 10, "alpha": 0.30}
+let ELEVATION_4 = {"offset": 6, "blur": 16, "alpha": 0.38}
+let ELEVATION_5 = {"offset": 10, "blur": 24, "alpha": 0.45}
+
+# Transition/animation timing
+let ANIM_FAST = 0.15       # Quick hover transitions
+let ANIM_NORMAL = 0.25     # Standard transitions
+let ANIM_SLOW = 0.4        # Panel open/close
+let ANIM_VERY_SLOW = 0.6   # Page transitions
+
+# Icon glyph system (text-based icons using Unicode-safe chars)
+let ICON_CLOSE = "X"
+let ICON_MINIMIZE = "_"
+let ICON_MAXIMIZE = "[]"
+let ICON_EXPAND = ">"
+let ICON_COLLAPSE = "v"
+let ICON_CHECK = "*"
+let ICON_SEARCH = "?"
+let ICON_FOLDER = "#"
+let ICON_FILE = "|"
+let ICON_GEAR = "@"
+let ICON_PLAY = ">"
+let ICON_PAUSE = "||"
+let ICON_STOP = "[]"
+let ICON_UNDO = "<"
+let ICON_REDO = ">"
+let ICON_SAVE = "S"
+let ICON_COPY = "C"
+let ICON_PASTE = "P"
+let ICON_DELETE = "X"
+let ICON_ADD = "+"
+let ICON_REMOVE = "-"
+let ICON_MOVE = "+"
+let ICON_ROTATE = "R"
+let ICON_SCALE = "S"
+let ICON_EYE = "o"
+let ICON_LOCK = "#"
+let ICON_LIGHT = "*"
+let ICON_CAMERA = "C"
+let ICON_MESH = "M"
 
 # --- Separator ---
 let THEME_SEPARATOR = rgba(0.188, 0.192, 0.208, 0.6)
@@ -342,6 +389,66 @@ proc _push_border_quads(quads, x, y, w, h, bw, color):
 proc _push_shadow_quads(quads, x, y, w, h):
     push(quads, {"x": x + 3.0, "y": y + 3.0, "w": w, "h": h, "color": [0.0, 0.0, 0.0, 0.30]})
     push(quads, {"x": x + 1.5, "y": y + 1.5, "w": w, "h": h, "color": [0.0, 0.0, 0.0, 0.15]})
+
+# Elevation-based shadow (professional multi-layer drop shadow)
+proc _push_elevation_shadow(quads, x, y, w, h, level):
+    if level <= 0:
+        return nil
+    let offset = level * 1.5
+    let blur = level * 3.0
+    let alpha = 0.08 * level
+    # Outer soft shadow (largest, most transparent)
+    push(quads, {"x": x - blur * 0.3, "y": y + offset + blur * 0.2, "w": w + blur * 0.6, "h": h + blur * 0.4, "color": [0.0, 0.0, 0.0, alpha * 0.4]})
+    # Mid shadow
+    push(quads, {"x": x - blur * 0.1, "y": y + offset * 0.7, "w": w + blur * 0.2, "h": h + blur * 0.1, "color": [0.0, 0.0, 0.0, alpha * 0.7]})
+    # Inner crisp shadow
+    push(quads, {"x": x + 1.0, "y": y + offset * 0.4 + 1.0, "w": w, "h": h, "color": [0.0, 0.0, 0.0, alpha]})
+
+# Rounded corner simulation (adds corner accent quads for visual softening)
+proc _push_rounded_accents(quads, x, y, w, h, radius, bg_color):
+    if radius < 2.0:
+        return nil
+    # Top-left corner darkening (simulates rounded shadow)
+    let corner_alpha = 0.06
+    let r = radius
+    push(quads, {"x": x, "y": y, "w": r, "h": 1.0, "color": color_with_alpha(bg_color, corner_alpha)})
+    push(quads, {"x": x, "y": y, "w": 1.0, "h": r, "color": color_with_alpha(bg_color, corner_alpha)})
+    # Top-right
+    push(quads, {"x": x + w - r, "y": y, "w": r, "h": 1.0, "color": color_with_alpha(bg_color, corner_alpha)})
+    push(quads, {"x": x + w - 1.0, "y": y, "w": 1.0, "h": r, "color": color_with_alpha(bg_color, corner_alpha)})
+    # Bottom-left
+    push(quads, {"x": x, "y": y + h - 1.0, "w": r, "h": 1.0, "color": color_with_alpha(bg_color, corner_alpha)})
+    push(quads, {"x": x, "y": y + h - r, "w": 1.0, "h": r, "color": color_with_alpha(bg_color, corner_alpha)})
+    # Bottom-right
+    push(quads, {"x": x + w - r, "y": y + h - 1.0, "w": r, "h": 1.0, "color": color_with_alpha(bg_color, corner_alpha)})
+    push(quads, {"x": x + w - 1.0, "y": y + h - r, "w": 1.0, "h": r, "color": color_with_alpha(bg_color, corner_alpha)})
+
+# Tooltip helper
+proc create_tooltip(text):
+    return {"text": text, "visible": false, "x": 0, "y": 0, "delay": 0.5, "timer": 0.0}
+
+proc update_tooltip(tip, mx, my, hovering, dt):
+    if hovering:
+        tip["timer"] = tip["timer"] + dt
+        if tip["timer"] >= tip["delay"]:
+            tip["visible"] = true
+            tip["x"] = mx + 12
+            tip["y"] = my + 16
+    else:
+        tip["timer"] = 0.0
+        tip["visible"] = false
+
+proc draw_tooltip_quads(quads, tip):
+    if not tip["visible"]:
+        return nil
+    let text_w = len(tip["text"]) * 7 + 16
+    let text_h = 24
+    # Shadow
+    _push_elevation_shadow(quads, tip["x"], tip["y"], text_w, text_h, 3)
+    # Background
+    push(quads, {"x": tip["x"], "y": tip["y"], "w": text_w, "h": text_h, "color": [0.12, 0.12, 0.14, 0.95]})
+    # Border
+    _push_border_quads(quads, tip["x"], tip["y"], text_w, text_h, 1.0, [0.25, 0.25, 0.28, 0.8])
 
 proc _push_inset_quads(quads, x, y, w, h):
     # Subtle inner shadow for recessed elements (inputs, progress bars)
