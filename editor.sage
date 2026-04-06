@@ -278,6 +278,273 @@ proc _spawn_voxel_world_entity(editor_ctx, w, pos, name, voxel_world):
     add_component(w, e, "collider", BoxColliderComponent(half_x, half_y, half_z))
     return e
 
+# ============================================================================
+# FPS Template Scene — arena with cover, health pickups, AI enemies
+# ============================================================================
+proc _populate_fps_template_scene(editor_ctx, w):
+    let spawned = 0
+    # Ground
+    let ground = spawn(w)
+    add_component(w, ground, "transform", TransformComponent(0.0, 0.0, 0.0))
+    add_component(w, ground, "name", NameComponent("Arena Ground"))
+    add_component(w, ground, "mesh_id", {"mesh": ground_gpu, "name": "plane"})
+    add_component(w, ground, "mesh_renderer", MeshRendererComponent(ground_gpu, 0))
+    add_component(w, ground, "material", MaterialComponent(0.3, 0.3, 0.35))
+    add_tag(w, ground, "editable")
+    spawned = spawned + 1
+
+    # Cover walls
+    let walls = [[-6.0, 1.0, 0.0], [6.0, 1.0, 0.0], [0.0, 1.0, -6.0], [0.0, 1.0, 6.0],
+                 [-3.0, 1.0, -3.0], [3.0, 1.0, 3.0], [-3.0, 1.0, 3.0], [3.0, 1.0, -3.0]]
+    let wi = 0
+    while wi < len(walls):
+        let wp = walls[wi]
+        let wall = _spawn_template_cube(editor_ctx, w, vec3(wp[0], wp[1], wp[2]), "Cover_" + str(wi), 0, {"albedo": [0.5, 0.5, 0.55]})
+        add_component(w, wall, "rigidbody", StaticBodyComponent())
+        add_component(w, wall, "collider", BoxColliderComponent(0.5, 0.5, 0.5))
+        spawned = spawned + 1
+        wi = wi + 1
+
+    # Health pickups (green cubes)
+    let pickups = [[-4.0, 0.5, 2.0], [4.0, 0.5, -2.0]]
+    let pi = 0
+    while pi < len(pickups):
+        let pp = pickups[pi]
+        let pickup = _spawn_template_cube(editor_ctx, w, vec3(pp[0], pp[1], pp[2]), "Health_" + str(pi), 0, {"albedo": [0.2, 0.85, 0.3]})
+        add_component(w, pickup, "health", {"type": "pickup", "amount": 25})
+        add_tag(w, pickup, "pickup")
+        spawned = spawned + 1
+        pi = pi + 1
+
+    # Enemy spawn markers (red cubes)
+    let enemies = [[8.0, 0.5, 8.0], [-8.0, 0.5, -8.0], [8.0, 0.5, -8.0]]
+    let ei = 0
+    while ei < len(enemies):
+        let ep = enemies[ei]
+        let enemy = _spawn_template_cube(editor_ctx, w, vec3(ep[0], ep[1], ep[2]), "Enemy_" + str(ei), 0, {"albedo": [0.85, 0.2, 0.2]})
+        add_component(w, enemy, "health", {"current": 100, "max": 100})
+        add_tag(w, enemy, "enemy")
+        spawned = spawned + 1
+        ei = ei + 1
+
+    print "FPS template: arena with " + str(spawned) + " entities"
+    return spawned
+
+# ============================================================================
+# RPG Template Scene — village with NPCs, quest markers, loot
+# ============================================================================
+proc _populate_rpg_template_scene(editor_ctx, w):
+    let spawned = 0
+    # Ground
+    let ground = spawn(w)
+    add_component(w, ground, "transform", TransformComponent(0.0, 0.0, 0.0))
+    add_component(w, ground, "name", NameComponent("Village Ground"))
+    add_component(w, ground, "mesh_id", {"mesh": ground_gpu, "name": "plane"})
+    add_component(w, ground, "mesh_renderer", MeshRendererComponent(ground_gpu, 0))
+    add_component(w, ground, "material", MaterialComponent(0.35, 0.55, 0.25))
+    add_tag(w, ground, "editable")
+    spawned = spawned + 1
+
+    # Buildings (clusters of cubes)
+    let buildings = [[-5.0, 1.5, -3.0], [4.0, 1.5, -4.0], [-3.0, 1.5, 5.0], [6.0, 1.5, 3.0]]
+    let bi = 0
+    while bi < len(buildings):
+        let bp = buildings[bi]
+        let building = _spawn_template_cube(editor_ctx, w, vec3(bp[0], bp[1], bp[2]), "Building_" + str(bi), 0, {"albedo": [0.65, 0.55, 0.4]})
+        add_component(w, building, "rigidbody", StaticBodyComponent())
+        add_component(w, building, "collider", BoxColliderComponent(1.0, 1.5, 1.0))
+        add_tag(w, building, "building")
+        spawned = spawned + 1
+        bi = bi + 1
+
+    # NPC markers (blue cubes)
+    let npcs = [[0.0, 0.5, -2.0], [-2.0, 0.5, 3.0], [3.0, 0.5, 0.0]]
+    let ni = 0
+    while ni < len(npcs):
+        let np = npcs[ni]
+        let npc = _spawn_template_cube(editor_ctx, w, vec3(np[0], np[1], np[2]), "NPC_" + str(ni), 0, {"albedo": [0.3, 0.5, 0.85]})
+        add_tag(w, npc, "npc")
+        spawned = spawned + 1
+        ni = ni + 1
+
+    # Quest marker (gold cube)
+    let quest = _spawn_template_cube(editor_ctx, w, vec3(0.0, 0.5, 6.0), "QuestMarker", 0, {"albedo": [0.95, 0.85, 0.2]})
+    add_tag(w, quest, "quest")
+    spawned = spawned + 1
+
+    # Treasure chest (brown cube)
+    let chest = _spawn_template_cube(editor_ctx, w, vec3(-6.0, 0.5, -6.0), "TreasureChest", 0, {"albedo": [0.55, 0.35, 0.15]})
+    add_tag(w, chest, "loot")
+    spawned = spawned + 1
+
+    print "RPG template: village with " + str(spawned) + " entities"
+    return spawned
+
+# ============================================================================
+# Top-Down Template Scene — overhead arena with spawn waves
+# ============================================================================
+proc _populate_topdown_template_scene(editor_ctx, w):
+    let spawned = 0
+    # Ground
+    let ground = spawn(w)
+    add_component(w, ground, "transform", TransformComponent(0.0, 0.0, 0.0))
+    add_component(w, ground, "name", NameComponent("Arena Floor"))
+    add_component(w, ground, "mesh_id", {"mesh": ground_gpu, "name": "plane"})
+    add_component(w, ground, "mesh_renderer", MeshRendererComponent(ground_gpu, 0))
+    add_component(w, ground, "material", MaterialComponent(0.2, 0.2, 0.25))
+    add_tag(w, ground, "editable")
+    spawned = spawned + 1
+
+    # Arena walls (border)
+    let wall_positions = [
+        [0.0, 0.5, -10.0], [0.0, 0.5, 10.0], [-10.0, 0.5, 0.0], [10.0, 0.5, 0.0],
+        [-5.0, 0.5, -10.0], [5.0, 0.5, -10.0], [-5.0, 0.5, 10.0], [5.0, 0.5, 10.0],
+        [-10.0, 0.5, -5.0], [-10.0, 0.5, 5.0], [10.0, 0.5, -5.0], [10.0, 0.5, 5.0]
+    ]
+    let walli = 0
+    while walli < len(wall_positions):
+        let wp = wall_positions[walli]
+        let wall = _spawn_template_cube(editor_ctx, w, vec3(wp[0], wp[1], wp[2]), "Wall_" + str(walli), 0, {"albedo": [0.4, 0.4, 0.45]})
+        add_component(w, wall, "rigidbody", StaticBodyComponent())
+        add_component(w, wall, "collider", BoxColliderComponent(0.5, 0.5, 0.5))
+        spawned = spawned + 1
+        walli = walli + 1
+
+    # Player start (cyan cube)
+    let player_start = _spawn_template_cube(editor_ctx, w, vec3(0.0, 0.5, 0.0), "PlayerStart", 0, {"albedo": [0.2, 0.8, 0.85]})
+    add_tag(w, player_start, "player_start")
+    spawned = spawned + 1
+
+    # Wave spawn points (red cubes at corners)
+    let spawn_pts = [[-8.0, 0.5, -8.0], [8.0, 0.5, -8.0], [-8.0, 0.5, 8.0], [8.0, 0.5, 8.0]]
+    let si = 0
+    while si < len(spawn_pts):
+        let sp = spawn_pts[si]
+        let spawner = _spawn_template_cube(editor_ctx, w, vec3(sp[0], sp[1], sp[2]), "Spawner_" + str(si), 0, {"albedo": [0.85, 0.15, 0.15]})
+        add_tag(w, spawner, "wave_spawner")
+        spawned = spawned + 1
+        si = si + 1
+
+    print "Top-Down template: arena with " + str(spawned) + " entities"
+    return spawned
+
+# ============================================================================
+# Racing Template Scene — track with checkpoints and start line
+# ============================================================================
+proc _populate_racing_template_scene(editor_ctx, w):
+    let spawned = 0
+    # Ground (track surface)
+    let ground = spawn(w)
+    add_component(w, ground, "transform", TransformComponent(0.0, 0.0, 0.0))
+    add_component(w, ground, "name", NameComponent("Track Surface"))
+    add_component(w, ground, "mesh_id", {"mesh": ground_gpu, "name": "plane"})
+    add_component(w, ground, "mesh_renderer", MeshRendererComponent(ground_gpu, 0))
+    add_component(w, ground, "material", MaterialComponent(0.3, 0.3, 0.3))
+    add_tag(w, ground, "editable")
+    spawned = spawned + 1
+
+    # Track markers (oval of cubes)
+    let num_markers = 16
+    let mi = 0
+    while mi < num_markers:
+        let angle = (mi * 6.2831853) / num_markers
+        let px = math.cos(angle) * 12.0
+        let pz = math.sin(angle) * 8.0
+        let marker = _spawn_template_cube(editor_ctx, w, vec3(px, 0.3, pz), "TrackMarker_" + str(mi), 0, {"albedo": [0.9, 0.9, 0.2]})
+        add_tag(w, marker, "track_marker")
+        spawned = spawned + 1
+        mi = mi + 1
+
+    # Start/finish line (white cubes)
+    let start = _spawn_template_cube(editor_ctx, w, vec3(12.0, 0.5, 0.0), "StartLine", 0, {"albedo": [0.95, 0.95, 0.95]})
+    add_tag(w, start, "start_line")
+    spawned = spawned + 1
+
+    # Checkpoints (green cubes)
+    let checkpoints = [[0.0, 0.5, 8.0], [-12.0, 0.5, 0.0], [0.0, 0.5, -8.0]]
+    let ci = 0
+    while ci < len(checkpoints):
+        let cp = checkpoints[ci]
+        let checkpoint = _spawn_template_cube(editor_ctx, w, vec3(cp[0], cp[1], cp[2]), "Checkpoint_" + str(ci), 0, {"albedo": [0.2, 0.85, 0.3]})
+        add_tag(w, checkpoint, "checkpoint")
+        spawned = spawned + 1
+        ci = ci + 1
+
+    # Vehicle start position (blue cube)
+    let vehicle = _spawn_template_cube(editor_ctx, w, vec3(12.0, 0.5, 2.0), "VehicleStart", 0, {"albedo": [0.2, 0.4, 0.9]})
+    add_tag(w, vehicle, "vehicle")
+    spawned = spawned + 1
+
+    print "Racing template: track with " + str(spawned) + " entities"
+    return spawned
+
+# ============================================================================
+# Survival Template Scene — wilderness with resources and shelter spots
+# ============================================================================
+proc _populate_survival_template_scene(editor_ctx, w):
+    let spawned = 0
+    # Ground (grass)
+    let ground = spawn(w)
+    add_component(w, ground, "transform", TransformComponent(0.0, 0.0, 0.0))
+    add_component(w, ground, "name", NameComponent("Wilderness"))
+    add_component(w, ground, "mesh_id", {"mesh": ground_gpu, "name": "plane"})
+    add_component(w, ground, "mesh_renderer", MeshRendererComponent(ground_gpu, 0))
+    add_component(w, ground, "material", MaterialComponent(0.3, 0.5, 0.2))
+    add_tag(w, ground, "editable")
+    spawned = spawned + 1
+
+    # Trees (tall brown cubes with green tops)
+    let tree_positions = [[-7.0, 0.0, -5.0], [5.0, 0.0, -8.0], [-3.0, 0.0, 7.0], [8.0, 0.0, 4.0], [-6.0, 0.0, 3.0], [2.0, 0.0, -3.0]]
+    let ti = 0
+    while ti < len(tree_positions):
+        let tp = tree_positions[ti]
+        let trunk = _spawn_template_cube(editor_ctx, w, vec3(tp[0], 1.5, tp[2]), "TreeTrunk_" + str(ti), 0, {"albedo": [0.45, 0.3, 0.15]})
+        add_tag(w, trunk, "resource_wood")
+        let canopy = _spawn_template_cube(editor_ctx, w, vec3(tp[0], 3.5, tp[2]), "TreeCanopy_" + str(ti), 0, {"albedo": [0.2, 0.6, 0.15]})
+        spawned = spawned + 2
+        ti = ti + 1
+
+    # Rock resources (grey cubes)
+    let rocks = [[3.0, 0.3, 5.0], [-4.0, 0.3, -7.0], [7.0, 0.3, -2.0]]
+    let ri = 0
+    while ri < len(rocks):
+        let rp = rocks[ri]
+        let rock = _spawn_template_cube(editor_ctx, w, vec3(rp[0], rp[1], rp[2]), "Rock_" + str(ri), 0, {"albedo": [0.55, 0.55, 0.5]})
+        add_tag(w, rock, "resource_stone")
+        spawned = spawned + 1
+        ri = ri + 1
+
+    # Water source (blue flat cube)
+    let water = _spawn_template_cube(editor_ctx, w, vec3(0.0, 0.1, 0.0), "WaterSource", 0, {"albedo": [0.2, 0.4, 0.8], "alpha": 0.6})
+    add_tag(w, water, "water_source")
+    spawned = spawned + 1
+
+    # Campfire spot (orange cube)
+    let campfire = _spawn_template_cube(editor_ctx, w, vec3(0.0, 0.3, 3.0), "CampfireSpot", 0, {"albedo": [0.9, 0.5, 0.1]})
+    add_tag(w, campfire, "campfire")
+    spawned = spawned + 1
+
+    print "Survival template: wilderness with " + str(spawned) + " entities"
+    return spawned
+
+# ============================================================================
+# Sandbox Template Scene — empty with just grid and basic lighting
+# ============================================================================
+proc _populate_sandbox_template_scene(editor_ctx, w):
+    let spawned = 0
+    let ground = spawn(w)
+    add_component(w, ground, "transform", TransformComponent(0.0, 0.0, 0.0))
+    add_component(w, ground, "name", NameComponent("Ground"))
+    add_tag(w, ground, "editable")
+    spawned = spawned + 1
+
+    # Single reference cube
+    let ref = _spawn_template_cube(editor_ctx, w, vec3(0.0, 0.5, 0.0), "ReferenceCube", 0, {"albedo": [0.7, 0.7, 0.7]})
+    spawned = spawned + 1
+
+    print "Sandbox template: empty scene with " + str(spawned) + " entities"
+    return spawned
+
 proc _populate_voxel_template_scene(editor_ctx, w):
     let ground = spawn(w)
     add_component(w, ground, "transform", TransformComponent(0.0, 0.0, 0.0))
@@ -417,6 +684,24 @@ register_system(world, "physics", ["rigidbody", "transform"], create_physics_sys
 if _launch_action == "new" and _launch_template == "voxel":
     let template_entities = _populate_voxel_template_scene(editor, world)
     print "Applied voxel template scene with " + str(template_entities) + " entities"
+elif _launch_action == "new" and _launch_template == "fps":
+    let template_entities = _populate_fps_template_scene(editor, world)
+    print "Applied FPS template scene with " + str(template_entities) + " entities"
+elif _launch_action == "new" and _launch_template == "rpg":
+    let template_entities = _populate_rpg_template_scene(editor, world)
+    print "Applied RPG template scene with " + str(template_entities) + " entities"
+elif _launch_action == "new" and _launch_template == "topdown":
+    let template_entities = _populate_topdown_template_scene(editor, world)
+    print "Applied Top-Down template scene with " + str(template_entities) + " entities"
+elif _launch_action == "new" and _launch_template == "race":
+    let template_entities = _populate_racing_template_scene(editor, world)
+    print "Applied Racing template scene with " + str(template_entities) + " entities"
+elif _launch_action == "new" and _launch_template == "survival":
+    let template_entities = _populate_survival_template_scene(editor, world)
+    print "Applied Survival template scene with " + str(template_entities) + " entities"
+elif _launch_action == "new" and _launch_template == "sandbox":
+    let template_entities = _populate_sandbox_template_scene(editor, world)
+    print "Applied Sandbox template scene with " + str(template_entities) + " entities"
 else:
     # Default scene: ground plane
     let ge = spawn(world)
