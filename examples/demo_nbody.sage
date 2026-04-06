@@ -79,6 +79,18 @@ let planet_sizes = {
     "Neptune": 0.064
 }
 
+# Rotation speeds (radians/sec — faster for smaller planets, like reality)
+let planet_spin = {
+    "Sun": 0.15, "Mercury": 0.02, "Venus": -0.01, "Earth": 1.0,
+    "Mars": 0.95, "Jupiter": 2.5, "Saturn": 2.2, "Uranus": -1.4, "Neptune": 1.5
+}
+
+# Axial tilts (radians — simplified)
+let planet_tilt = {
+    "Sun": 0.0, "Mercury": 0.0, "Venus": 0.05, "Earth": 0.41,
+    "Mars": 0.44, "Jupiter": 0.05, "Saturn": 0.47, "Uranus": 1.71, "Neptune": 0.49
+}
+
 # Atmosphere glow colors (faint halo around gas giants / Venus / Earth)
 let atmosphere_colors = {
     "Earth": [0.3, 0.5, 1.0, 0.12],
@@ -284,7 +296,16 @@ while running:
         elif sz < 0.025:
             mesh = sphere_tiny
 
-        let model = mat4_mul(mat4_translate(pos[0], pos[1], pos[2]), mat4_scale(sz, sz, sz))
+        # Planet rotation: translate → tilt → spin → scale
+        let spin_angle = 0.0
+        let tilt_angle = 0.0
+        if dict_has(planet_spin, name):
+            spin_angle = total_time * planet_spin[name]
+        if dict_has(planet_tilt, name):
+            tilt_angle = planet_tilt[name]
+        let model = mat4_mul(mat4_translate(pos[0], pos[1], pos[2]),
+                     mat4_mul(mat4_rotate_x(tilt_angle),
+                      mat4_mul(mat4_rotate_y(spin_angle), mat4_scale(sz, sz, sz))))
         let mvp = mat4_mul(vp, model)
 
         if is_star:
@@ -316,6 +337,27 @@ while running:
                     draw_mesh_unlit(cmd, unlit_mat, sphere_lo, atmo_mvp, [atmo[0] * 0.15, atmo[1] * 0.15, atmo[2] * 0.15, 1.0])
             else:
                 draw_mesh_unlit(cmd, unlit_mat, mesh, mvp, [color[0], color[1], color[2], 1.0])
+
+        # Jupiter/Saturn banding — draw 3 thin color-varied bands for visual texture
+        if not is_star and (name == "Jupiter" or name == "Saturn"):
+            let band_colors_j = [[0.72, 0.62, 0.42], [0.85, 0.75, 0.55], [0.65, 0.55, 0.38]]
+            let band_colors_s = [[0.82, 0.74, 0.52], [0.92, 0.85, 0.65], [0.78, 0.70, 0.50]]
+            let bcols = band_colors_j
+            if name == "Saturn":
+                bcols = band_colors_s
+            let bandi = 0
+            while bandi < 3:
+                # Each band is a squished sphere at a different Y offset
+                let band_y = (bandi - 1.0) * sz * 0.5
+                let band_thick = sz * 0.22
+                let bm = mat4_mul(mat4_translate(pos[0], pos[1] + band_y, pos[2]),
+                         mat4_mul(mat4_rotate_x(tilt_angle),
+                          mat4_mul(mat4_rotate_y(spin_angle),
+                           mat4_scale(sz * 1.002, band_thick, sz * 1.002))))
+                let bmvp = mat4_mul(vp, bm)
+                if lit_mat != nil:
+                    draw_mesh_lit_surface_controlled(cmd, lit_mat, sphere_tiny, bmvp, bm, ls["desc_set"], {"albedo": bcols[bandi]}, false)
+                bandi = bandi + 1
 
         # Saturn ring
         if body["rings"]:
