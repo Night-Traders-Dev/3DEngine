@@ -23,8 +23,8 @@ if r == nil:
 
 # Post-processing (HDR + bloom + tonemapping)
 let pp = create_postprocess(1280, 720)
-let use_bloom = pp["enabled"]
-if use_bloom:
+let use_bloom = false  # Start with bloom OFF, press O to enable
+if pp["enabled"]:
     create_tonemap_pipeline(pp, r["render_pass"])
     pp["exposure"] = 1.0
     pp["bloom_intensity"] = 0.4
@@ -35,7 +35,7 @@ if use_bloom:
     pp["saturation"] = 1.08
     pp["warmth"] = 0.02
     pp["vignette"] = 0.12
-    print "✓ HDR + Bloom enabled"
+    print "✓ HDR + Bloom available (press O to toggle, starts OFF)"
 else:
     print "⚠ Bloom unavailable, using direct rendering"
 
@@ -46,15 +46,21 @@ add_light(ls, directional_light(0.2, -0.5, 0.3, 1.0, 0.97, 0.90, 1.5))
 add_light(ls, directional_light(-0.3, 0.2, -0.4, 0.4, 0.5, 0.7, 0.3))
 set_ambient(ls, 0.06, 0.06, 0.10, 0.3)
 
-# Materials — created for HDR render pass if bloom is active, else swapchain pass
-let scene_rp = r["render_pass"]
-if use_bloom:
-    scene_rp = pp["hdr_target"]["render_pass"]
-
-let lit_mat = create_lit_material(scene_rp, ls["desc_layout"], ls["desc_set"])
+# Materials for swapchain render pass (always works)
+let lit_mat = create_lit_material(r["render_pass"], ls["desc_layout"], ls["desc_set"])
 if lit_mat == nil:
     print "WARNING: Lit material failed, falling back to unlit"
-let unlit_mat = create_unlit_material(scene_rp)
+let unlit_mat = create_unlit_material(r["render_pass"])
+
+# Materials for HDR render pass (for bloom mode)
+let hdr_lit_mat = nil
+let hdr_unlit_mat = nil
+if use_bloom:
+    let hdr_rp = pp["hdr_target"]["render_pass"]
+    hdr_lit_mat = create_lit_material(hdr_rp, ls["desc_layout"], ls["desc_set"])
+    hdr_unlit_mat = create_unlit_material(hdr_rp)
+    if hdr_lit_mat == nil:
+        print "WARNING: HDR lit material failed"
 
 let inp = create_input()
 default_fps_bindings(inp)
@@ -64,6 +70,7 @@ bind_action(inp, "speed_down", [gpu.KEY_DOWN])
 bind_action(inp, "preset_1", [gpu.KEY_1])
 bind_action(inp, "preset_2", [gpu.KEY_2])
 bind_action(inp, "preset_3", [gpu.KEY_3])
+bind_action(inp, "toggle_bloom", [gpu.KEY_O])
 
 let cam_distance = 14.0
 let cam_yaw = 0.5
@@ -135,7 +142,7 @@ while bsi < 80:
     bsi = bsi + 1
 
 print "✓ " + str(alive_body_count(sim)) + " bodies | Lit planets + HDR stars"
-print "Mouse=Orbit | Scroll=Zoom | SPACE=Pause | Up/Down=Speed | 1/2/3=Presets"
+print "Mouse=Orbit | Scroll=Zoom | SPACE=Pause | Up/Down=Speed | 1/2/3=Presets | O=Bloom"
 
 let ts = create_time_state()
 let running = true
@@ -193,6 +200,14 @@ while running:
         compute_gravitational_forces(sim)
         orbit_history = {}
         cam_distance = 8.0
+
+    if action_just_pressed(inp, "toggle_bloom"):
+        if pp["enabled"]:
+            use_bloom = not use_bloom
+            if use_bloom:
+                print "Bloom: ON"
+            else:
+                print "Bloom: OFF"
 
     # Camera
     let md = mouse_delta(inp)
@@ -253,6 +268,13 @@ while running:
     else:
         begin_swapchain_pass(r, frame)
 
+    # Select materials for current render pass
+    let cur_lit = lit_mat
+    let cur_unlit = unlit_mat
+    if use_bloom and hdr_lit_mat != nil:
+        cur_lit = hdr_lit_mat
+        cur_unlit = hdr_unlit_mat
+
     # ---- Background stars ----
     let star_batch_start = (frame_count * 20) % len(bg_stars)
     let sti = 0
@@ -260,7 +282,7 @@ while running:
         let si = (star_batch_start + sti) % len(bg_stars)
         let s = bg_stars[si]
         let sm = mat4_mul(mat4_translate(s[0], s[1], s[2]), mat4_scale(0.08, 0.08, 0.08))
-        draw_mesh_unlit(cmd, unlit_mat, sphere_tiny, mat4_mul(vp, sm), [s[3], s[4], s[5], 1.0])
+        draw_mesh_unlit(cmd, cur_unlit, sphere_tiny, mat4_mul(vp, sm), [s[3], s[4], s[5], 1.0])
         sti = sti + 1
 
     # ---- Simulation bodies ----
@@ -307,7 +329,7 @@ while running:
             let hdr_mult = 2.5
             if not use_bloom:
                 hdr_mult = 1.0
-            draw_mesh_unlit(cmd, unlit_mat, mesh, mvp,
+            draw_mesh_unlit(cmd, cur_unlit, mesh, mvp,
                 [color[0] * pulse * hdr_mult, color[1] * pulse * hdr_mult, color[2] * pulse * 0.95 * hdr_mult, 1.0])
 
             # Inner corona
@@ -316,7 +338,7 @@ while running:
             let corona_mult = 1.5
             if not use_bloom:
                 corona_mult = 0.55
-            draw_mesh_unlit(cmd, unlit_mat, sphere_lo, mat4_mul(vp, g1m),
+            draw_mesh_unlit(cmd, cur_unlit, sphere_lo, mat4_mul(vp, g1m),
                 [color[0] * corona_mult * 0.8, color[1] * corona_mult * 0.75, color[2] * corona_mult * 0.5, 1.0])
 
             # Outer corona
@@ -325,20 +347,20 @@ while running:
             let outer = 0.8 + math.sin(total_time * 1.3) * 0.1
             if not use_bloom:
                 outer = 0.22
-            draw_mesh_unlit(cmd, unlit_mat, sphere_lo, mat4_mul(vp, g2m),
+            draw_mesh_unlit(cmd, cur_unlit, sphere_lo, mat4_mul(vp, g2m),
                 [color[0] * outer * 0.7, color[1] * outer * 0.6, color[2] * outer * 0.4, 1.0])
         else:
             # Planets: lit material for 3D shading
-            if lit_mat != nil:
-                draw_mesh_lit_surface_controlled(cmd, lit_mat, mesh, mvp, model, ls["desc_set"], {"albedo": color}, true)
+            if cur_lit != nil:
+                draw_mesh_lit_surface_controlled(cmd, cur_lit, mesh, mvp, model, ls["desc_set"], {"albedo": color}, true)
                 # Atmosphere halo
                 if dict_has(atmosphere_colors, name):
                     let ac = atmosphere_colors[name]
                     let asz = sz * 1.08
                     let am = mat4_mul(mat4_translate(pos[0], pos[1], pos[2]), mat4_scale(asz, asz, asz))
-                    draw_mesh_unlit(cmd, unlit_mat, sphere_lo, mat4_mul(vp, am), [ac[0] * 0.15, ac[1] * 0.15, ac[2] * 0.15, 1.0])
+                    draw_mesh_unlit(cmd, cur_unlit, sphere_lo, mat4_mul(vp, am), [ac[0] * 0.15, ac[1] * 0.15, ac[2] * 0.15, 1.0])
             else:
-                draw_mesh_unlit(cmd, unlit_mat, mesh, mvp, [color[0], color[1], color[2], 1.0])
+                draw_mesh_unlit(cmd, cur_unlit, mesh, mvp, [color[0], color[1], color[2], 1.0])
 
         # Gas giant banding
         if not is_star and (name == "Jupiter" or name == "Saturn"):
@@ -354,8 +376,8 @@ while running:
                          mat4_mul(mat4_rotate_x(tilt_angle),
                           mat4_mul(mat4_rotate_y(spin_angle),
                            mat4_scale(sz * 1.002, sz * 0.22, sz * 1.002))))
-                if lit_mat != nil:
-                    draw_mesh_lit_surface_controlled(cmd, lit_mat, sphere_tiny, mat4_mul(vp, bm), bm, ls["desc_set"], {"albedo": bcols[bandi]}, false)
+                if cur_lit != nil:
+                    draw_mesh_lit_surface_controlled(cmd, cur_lit, sphere_tiny, mat4_mul(vp, bm), bm, ls["desc_set"], {"albedo": bcols[bandi]}, false)
                 bandi = bandi + 1
 
         # Rings
@@ -364,7 +386,7 @@ while running:
                 let ur = sz * 1.8
                 let urm = mat4_mul(mat4_translate(pos[0], pos[1], pos[2]),
                           mat4_mul(mat4_rotate_x(1.71), mat4_scale(ur, ur * 0.008, ur)))
-                draw_mesh_unlit(cmd, unlit_mat, sphere_lo, mat4_mul(vp, urm), [0.5, 0.55, 0.58, 1.0])
+                draw_mesh_unlit(cmd, cur_unlit, sphere_lo, mat4_mul(vp, urm), [0.5, 0.55, 0.58, 1.0])
             else:
                 let rr1 = sz * 1.8
                 let rr2 = sz * 2.5
@@ -372,12 +394,12 @@ while running:
                           mat4_mul(mat4_rotate_x(0.47), mat4_scale(rr1, rr1 * 0.012, rr1)))
                 let rm2 = mat4_mul(mat4_translate(pos[0], pos[1], pos[2]),
                           mat4_mul(mat4_rotate_x(0.47), mat4_scale(rr2, rr2 * 0.010, rr2)))
-                if lit_mat != nil:
-                    draw_mesh_lit_surface_controlled(cmd, lit_mat, sphere_lo, mat4_mul(vp, rm1), rm1, ls["desc_set"], {"albedo": [0.88, 0.82, 0.62]}, false)
-                    draw_mesh_lit_surface_controlled(cmd, lit_mat, sphere_lo, mat4_mul(vp, rm2), rm2, ls["desc_set"], {"albedo": [0.70, 0.65, 0.50]}, false)
+                if cur_lit != nil:
+                    draw_mesh_lit_surface_controlled(cmd, cur_lit, sphere_lo, mat4_mul(vp, rm1), rm1, ls["desc_set"], {"albedo": [0.88, 0.82, 0.62]}, false)
+                    draw_mesh_lit_surface_controlled(cmd, cur_lit, sphere_lo, mat4_mul(vp, rm2), rm2, ls["desc_set"], {"albedo": [0.70, 0.65, 0.50]}, false)
                 else:
-                    draw_mesh_unlit(cmd, unlit_mat, sphere_lo, mat4_mul(vp, rm1), [0.88, 0.82, 0.62, 1.0])
-                    draw_mesh_unlit(cmd, unlit_mat, sphere_lo, mat4_mul(vp, rm2), [0.70, 0.65, 0.50, 1.0])
+                    draw_mesh_unlit(cmd, cur_unlit, sphere_lo, mat4_mul(vp, rm1), [0.88, 0.82, 0.62, 1.0])
+                    draw_mesh_unlit(cmd, cur_unlit, sphere_lo, mat4_mul(vp, rm2), [0.70, 0.65, 0.50, 1.0])
         bi = bi + 1
 
     # ---- Orbit trails ----
@@ -401,7 +423,7 @@ while running:
                     let dot_sz = 0.003 + fade * 0.002
                     let tp = hist[idx]
                     let tm = mat4_mul(mat4_translate(tp[0], tp[1], tp[2]), mat4_scale(dot_sz, dot_sz, dot_sz))
-                    draw_mesh_unlit(cmd, unlit_mat, sphere_tiny, mat4_mul(vp, tm),
+                    draw_mesh_unlit(cmd, cur_unlit, sphere_tiny, mat4_mul(vp, tm),
                         [tc_base[0] * brightness, tc_base[1] * brightness, tc_base[2] * brightness, 1.0])
                 di = di + 1
         oi = oi + 1
