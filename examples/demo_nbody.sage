@@ -12,7 +12,7 @@ import gpu
 import math
 from renderer import create_renderer, begin_frame, end_frame, shutdown_renderer, check_resize, update_title_fps
 from input import create_input, update_input, action_just_pressed, action_held, default_fps_bindings, mouse_delta, scroll_value, bind_action
-from math3d import vec3, v3_add, v3_sub, v3_scale, v3_normalize, v3_length, mat4_identity, mat4_mul, mat4_perspective, mat4_look_at, radians
+from math3d import vec3, v3_add, v3_sub, v3_scale, v3_normalize, v3_length, mat4_identity, mat4_mul, mat4_perspective, mat4_look_at, mat4_translate, mat4_scale, radians
 from mesh import sphere_mesh, upload_mesh
 from lighting import create_light_scene, directional_light, point_light, add_light, set_ambient, set_fog, set_view_position, init_light_gpu, update_light_ubo
 from render_system import create_lit_material, draw_mesh_lit_surface_controlled
@@ -208,20 +208,16 @@ while running:
             let body = sim["bodies"][bi]
             if body["alive"]:
                 let pos = body["position"]
-                # Scale radius for visibility (log scale for huge range)
-                let visual_radius = 0.02 + math.log(body["radius"] + 1.0) * 0.005
+                # Scale radius for visibility — much larger than real for visual clarity
+                # Real scale would make planets invisible; this is artistic
+                let visual_radius = 0.08 + math.log(body["radius"] + 1.0) * 0.02
                 if body["type"] == "star":
-                    visual_radius = visual_radius * 3.0
+                    visual_radius = visual_radius * 5.0
+                elif body["type"] == "planet":
+                    visual_radius = visual_radius * 2.0
 
-                # Model matrix: translate to position, scale
-                let model = mat4_identity()
-                # Simple translate via matrix manipulation
-                model[12] = pos[0]
-                model[13] = pos[1]
-                model[14] = pos[2]
-                model[0] = visual_radius
-                model[5] = visual_radius
-                model[10] = visual_radius
+                # Model matrix: translate to position then scale
+                let model = mat4_mul(mat4_translate(pos[0], pos[1], pos[2]), mat4_scale(visual_radius, visual_radius, visual_radius))
 
                 let mvp = mat4_mul(vp, model)
                 # Surface color — stars use temperature-based color, planets use defined color
@@ -246,14 +242,8 @@ while running:
                 let ti = 1
                 while ti < len(body["trail"]):
                     let tp = body["trail"][ti]
-                    let trail_model = mat4_identity()
-                    trail_model[12] = tp[0]
-                    trail_model[13] = tp[1]
-                    trail_model[14] = tp[2]
-                    let trail_size = 0.002
-                    trail_model[0] = trail_size
-                    trail_model[5] = trail_size
-                    trail_model[10] = trail_size
+                    let trail_size = 0.005
+                    let trail_model = mat4_mul(mat4_translate(tp[0], tp[1], tp[2]), mat4_scale(trail_size, trail_size, trail_size))
                     let trail_mvp = mat4_mul(vp, trail_model)
                     let trail_alpha = ti / len(body["trail"])
                     let trail_surface = {"albedo": [body["color"][0] * trail_alpha, body["color"][1] * trail_alpha, body["color"][2] * trail_alpha]}
