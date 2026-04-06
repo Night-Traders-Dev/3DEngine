@@ -1,6 +1,6 @@
 # Forge Engine
 
-A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Features a project launcher with game templates, a visual editor with floating windows, TrueType font rendering, PBR lighting, quaternion math, a centralized UI theme system, and 93 engine modules spanning rendering, physics, animation, AI, networking, and content pipelines.
+A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Features a project launcher with 7 game templates (FPS, RPG, Top-Down, Voxel, Racing, Survival, Sandbox), a visual editor with floating windows, TrueType font rendering, PBR lighting, 107 engine modules (25K lines) spanning rendering, physics, animation, AI, inventory, quests, vehicle physics, destruction, volumetric effects, cutscenes, decals, networking, and content pipelines.
 
 For the complete engine guide, see **[GUIDE.md](GUIDE.md)**. For release numbering rules, see **[VERSIONING.md](VERSIONING.md)**.
 

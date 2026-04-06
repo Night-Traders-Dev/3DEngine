@@ -7,7 +7,7 @@ gc_disable()
 
 import io
 import math
-from ecs import get_component, has_component, query
+from ecs import get_component, has_component, query, query_tag
 from math3d import vec3
 
 proc _fmt(n):
@@ -184,6 +184,38 @@ proc generate_game_script(world, scene_name, settings):
     if has_health:
         push(L, "from gameplay import HealthComponent, damage, is_dead, health_percent")
         push(L, "from gameplay import create_score, add_points, update_score")
+
+    # Include new gameplay systems based on scene content
+    let has_enemies = len(query_tag(world, "enemy")) > 0
+    let has_npcs = len(query_tag(world, "npc")) > 0
+    let has_vehicles = len(query_tag(world, "vehicle")) > 0
+    let has_destructibles = len(query_tag(world, "destructible")) > 0
+    let has_quests = len(query_tag(world, "quest")) > 0
+
+    # Always include inventory for games with pickups, enemies, or NPCs
+    if has_enemies or has_npcs or has_health:
+        push(L, "from inventory import create_inventory, add_item, remove_item, item_count")
+        push(L, "from inventory import register_default_items, create_equipment")
+
+    if has_quests or has_npcs:
+        push(L, "from quest import create_quest_manager, register_quest, start_quest")
+        push(L, "from quest import advance_objective, quest_state, objective")
+        push(L, "from quest import create_dialog_tree, add_dialog_node, start_dialog")
+        push(L, "from quest import create_character_stats, add_xp, take_damage")
+
+    if has_vehicles:
+        push(L, "from vehicle import create_vehicle, add_wheel, update_vehicle")
+        push(L, "from vehicle import vehicle_speed_kmh, create_chase_camera, update_chase_camera")
+
+    if has_destructibles or has_enemies:
+        push(L, "from destruction import create_destructible, apply_damage, spawn_debris, update_debris")
+        push(L, "from destruction import default_destruction_materials")
+
+    # Always include volumetric effects and decals for visual polish
+    push(L, "from volumetric import create_volumetric_system, set_distance_fog, set_height_fog")
+    push(L, "from volumetric import sample_fog, update_clouds")
+    push(L, "from decal import create_decal_manager, spawn_decal, update_decals, default_decal_types")
+
     push(L, "")
     if has_imported_assets:
         push(L, "proc _imported_runtime_surface(mat_info):")
@@ -530,6 +562,28 @@ proc generate_game_script(world, scene_name, settings):
     push(L, "bind_action(inp, " + q + "sprint" + q + ", [gpu.KEY_SHIFT])")
     if has_health:
         push(L, "let score = create_score()")
+
+    # Initialize new gameplay systems based on scene content
+    if has_enemies or has_npcs or has_health:
+        push(L, "register_default_items()")
+        push(L, "let player_inv = create_inventory(36)")
+        push(L, "let player_equip = create_equipment()")
+    if has_quests or has_npcs:
+        push(L, "let quest_mgr = create_quest_manager()")
+        push(L, "let player_stats = create_character_stats(" + q + "Player" + q + ", 1)")
+    if has_vehicles:
+        push(L, "let player_vehicle = nil  # Set when entering a vehicle")
+        push(L, "let chase_cam = create_chase_camera(8.0, 4.0, 1.5)")
+    if has_destructibles or has_enemies:
+        push(L, "default_destruction_materials()")
+        push(L, "let all_debris = []")
+
+    # Always init visual systems
+    push(L, "let vfx = create_volumetric_system()")
+    push(L, "set_distance_fog(vfx, 50.0, 200.0, [0.6, 0.65, 0.7])")
+    push(L, "default_decal_types()")
+    push(L, "let decal_mgr = create_decal_manager(256)")
+
     push(L, "let ts = create_time_state()")
     push(L, "let running = true")
     push(L, "")
@@ -554,6 +608,12 @@ proc generate_game_script(world, scene_name, settings):
         push(L, "    flush_dead(world)")
     if has_health:
         push(L, "    update_score(score, dt)")
+    # Update new gameplay systems per frame
+    if has_destructibles or has_enemies:
+        push(L, "    all_debris = update_debris(all_debris, dt)")
+    push(L, "    update_decals(decal_mgr, dt)")
+    push(L, "    update_clouds(vfx, dt)")
+
     push(L, "    set_view_position(ls, player_eye_position(player))")
     push(L, "    update_light_ubo(ls)")
     if has_imported_assets:

@@ -28,6 +28,13 @@ A complete guide to building games and interactive experiences with the Forge En
 22. [Environment Configuration](#environment-configuration)
 23. [Performance Tips](#performance-tips)
 24. [SageLang Reference](#sagelang-reference)
+25. [Inventory System](#inventory-system)
+26. [Quest and Dialog System](#quest-and-dialog-system)
+27. [Vehicle Physics](#vehicle-physics)
+28. [Destruction System](#destruction-system)
+29. [Decal System](#decal-system)
+30. [Volumetric Effects](#volumetric-effects)
+31. [Cutscene System](#cutscene-system)
 
 ---
 
@@ -1056,3 +1063,204 @@ from math3d import vec3, mat4_mul
 | `gpu.text_input_available()` | Check if keyboard input is pending |
 | `gpu.text_input_read()` | Read next UTF-8 character from input buffer |
 | `build_line_quads(lines, thickness, r, g, b, a)` | Convert line segments to quad array |
+
+---
+
+## 25. Inventory System
+
+The `inventory` module provides a complete item management system with stacking, equipment slots, crafting, and loot tables.
+
+```sage
+from inventory import create_inventory, add_item, remove_item, item_count
+from inventory import register_default_items, create_equipment, equip_item
+from inventory import register_recipe, available_recipes, craft_recipe
+from inventory import create_loot_table, roll_loot
+
+# Register built-in items (weapons, armor, consumables, resources)
+register_default_items()
+
+# Create a 36-slot backpack
+let inv = create_inventory(36)
+add_item(inv, "sword", 1)
+add_item(inv, "potion_hp", 5)
+
+# Equipment
+let equip = create_equipment()
+equip_item(equip, "mainhand", "sword")
+let dmg = equipment_damage(equip)    # 10 (from sword properties)
+let def = equipment_defense(equip)    # 0 (no armor equipped)
+
+# Crafting
+register_default_recipes()
+let recipes = available_recipes(inv)
+if len(recipes) > 0:
+    craft_recipe(inv, recipes[0])
+
+# Loot tables
+let table = create_loot_table([
+    {"id": "gold", "count": 10, "weight": 50},
+    {"id": "gem", "count": 1, "weight": 10},
+    {"id": "potion_hp", "count": 2, "weight": 30}
+])
+let drops = roll_loot(table, 3)
+```
+
+**Item Categories:** weapon, armor, consumable, resource, ammo, quest
+
+---
+
+## 26. Quest and Dialog System
+
+The `quest` module provides quest chains, dialog trees, and RPG character stats.
+
+```sage
+from quest import create_quest_manager, register_quest, start_quest
+from quest import advance_objective, turn_in_quest, objective
+from quest import create_dialog_tree, add_dialog_node, start_dialog, choose_dialog
+from quest import create_character_stats, add_xp, take_damage, heal
+
+# Quest system
+let qm = create_quest_manager()
+register_quest(qm, "rescue", "Rescue the Villager", [
+    objective("kill", "goblin", 3, "Defeat 3 goblins"),
+    objective("talk", "villager", 1, "Talk to the villager")
+], [{"id": "gold", "count": 100}])
+
+start_quest(qm, "rescue")
+advance_objective(qm, "rescue", "kill", "goblin", 1)  # Kill a goblin
+
+# Dialog trees
+let dialog = create_dialog_tree("Merchant")
+add_dialog_node(dialog, "root", "Welcome! What can I do for you?", [
+    {"text": "Show me your wares", "next": "shop"},
+    {"text": "Any quests?", "next": "quest_offer"},
+    {"text": "Goodbye", "next": nil}
+])
+start_dialog(dialog)
+
+# RPG stats
+let stats = create_character_stats("Hero", 1)
+let leveled = add_xp(stats, 150)    # Level up at 100 XP
+take_damage(stats, 30, equipment_defense(equip))
+heal(stats, 20)
+```
+
+---
+
+## 27. Vehicle Physics
+
+The `vehicle` module provides arcade-style vehicle physics with suspension, steering, and a chase camera.
+
+```sage
+from vehicle import create_vehicle, add_wheel, update_vehicle
+from vehicle import vehicle_speed_kmh, create_chase_camera, update_chase_camera
+
+let car = create_vehicle(vec3(0, 1, 0), 1200.0)
+add_wheel(car, vec3(-0.8, -0.3, 1.2), 0.3)   # Front-left
+add_wheel(car, vec3(0.8, -0.3, 1.2), 0.3)    # Front-right
+add_wheel(car, vec3(-0.8, -0.3, -1.2), 0.3)  # Rear-left
+add_wheel(car, vec3(0.8, -0.3, -1.2), 0.3)   # Rear-right
+
+let chase_cam = create_chase_camera(8.0, 4.0, 1.5)
+
+# In game loop:
+update_vehicle(car, throttle, brake, steer_input, dt)
+let cam_pos = update_chase_camera(chase_cam, car, dt)
+let speed = vehicle_speed_kmh(car)
+```
+
+---
+
+## 28. Destruction System
+
+The `destruction` module provides health-based object destruction with debris physics and explosions.
+
+```sage
+from destruction import create_destructible, apply_damage, spawn_debris, update_debris
+from destruction import create_explosion, apply_explosion, default_destruction_materials
+
+default_destruction_materials()  # Register wood, stone, glass, metal, concrete
+
+let wall = create_destructible(entity_id, 100, "stone")
+let destroyed = apply_damage(wall, 60, hit_point, hit_direction)
+if destroyed:
+    let debris = spawn_debris(wall, hit_point, 1.0)
+
+# Explosions
+let boom = create_explosion(origin, 5.0, 200, 1.5)
+let results = apply_explosion(boom, all_destructibles)
+
+# Per frame:
+all_debris = update_debris(all_debris, dt)
+```
+
+---
+
+## 29. Decal System
+
+The `decal` module projects marks onto surfaces (bullet holes, blood, scorch marks, etc.).
+
+```sage
+from decal import create_decal_manager, spawn_decal, update_decals, default_decal_types
+
+default_decal_types()
+let dm = create_decal_manager(256)
+
+# On hit:
+spawn_decal(dm, "bullet_hole", hit_pos, hit_normal, 0.0)
+
+# Per frame:
+update_decals(dm, dt)
+```
+
+**Built-in types:** bullet_hole, blood_splatter, scorch_mark, footprint, tire_track, crack, spray_paint
+
+---
+
+## 30. Volumetric Effects
+
+The `volumetric` module provides fog, god rays, clouds, and atmospheric scattering.
+
+```sage
+from volumetric import create_volumetric_system, set_distance_fog, set_height_fog
+from volumetric import set_god_rays, set_clouds, sample_fog, update_clouds
+
+let vfx = create_volumetric_system()
+set_distance_fog(vfx, 50.0, 200.0, [0.6, 0.65, 0.7])
+set_height_fog(vfx, 0.0, 20.0, 0.3, [0.5, 0.55, 0.6])
+set_god_rays(vfx, vec3(0.3, -0.8, 0.5), 0.8, 0.95)
+set_clouds(vfx, 100.0, 30.0, 0.5, 2.0)
+
+# Per frame:
+update_clouds(vfx, dt)
+let fog = sample_fog(vfx, world_position, camera_position)
+# fog["factor"] = 0.0-1.0, fog["color"] = [r, g, b]
+```
+
+---
+
+## 31. Cutscene System
+
+The `cutscene` module provides a timeline-based sequencer for camera tracks, dialog, fades, and scripted events.
+
+```sage
+from cutscene import create_cutscene, add_camera_track, add_dialog_event
+from cutscene import add_fade, add_entity_move, play_cutscene, update_cutscene
+
+let cs = create_cutscene("intro")
+add_fade(cs, 0.0, "in", 2.0)
+add_camera_track(cs, 0.0, vec3(0, 10, -20), vec3(0, 0, 0))
+add_camera_track(cs, 5.0, vec3(5, 3, -5), vec3(0, 1, 0))
+add_dialog_event(cs, 2.0, "Narrator", "Welcome to the world of Forge...")
+add_fade(cs, 8.0, "out", 1.5)
+
+cs["on_complete"] = proc():
+    print "Cutscene finished!"
+
+play_cutscene(cs)
+
+# Per frame:
+let result = update_cutscene(cs, dt)
+if result != nil:
+    # result["camera_pos"], result["camera_target"], result["dialog"], result["fade"]
+```
