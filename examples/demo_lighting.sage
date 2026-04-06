@@ -1,3 +1,4 @@
+gc_disable()
 # demo_lighting.sage - Forge Engine Phase 2 Demo
 # Demonstrates: Lit rendering, point/directional lights, fog, procedural sky
 #

@@ -1,3 +1,4 @@
+gc_disable()
 # demo_assets.sage - Forge Engine Phase 4 Demo
 # Asset manager, scene save/load, audio system
 #

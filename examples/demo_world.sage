@@ -1,3 +1,4 @@
+gc_disable()
 # demo_world.sage - Forge Engine Phase 7 Demo
 # Terrain, water, foliage, day/night cycle
 #

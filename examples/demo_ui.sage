@@ -1,3 +1,4 @@
+gc_disable()
 # demo_ui.sage - Forge Engine Phase 6 Demo
 # Full HUD: health bar, crosshair, score, info panel, minimap, pause menu
 #

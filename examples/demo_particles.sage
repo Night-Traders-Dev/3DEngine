@@ -1,3 +1,4 @@
+gc_disable()
 # demo_particles.sage - Forge Engine Phase 8 Demo
 # Particles, VFX presets, post-processing effects
 #

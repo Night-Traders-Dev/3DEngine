@@ -1,3 +1,4 @@
+gc_disable()
 # demo_physics.sage - Forge Engine Phase 3 Demo
 # Physics playground with FPS player, falling cubes, raycasting, health
 #

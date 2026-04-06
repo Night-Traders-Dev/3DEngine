@@ -1,3 +1,4 @@
+gc_disable()
 # demo_ai.sage - Forge Engine Phase 5 Demo
 # AI entities with behavior trees, pathfinding, steering, tweened animations
 #
