@@ -59,6 +59,7 @@ default_fps_bindings(inp)
 let player = create_player_controller()
 let player_pos = vec3(32.0, 30.0, 32.0)
 player["position"] = player_pos
+player["pitch"] = -0.4   # Look slightly downward to see terrain
 
 # ============================================================================
 # Initialize world systems
@@ -162,6 +163,13 @@ while mi < len(gameplay["mobs"]):
         gameplay["mobs"][mi]["behavior"] = create_behavior_state(gameplay["mobs"][mi]["type"])
         gameplay["mobs"][mi]["patrol_center"] = gameplay["mobs"][mi]["position"]
     mi = mi + 1
+
+# Pre-load all visible chunks before rendering starts
+# This prevents blank screen on first frames
+voxel["max_stream_chunk_refresh"] = 999
+let preload = voxel_visible_draws(voxel, player_pos[0], player_pos[1], player_pos[2], 3)
+print "✓ Pre-loaded " + str(len(preload)) + " chunk draws"
+voxel["max_stream_chunk_refresh"] = 4
 
 print "✓ World: 64x48x64 with terrain, water, lava, trees"
 print "✓ Mobs: " + str(voxel_alive_mob_count(gameplay))
