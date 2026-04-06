@@ -1,6 +1,6 @@
 # Forge Engine
 
-A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Features a project launcher with 7 game templates (FPS, RPG, Top-Down, Voxel, Racing, Survival, Sandbox), a visual editor with floating windows, TrueType font rendering, PBR lighting, 107 engine modules (25K lines) spanning rendering, physics, animation, AI, inventory, quests, vehicle physics, destruction, volumetric effects, cutscenes, decals, networking, and content pipelines.
+A Vulkan-powered 3D game engine built with [SageLang](../sagelang). Features a project launcher with 7 game templates (FPS, RPG, Top-Down, Voxel, Racing, Survival, Sandbox), a visual editor with floating windows, TrueType font rendering, PBR lighting, 116 engine modules (27K lines) spanning GPU instancing, occlusion culling, navmesh pathfinding, convex collision (GJK), ragdoll physics, animation blend trees, terrain splatmaps, level streaming, runtime profiling, inventory, quests, vehicle physics, destruction, volumetric effects, cutscenes, decals, networking, and content pipelines.
 
 For the complete engine guide, see **[GUIDE.md](GUIDE.md)**. For release numbering rules, see **[VERSIONING.md](VERSIONING.md)**.
 
@@ -151,7 +151,7 @@ forge-engine/
 ├── run.sh                   # Script runner
 ├── build_dist.sh            # Distribution builder
 ├── VERSION                  # Single source of truth for engine version
-├── lib/                     # Engine modules (107 files, 25K lines)
+├── lib/                     # Engine modules (116 files, 27K lines)
 │   ├── ui_core.sage         # Centralized theme + widget system
 │   ├── ui_widgets.sage      # Advanced widgets (sliders, checkboxes, dropdowns, text fields)
 │   ├── ui_window.sage       # Floating windows, menus, modals
@@ -172,7 +172,7 @@ forge-engine/
 └── build/                   # Distribution output
 ```
 
-**Total codebase:** ~25,000 lines of SageLang + ~700 lines of GLSL
+**Total codebase:** ~27,000 lines of SageLang + ~700 lines of GLSL
 
 ## Engine Systems
 
@@ -183,10 +183,10 @@ forge-engine/
 `math3d` — vec2/3/4, mat4 (multiply, translate, scale, rotate, perspective, look_at, ortho, inverse), quaternions (mul, slerp, from_euler, to_matrix, rotate_vec3)
 
 ### Rendering
-`renderer` (Vulkan swapchain, frame sync, **pipeline cache**, **secondary command buffers**, **manual frame-begin path for offscreen composites**) · `render_system` (**indirect draw**, **compute dispatch**, **anisotropic samplers**, **pipeline barriers**, **directional shadow binding**, **stable lit material bindings**, **scene-color water sampling for transparent lit passes**) · `lighting` (16 lights, fog, UBO, **scene-time shader feed**) · `sky` (procedural presets, **cubemap skybox**, **vibrant-day atmospheric variant**) · `pbr_material` (Cook-Torrance BRDF, **shadowed forward PBR**) · `textures` · `shadow_map` (depth pass, PCF, **dedicated prepass submission**, **texel-snapped directional stability**, **skinned shadow depth**) · `deferred` (G-buffer MRT) · `frustum` (culling) · `lod` (5 distance levels) · `taa` (temporal anti-aliasing) · `frame_graph` (pass dependencies, **GPU barrier integration**) · `editor_grid` · `post_fx` (vignette, color grading, fade) · `postprocess` (**HDR scene target**, **opaque-scene copy**, bloom extract/blur, tone-map composite, fullscreen passes, **load-and-blend transparent scene pass**, **offscreen targets**)
+`renderer` (Vulkan swapchain, frame sync, **pipeline cache**, **secondary command buffers**) · `render_system` (**indirect draw**, **compute dispatch**, **anisotropic samplers**, **directional shadow binding**, **stable lit material bindings**) · `instancing` (**GPU instance batching**, frustum-culled instanced draw, terrain scatter helper) · `occlusion` (**frustum + distance + back-face culling**, occluder registration, per-frame stats) · `lighting` (16 lights, fog, UBO, **scene-time shader feed**) · `sky` (procedural presets, **cubemap skybox**) · `pbr_material` (Cook-Torrance BRDF, **shadowed forward PBR**) · `shadow_map` (depth pass, PCF, **texel-snapped stability**, **skinned shadow depth**) · `deferred` (G-buffer MRT, SSAO, SSR) · `lod` (5 distance levels) · `taa` (temporal anti-aliasing) · `frame_graph` (pass dependencies, **GPU barrier integration**) · `post_fx` (vignette, color grading, fade) · `postprocess` (**HDR**, bloom, tone-map, **offscreen composites**) · `profiler` (**runtime profiler overlay**, section timing, draw call/triangle stats, frame time graph)
 
 ### Physics
-`collision` (AABB/sphere/ray/capsule, collision callbacks/events) · `physics` (rigidbody, gravity, restitution, fixed/distance/hinge constraints, constraint solver) · `spatial_grid` (broadphase, **octree** for large scenes)
+`collision` (AABB/sphere/ray/capsule, collision callbacks/events) · `physics` (rigidbody, gravity, restitution, fixed/distance/hinge constraints, constraint solver) · `spatial_grid` (broadphase, **octree** for large scenes) · `convex_collider` (**GJK** convex-convex/sphere/AABB, convex hull generation, box/cylinder constructors) · `ragdoll` (16-bone humanoid, impulse propagation, joint constraints, animation→ragdoll blending, settle detection)
 
 ### Gameplay
 `player_controller` (FPS, ground check, step climbing, slope limits) · `gameplay` (health, damage/heal, timers, state machines, spawners, scoring with combos) · `inventory` (items, stacks, equipment slots, crafting recipes, loot tables) · `quest` (quest chains, objectives, dialog trees, RPG stats, leveling) · `vehicle` (wheeled physics, suspension, steering, chase camera) · `destruction` (material fracture, debris physics, explosions) · `decal` (projected surface marks, lifetime, fade) · `cutscene` (timeline sequencer, camera tracks, dialog, fades)
@@ -195,13 +195,13 @@ forge-engine/
 `asset_manager` (caching) · `asset_cache` · `scene_serial` (JSON save/load, prefab save/load, **imported asset references**) · `asset_import` (glTF 2.0, **async loading queue**, **HTTP download**, imported material metadata + textures, **node hierarchy draws**, **transform-animation clip sampling**, **skinned vertex decode**, **skin/joint palette generation**, **clip/state helpers**) · `asset_browser` (search, filter, categories) · `audio` (OpenAL FFI) · `hot_reload` (directory watching) · `codegen` (game script generation, **scene light/camera export**, **runtime glTF re-import**, **hierarchical imported draws**, **imported transform-animation playback**, **imported GPU skinning parity**, **runtime shadow prepass parity**, **animation state export parity**, **LLVM native compilation**) · `material` (8 PBR presets) · `mesh` (**device-local uploads**, **skinnable vertex expansion**, **struct vertex packing**) · `voxel_gameplay` (**shared drops, pickups, hostile slime loop, save/load state**)
 
 ### Animation & AI
-`tween` (18 easings) · `animation` (skeletal, keyframes, blend trees, state machine, two-bone IK solver, animation events) · `navigation` (A* pathfinding, steering: seek/flee/arrive/wander/avoid) · `behavior_tree` (action/condition/sequence/selector/inverter/repeater/wait)
+`tween` (18 easings) · `animation` (skeletal, keyframes, IK, animation events) · `blend_tree` (**node-based** blend trees: 1D/2D blend spaces, additive layers, state machine with transitions, root motion extraction) · `navigation` (A* pathfinding, steering: seek/flee/arrive/wander/avoid) · `navmesh` (**polygon-based** navigation mesh, A* on polygon graph, terrain-to-navmesh generation, off-mesh links, nav agent with path following) · `behavior_tree` (action/condition/sequence/selector/inverter/repeater/wait)
 
 ### UI Framework
 `ui_core` (**centralized theme system** with 40+ named colors, spacing constants, font sizing, border/shadow helpers, hover/active/disabled/pressed widget states, focus rings) · `ui_renderer` (batched quads) · `ui_widgets` (buttons, sliders, checkboxes, dropdowns, text input fields, number fields, tree views, scroll panels, section headers, **visible scrollbars**, **per-widget quad collection**) · `ui_window` (floating windows, context menus, modal dialogs, snap-to-edge) · `font` (TrueType via stb_truetype) · `launch_screen` (project browser with templates) · `hud` (health bar with 4-stage color transition, gapped crosshair, themed minimap, score display) · `voxel_hud` (**shared voxel hotbar/backpack/crafting HUD**) · `menu` (themed pause/main/game-over menus with visual hierarchy, button styles, fade animations) · `inspector` (entity property inspector with accent bars, color-coded booleans)
 
 ### World
-`terrain` (heightmap, procedural noise) · `water` (animated waves) · `foliage` (scatter rules) · `day_night` (sun cycle) · `scene` (scene graph, level streaming) · `voxel_world` (**shared voxel template terrain generation**, **grounded ten-block palette**, **real water lakes**, **rare bloom/crystal accents**, **exposed-face meshing**, **face-aware top/side/bottom material buckets**, **chunk-aware mesh builds**, **incremental streamed chunk draw cache**, **zero-face bucket culling**, **block picking/place-break**, **water-aware player collision helpers**, **chunked JSON world save/load**, **inventory helpers**, **basic crafting recipes**)
+`terrain` (heightmap, procedural noise) · `water` (animated waves) · `foliage` (scatter rules) · `day_night` (sun cycle) · `scene` (scene graph) · `level_streaming` (**world partition**, chunk load/unload by distance, per-frame budget, persistent entities) · `splatmap` (4-layer terrain texture blending, height/slope auto-painting, manual brush) · `voxel_world` (**shared voxel template terrain generation**, **grounded ten-block palette**, **real water lakes**, **rare bloom/crystal accents**, **exposed-face meshing**, **face-aware top/side/bottom material buckets**, **chunk-aware mesh builds**, **incremental streamed chunk draw cache**, **zero-face bucket culling**, **block picking/place-break**, **water-aware player collision helpers**, **chunked JSON world save/load**, **inventory helpers**, **basic crafting recipes**)
 
 ### VFX & Post-Processing
 `particles` (CPU pool, emitter shapes) · `vfx_presets` (fire/smoke/sparks/rain/magic) · `particle_renderer` · `post_fx` (vignette, color grading, fade, presets) · `postprocess` (bloom extract/blur/composite, HDR tone mapping, fullscreen pass infrastructure, **editor/voxel offscreen scene compositing**, **transparent water scene-copy composite pass**) · `volumetric` (distance fog, height fog, god rays, procedural clouds, cloud shadows, atmospheric scattering)

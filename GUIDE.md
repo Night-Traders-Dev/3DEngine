@@ -1264,3 +1264,139 @@ let result = update_cutscene(cs, dt)
 if result != nil:
     # result["camera_pos"], result["camera_target"], result["dialog"], result["fade"]
 ```
+
+---
+
+## 32. GPU Instancing
+
+The `instancing` module draws thousands of identical meshes in a single draw call.
+
+```sage
+from instancing import create_instance_batch, add_instance, draw_instanced_culled, scatter_instances
+
+let trees = create_instance_batch(tree_mesh_gpu, 5000)
+scatter_instances(trees, vec3(0,0,0), vec3(100,0,100), 5000, terrain_height)
+upload_instance_data(trees)
+
+# In render loop:
+draw_instanced_culled(cmd, lit_mat, trees, vp, desc_set, frustum_planes, 5.0)
+```
+
+## 33. Occlusion Culling
+
+The `occlusion` module prevents rendering invisible objects.
+
+```sage
+from occlusion import create_occlusion_system, begin_occlusion_frame, occlusion_test_aabb
+
+let occ = create_occlusion_system()
+begin_occlusion_frame(occ, cam_pos, cam_dir, 60.0, 1.77)
+if occlusion_test_aabb(occ, entity_min, entity_max):
+    draw_entity(...)
+let stats = occlusion_stats(occ)  # {tested, culled, visible, cull_rate}
+```
+
+## 34. NavMesh Pathfinding
+
+The `navmesh` module provides polygon-based 3D navigation.
+
+```sage
+from navmesh import create_navmesh, generate_navmesh_from_terrain, navmesh_find_path
+from navmesh import create_nav_agent, nav_agent_set_path, nav_agent_update
+
+let nav = create_navmesh()
+generate_navmesh_from_terrain(nav, terrain, 1.0)
+let path = navmesh_find_path(nav, start, goal)
+let agent = create_nav_agent(start, 5.0, 0.3)
+nav_agent_set_path(agent, path)
+nav_agent_update(agent, dt)
+```
+
+## 35. Convex Colliders (GJK)
+
+The `convex_collider` module provides convex mesh collision via GJK algorithm.
+
+```sage
+from convex_collider import create_convex_hull, create_convex_box, test_convex_convex
+
+let hull_a = create_convex_box(vec3(1, 1, 1))
+let hull_b = create_convex_hull(point_cloud)
+let hit = test_convex_convex(hull_a, pos_a, hull_b, pos_b)
+if hit["colliding"]:
+    resolve(hit["normal"], hit["depth"])
+```
+
+## 36. Ragdoll Physics
+
+The `ragdoll` module converts animated characters to physics-driven ragdolls.
+
+```sage
+from ragdoll import create_humanoid_ragdoll, activate_ragdoll, update_ragdoll
+
+let rd = create_humanoid_ragdoll()
+activate_ragdoll(rd, bone_positions, {"bone_index": 2, "force": vec3(5, 10, 0)})
+update_ragdoll(rd, dt, -9.81)
+let positions = ragdoll_bone_transforms(rd)
+```
+
+## 37. Animation Blend Trees
+
+The `blend_tree` module provides node-based animation blending.
+
+```sage
+from blend_tree import create_blend_tree, add_clip_node, add_blend_1d
+from blend_tree import add_state_machine, add_transition, set_blend_param
+
+let tree = create_blend_tree()
+add_clip_node(tree, "idle", idle_clip)
+add_clip_node(tree, "walk", walk_clip)
+add_clip_node(tree, "run", run_clip)
+add_blend_1d(tree, "locomotion", ["idle", "walk", "run"], [0.0, 0.5, 1.0])
+set_blend_param(tree, "speed", player_speed)
+let pose = evaluate_blend_tree(tree, dt)
+```
+
+## 38. Terrain Splatmaps
+
+The `splatmap` module blends up to 4 terrain materials.
+
+```sage
+from splatmap import create_splatmap, add_terrain_layer, auto_paint_by_height
+
+let splat = create_splatmap(100, 100, 2)
+add_terrain_layer(splat, "grass", [0.3, 0.6, 0.2], 4.0)
+add_terrain_layer(splat, "rock", [0.5, 0.5, 0.45], 8.0)
+add_terrain_layer(splat, "snow", [0.9, 0.9, 0.95], 2.0)
+auto_paint_by_height(splat, terrain, rules)
+let color = sample_splatmap(splat, world_x, world_z)
+```
+
+## 39. Level Streaming
+
+The `level_streaming` module loads/unloads world chunks by distance.
+
+```sage
+from level_streaming import create_world_streamer, register_chunk_loader, update_streaming
+
+let ws = create_world_streamer(64.0, 3)
+register_chunk_loader(ws, proc(cx, cz): generate_chunk(cx, cz))
+update_streaming(ws, player_pos)
+let stats = streaming_stats(ws)
+```
+
+## 40. Runtime Profiler
+
+The `profiler` module tracks performance with section timing and overlay.
+
+```sage
+from profiler import create_profiler, begin_frame_profile, end_frame_profile
+from profiler import begin_profile, end_profile, profiler_overlay
+
+let prof = create_profiler()
+begin_frame_profile(prof)
+begin_profile(prof, "physics")
+# ... physics code ...
+end_profile(prof, "physics")
+end_frame_profile(prof)
+let lines = profiler_overlay(prof)
+```
