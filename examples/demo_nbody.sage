@@ -309,18 +309,25 @@ while running:
         let mvp = mat4_mul(vp, model)
 
         if is_star:
-            # Stars: draw as bright unlit (self-illuminating)
-            # Pulsing brightness for realism
+            # Stars: layered unlit spheres for corona glow effect
             let pulse = 1.0 + math.sin(total_time * 2.0 + pos[0]) * 0.03
+
+            # Core (bright, sharp)
             let star_color = [color[0] * pulse, color[1] * pulse, color[2] * pulse * 0.95, 1.0]
             draw_mesh_unlit(cmd, unlit_mat, mesh, mvp, star_color)
 
-            # Star glow halo (slightly larger, dimmer sphere)
-            let glow_sz = sz * 1.35
-            let glow_model = mat4_mul(mat4_translate(pos[0], pos[1], pos[2]), mat4_scale(glow_sz, glow_sz, glow_sz))
-            let glow_mvp = mat4_mul(vp, glow_model)
-            let glow_bright = 0.35 + math.sin(total_time * 1.5) * 0.05
-            draw_mesh_unlit(cmd, unlit_mat, sphere_lo, glow_mvp, [color[0] * glow_bright, color[1] * glow_bright, color[2] * glow_bright * 0.8, 1.0])
+            # Inner corona (warm, medium brightness)
+            let g1 = sz * 1.18
+            let g1m = mat4_mul(mat4_translate(pos[0], pos[1], pos[2]), mat4_scale(g1, g1, g1))
+            draw_mesh_unlit(cmd, unlit_mat, sphere_lo, mat4_mul(vp, g1m),
+                [color[0] * 0.55, color[1] * 0.50, color[2] * 0.35, 1.0])
+
+            # Outer corona (cooler, dimmer)
+            let g2 = sz * 1.45
+            let g2m = mat4_mul(mat4_translate(pos[0], pos[1], pos[2]), mat4_scale(g2, g2, g2))
+            let corona_pulse = 0.22 + math.sin(total_time * 1.3) * 0.04
+            draw_mesh_unlit(cmd, unlit_mat, sphere_lo, mat4_mul(vp, g2m),
+                [color[0] * corona_pulse, color[1] * corona_pulse * 0.9, color[2] * corona_pulse * 0.6, 1.0])
         else:
             # Planets: draw with lit material for proper 3D shading
             if lit_mat != nil:
@@ -359,15 +366,29 @@ while running:
                     draw_mesh_lit_surface_controlled(cmd, lit_mat, sphere_tiny, bmvp, bm, ls["desc_set"], {"albedo": bcols[bandi]}, false)
                 bandi = bandi + 1
 
-        # Saturn ring
-        if body["rings"]:
-            let rr = sz * 2.4
-            let rm = mat4_mul(mat4_mul(mat4_translate(pos[0], pos[1], pos[2]), mat4_rotate_x(0.45)), mat4_scale(rr, rr * 0.015, rr))
-            let rmvp = mat4_mul(vp, rm)
-            if lit_mat != nil:
-                draw_mesh_lit_surface_controlled(cmd, lit_mat, sphere_lo, rmvp, rm, ls["desc_set"], {"albedo": [0.85, 0.78, 0.58]}, false)
+        # Rings (Saturn has prominent rings, Uranus has faint ones)
+        if body["rings"] or name == "Uranus":
+            if name == "Uranus":
+                # Uranus rings — nearly vertical due to extreme axial tilt
+                let ur = sz * 1.8
+                let urm = mat4_mul(mat4_translate(pos[0], pos[1], pos[2]),
+                          mat4_mul(mat4_rotate_x(1.71), mat4_scale(ur, ur * 0.008, ur)))
+                let urmvp = mat4_mul(vp, urm)
+                draw_mesh_unlit(cmd, unlit_mat, sphere_lo, urmvp, [0.5, 0.55, 0.58, 1.0])
             else:
-                draw_mesh_unlit(cmd, unlit_mat, sphere_lo, rmvp, [0.85, 0.78, 0.58, 1.0])
+                # Saturn rings — two bands (inner brighter, outer darker)
+                let rr1 = sz * 1.8
+                let rr2 = sz * 2.5
+                let rm1 = mat4_mul(mat4_translate(pos[0], pos[1], pos[2]),
+                          mat4_mul(mat4_rotate_x(0.47), mat4_scale(rr1, rr1 * 0.012, rr1)))
+                let rm2 = mat4_mul(mat4_translate(pos[0], pos[1], pos[2]),
+                          mat4_mul(mat4_rotate_x(0.47), mat4_scale(rr2, rr2 * 0.010, rr2)))
+                if lit_mat != nil:
+                    draw_mesh_lit_surface_controlled(cmd, lit_mat, sphere_lo, mat4_mul(vp, rm1), rm1, ls["desc_set"], {"albedo": [0.88, 0.82, 0.62]}, false)
+                    draw_mesh_lit_surface_controlled(cmd, lit_mat, sphere_lo, mat4_mul(vp, rm2), rm2, ls["desc_set"], {"albedo": [0.70, 0.65, 0.50]}, false)
+                else:
+                    draw_mesh_unlit(cmd, unlit_mat, sphere_lo, mat4_mul(vp, rm1), [0.88, 0.82, 0.62, 1.0])
+                    draw_mesh_unlit(cmd, unlit_mat, sphere_lo, mat4_mul(vp, rm2), [0.70, 0.65, 0.50, 1.0])
 
         bi = bi + 1
 
@@ -381,18 +402,20 @@ while running:
         let tc_base = [0.3, 0.3, 0.3]
         if dict_has(planet_colors, okeys[oi]):
             tc_base = planet_colors[okeys[oi]]
-        if hlen > 8:
-            let num_dots = 8
+        if hlen > 12:
+            let num_dots = 12
             let step = hlen / num_dots
             let di = 0
             while di < num_dots:
                 let idx = di * step
                 if idx < hlen:
-                    # Fade: older dots are dimmer
+                    # Fade: older dots are dimmer, newer are brighter
                     let fade = (di + 1.0) / num_dots
-                    let brightness = fade * 0.25
+                    let brightness = fade * 0.30
+                    # Size also fades — newer dots slightly larger
+                    let dot_sz = 0.003 + fade * 0.002
                     let tp = hist[idx]
-                    let tm = mat4_mul(mat4_translate(tp[0], tp[1], tp[2]), mat4_scale(0.004, 0.004, 0.004))
+                    let tm = mat4_mul(mat4_translate(tp[0], tp[1], tp[2]), mat4_scale(dot_sz, dot_sz, dot_sz))
                     draw_mesh_unlit(cmd, unlit_mat, sphere_tiny, mat4_mul(vp, tm),
                         [tc_base[0] * brightness, tc_base[1] * brightness, tc_base[2] * brightness, 1.0])
                 di = di + 1
