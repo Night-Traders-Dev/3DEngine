@@ -108,6 +108,39 @@ proc get_material(reg, name):
 # ============================================================================
 # Create a lit material (uses SceneUBO for lighting)
 # ============================================================================
+proc _create_material_binding():
+    # Set 3: MaterialUBO (baseColor + surfaceControl + waterControl) + sceneColorCopy sampler
+    let b0 = {}
+    b0["binding"] = 0
+    b0["type"] = gpu.DESC_UNIFORM_BUFFER
+    b0["stage"] = gpu.STAGE_FRAGMENT
+    b0["count"] = 1
+    let b1 = {}
+    b1["binding"] = 1
+    b1["type"] = gpu.DESC_COMBINED_SAMPLER
+    b1["stage"] = gpu.STAGE_FRAGMENT
+    b1["count"] = 1
+    let layout = gpu.create_descriptor_layout([b0, b1])
+    let ps0 = {}
+    ps0["type"] = gpu.DESC_UNIFORM_BUFFER
+    ps0["count"] = 1
+    let ps1 = {}
+    ps1["type"] = gpu.DESC_COMBINED_SAMPLER
+    ps1["count"] = 1
+    let pool = gpu.create_descriptor_pool(1, [ps0, ps1])
+    let desc_set = gpu.allocate_descriptor_set(pool, layout)
+    # MaterialUBO: baseColor(vec4) + surfaceControl(vec4) + waterControl(vec4) = 48 bytes
+    let ubo = gpu.create_uniform_buffer(48)
+    # Default: white color, receive shadows, no water
+    let mat_data = [1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    gpu.update_uniform(ubo, mat_data)
+    gpu.update_descriptor(desc_set, 0, gpu.DESC_UNIFORM_BUFFER, ubo)
+    # Dummy 1x1 image for sceneColorCopy
+    let dummy_img = gpu.create_image(1, 1, 1, gpu.FORMAT_RGBA8, gpu.IMAGE_SAMPLED)
+    let dummy_sampler = gpu.create_sampler(gpu.FILTER_LINEAR, gpu.FILTER_LINEAR, gpu.ADDRESS_CLAMP_EDGE)
+    gpu.update_descriptor_image(desc_set, 1, dummy_img, dummy_sampler)
+    return {"layout": layout, "pool": pool, "desc_set": desc_set, "ubo": ubo}
+
 proc create_lit_material(render_pass, desc_layout, desc_set):
     let vert = gpu.load_shader("shaders/engine_lit.vert.spv", gpu.STAGE_VERTEX)
     let frag = gpu.load_shader("shaders/engine_lit.frag.spv", gpu.STAGE_FRAGMENT)
@@ -115,11 +148,12 @@ proc create_lit_material(render_pass, desc_layout, desc_set):
         print "ERROR: Failed to load lit shaders"
         return nil
 
-    # Pipeline layout: push = 160 bytes (MVP + Model + baseColor + shadow flags), 1 descriptor set (SceneUBO)
+    # Pipeline layout: 4 descriptor sets + 160 byte push constants
     let stage_flags = gpu.STAGE_VERTEX | gpu.STAGE_FRAGMENT
     let skin_binding = _create_skin_binding()
     let shadow_binding = _create_shadow_binding()
-    let pipe_layout = gpu.create_pipeline_layout([desc_layout, skin_binding["layout"], shadow_binding["layout"]], 160, stage_flags)
+    let material_binding = _create_material_binding()
+    let pipe_layout = gpu.create_pipeline_layout([desc_layout, skin_binding["layout"], shadow_binding["layout"], material_binding["layout"]], 160, stage_flags)
 
     let cfg = {}
     cfg["layout"] = pipe_layout
@@ -154,6 +188,10 @@ proc create_lit_material(render_pass, desc_layout, desc_set):
     mat["shadow_dummy_image"] = shadow_binding["dummy_image"]
     mat["shadow_dummy_sampler"] = shadow_binding["dummy_sampler"]
     mat["shadow_source"] = nil
+    mat["material_layout"] = material_binding["layout"]
+    mat["material_pool"] = material_binding["pool"]
+    mat["material_desc_set"] = material_binding["desc_set"]
+    mat["material_ubo"] = material_binding["ubo"]
     mat["vert"] = vert
     mat["frag"] = frag
     _update_shadow_binding(mat)
@@ -284,6 +322,13 @@ proc draw_mesh_lit_surface_skinned_controlled(cmd, mat, mesh_gpu, mvp_data, mode
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 0, desc_set, 0)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 1, mat["skin_desc_set"], 0)
     gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 2, mat["shadow_desc_set"], 0)
+    # Bind material UBO (set 3) with current base color
+    if dict_has(mat, "material_ubo"):
+        let mat_data = [base_color[0], base_color[1], base_color[2], base_color[3], 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        if receive_shadows == false:
+            mat_data[4] = 0.0
+        gpu.update_uniform(mat["material_ubo"], mat_data)
+        gpu.cmd_bind_descriptor_set(cmd, mat["pipe_layout"], 3, mat["material_desc_set"], 0)
     let push_data = build_lit_push_data(mvp_data, model_data, base_color, receive_shadows)
     gpu.cmd_push_constants(cmd, mat["pipe_layout"], stage_flags, push_data)
     gpu.cmd_bind_vertex_buffer(cmd, mesh_gpu["vbuf"])
