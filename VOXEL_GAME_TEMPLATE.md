@@ -131,4 +131,11 @@ This template requires all the voxel system modules:
 - `voxel_biomes.sage` - Terrain generation
 - `voxel_hud.sage` - UI display
 
+Additionally, rendering requires:
+- `renderer.sage` - Vulkan swapchain and frame management
+- `lighting.sage` - Directional light, ambient, fog
+- `render_system.sage` - Lit material pipeline and draw functions
+- `math3d.sage` - Vector/matrix math
+- `player_controller.sage` - FPS camera with view/projection matrices
+
 Make sure all these files are present in the `lib/` directory.

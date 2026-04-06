@@ -151,25 +151,28 @@ forge-engine/
 ├── run.sh                   # Script runner
 ├── build_dist.sh            # Distribution builder
 ├── VERSION                  # Single source of truth for engine version
-├── lib/                     # Engine modules (93 files)
+├── lib/                     # Engine modules (107 files, 25K lines)
 │   ├── ui_core.sage         # Centralized theme + widget system
 │   ├── ui_widgets.sage      # Advanced widgets (sliders, checkboxes, dropdowns, text fields)
 │   ├── ui_window.sage       # Floating windows, menus, modals
 │   ├── ui_renderer.sage     # Batched GPU quad rendering
-│   ├── forge_version.sage   # Shared engine version + branding helpers
-│   ├── launch_screen.sage   # Project browser / template selector
-│   ├── hud.sage             # Game HUD (health, crosshair, minimap, score)
-│   ├── menu.sage            # Game menus (pause, main, game over)
-│   └── ...                  # 80+ more engine modules
+│   ├── inventory.sage       # Items, equipment, crafting, loot tables
+│   ├── quest.sage           # Quest chains, dialog trees, RPG stats
+│   ├── vehicle.sage         # Vehicle physics, suspension, chase camera
+│   ├── destruction.sage     # Fracture, debris, explosions
+│   ├── volumetric.sage      # Fog, god rays, clouds, scattering
+│   ├── decal.sage           # Projected surface marks
+│   ├── cutscene.sage        # Sequencer: camera tracks, dialog, fades
+│   └── ...                  # 95+ more engine modules
 ├── shaders/                 # GLSL shader pairs + SPIR-V
-├── examples/                # 9 demo programs
+├── examples/                # 18 demo programs (9 core + 9 voxel variants)
 ├── tests/                   # 59 suites, 1,752 checks
 ├── assets/                  # Fonts, models, scenes, prefabs
 │   └── prefabs/             # Saved entity templates
 └── build/                   # Distribution output
 ```
 
-**Total codebase:** ~22,400 lines of SageLang + ~700 lines of GLSL
+**Total codebase:** ~25,000 lines of SageLang + ~700 lines of GLSL
 
 ## Engine Systems
 
@@ -186,7 +189,7 @@ forge-engine/
 `collision` (AABB/sphere/ray/capsule, collision callbacks/events) · `physics` (rigidbody, gravity, restitution, fixed/distance/hinge constraints, constraint solver) · `spatial_grid` (broadphase, **octree** for large scenes)
 
 ### Gameplay
-`player_controller` (FPS, ground check, step climbing, slope limits) · `gameplay` (health, damage/heal, timers, state machines, spawners, scoring with combos)
+`player_controller` (FPS, ground check, step climbing, slope limits) · `gameplay` (health, damage/heal, timers, state machines, spawners, scoring with combos) · `inventory` (items, stacks, equipment slots, crafting recipes, loot tables) · `quest` (quest chains, objectives, dialog trees, RPG stats, leveling) · `vehicle` (wheeled physics, suspension, steering, chase camera) · `destruction` (material fracture, debris physics, explosions) · `decal` (projected surface marks, lifetime, fade) · `cutscene` (timeline sequencer, camera tracks, dialog, fades)
 
 ### Content
 `asset_manager` (caching) · `asset_cache` · `scene_serial` (JSON save/load, prefab save/load, **imported asset references**) · `asset_import` (glTF 2.0, **async loading queue**, **HTTP download**, imported material metadata + textures, **node hierarchy draws**, **transform-animation clip sampling**, **skinned vertex decode**, **skin/joint palette generation**, **clip/state helpers**) · `asset_browser` (search, filter, categories) · `audio` (OpenAL FFI) · `hot_reload` (directory watching) · `codegen` (game script generation, **scene light/camera export**, **runtime glTF re-import**, **hierarchical imported draws**, **imported transform-animation playback**, **imported GPU skinning parity**, **runtime shadow prepass parity**, **animation state export parity**, **LLVM native compilation**) · `material` (8 PBR presets) · `mesh` (**device-local uploads**, **skinnable vertex expansion**, **struct vertex packing**) · `voxel_gameplay` (**shared drops, pickups, hostile slime loop, save/load state**)
@@ -201,7 +204,7 @@ forge-engine/
 `terrain` (heightmap, procedural noise) · `water` (animated waves) · `foliage` (scatter rules) · `day_night` (sun cycle) · `scene` (scene graph, level streaming) · `voxel_world` (**shared voxel template terrain generation**, **grounded ten-block palette**, **real water lakes**, **rare bloom/crystal accents**, **exposed-face meshing**, **face-aware top/side/bottom material buckets**, **chunk-aware mesh builds**, **incremental streamed chunk draw cache**, **zero-face bucket culling**, **block picking/place-break**, **water-aware player collision helpers**, **chunked JSON world save/load**, **inventory helpers**, **basic crafting recipes**)
 
 ### VFX & Post-Processing
-`particles` (CPU pool, emitter shapes) · `vfx_presets` (fire/smoke/sparks/rain/magic) · `particle_renderer` · `post_fx` (vignette, color grading, fade, presets) · `postprocess` (bloom extract/blur/composite, HDR tone mapping, fullscreen pass infrastructure, **editor/voxel offscreen scene compositing**, **transparent water scene-copy composite pass**)
+`particles` (CPU pool, emitter shapes) · `vfx_presets` (fire/smoke/sparks/rain/magic) · `particle_renderer` · `post_fx` (vignette, color grading, fade, presets) · `postprocess` (bloom extract/blur/composite, HDR tone mapping, fullscreen pass infrastructure, **editor/voxel offscreen scene compositing**, **transparent water scene-copy composite pass**) · `volumetric` (distance fog, height fog, god rays, procedural clouds, cloud shadows, atmospheric scattering)
 
 ### Networking
 `net_protocol` (binary messages) · `net_server` (TCP, 16 clients, **SSL/TLS**) · `net_client` (**secure connect**) · `net_replication` · `lobby`

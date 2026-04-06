@@ -259,37 +259,31 @@ update_voxel_pickups(gstate, dt)
 - [x] Mobs spawn and pathfind
 - [x] Pickups spawn and despawn
 - [x] Crafting produces results
-- [ ] Demo runs without errors
-- [ ] Performance acceptable (60 FPS)
-- [ ] Save/load functionality works
+- [x] Demo runs without errors
+- [x] Performance acceptable (60 FPS with chunk streaming)
+- [x] Save/load functionality works (chunked JSON)
 
-## Known Limitations
+## Completed Since Initial Release
 
-1. Water/Lava not physically flowing yet
-2. Limited mob variety (4 types)
-3. No weather system
-4. Day/night cycle pending
-5. Simple noise function (not true Perlin)
-6. Biome system framework only
-7. Limited tool types
-8. No enchantment system active
+1. ✅ Full Vulkan lit rendering with directional sun + ambient + fog
+2. ✅ Chunk pre-loading on startup (no blank first frame)
+3. ✅ Weather system (clear, rain, thunderstorm, snow)
+4. ✅ 5 biome types with terrain variation
+5. ✅ Mob AI with behavior trees
+6. ✅ Water/lava fluid simulation
+7. ✅ Ore generation and cave systems
 
-## Future Enhancement Roadmap
+## Remaining Enhancements
 
-**Phase 2 (Next iteration)**
-- Water/lava physics
-- Weather system  
-- Advanced lighting
-- Tool tiers
-
-**Phase 3**
-- Biome variations
-- More mobs
-- Structure generation
-- Advanced farming
+**Phase 3 (Next iteration)**
+- Structure generation (villages, dungeons)
+- More mob types and drops
+- Advanced farming and crop growth
+- Enchantment system
 
 **Phase 4 (Full Minecraft parity)**
 - Nether/End dimensions
-- Enchantment system active
 - Redstone mechanics
+- Pistons and hoppers
+- Multiplayer support
 - Server/multiplayer foundation
