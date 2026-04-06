@@ -20,6 +20,7 @@ from nbody import create_nbody_sim, add_body, add_solar_system, add_binary_star
 from nbody import step_simulation, alive_body_count, simulation_info
 from nbody import compute_gravitational_forces
 from star_renderer import temperature_to_color
+from planet_mesh import draw_planet_detailed
 from game_loop import create_time_state, update_time
 
 print "=== Realistic N-Body Simulation ==="
@@ -264,51 +265,23 @@ while running:
             body_mesh = sphere_lo
 
         if body["type"] == "star":
-            # ---- STAR ----
-            # Fixed artistic size (not log scale — too unpredictable)
+            # ---- STAR with surface detail ----
             let star_r = 0.35
-
-            # Color from black body temperature
-            let tc = [1.0, 0.95, 0.7]
-            if body["temperature"] > 0:
-                tc = temperature_to_color(body["temperature"])
-
-            # Bright hot core
-            let core_color = [tc[0] * 2.0, tc[1] * 1.9, tc[2] * 1.6, 1.0]
-            if core_color[0] > 1.0:
-                core_color[0] = 1.0
-            if core_color[1] > 1.0:
-                core_color[1] = 1.0
-            if core_color[2] > 1.0:
-                core_color[2] = 1.0
-            draw_sphere(cmd, vp, pos, star_r, core_color, body_mesh)
+            # Draw with procedural granulation/sunspot banding
+            draw_planet_detailed(cmd, mat, vp, pos, star_r, body["name"], body_mesh, 16)
 
         else:
-            # ---- PLANET ----
-            # Size based on actual radius ratio (artistic, not real scale)
+            # ---- PLANET with procedural surface ----
             let planet_r = 0.03 + (body["radius"] / 70000.0) * 0.12
             if planet_r > 0.15:
-                planet_r = 0.15  # Cap gas giants
+                planet_r = 0.15
             if planet_r < 0.025:
-                planet_r = 0.025  # Min size so small planets visible
+                planet_r = 0.025
 
-            # Day/night shading from sun direction
-            let bc = body["color"]
-            let to_sun = v3_normalize(v3_scale(pos, -1.0))
-            let to_cam = v3_normalize(v3_sub(cam_pos, pos))
-            let light = to_sun[0] * to_cam[0] + to_sun[1] * to_cam[1] + to_sun[2] * to_cam[2]
-            let shade = 0.35 + 0.65 * ((light + 1.0) * 0.5)
+            # Draw with latitude-banded procedural coloring
+            draw_planet_detailed(cmd, mat, vp, pos, planet_r, body["name"], body_mesh, 16)
 
-            let planet_color = [bc[0] * shade * 1.4, bc[1] * shade * 1.4, bc[2] * shade * 1.4, 1.0]
-            if planet_color[0] > 1.0:
-                planet_color[0] = 1.0
-            if planet_color[1] > 1.0:
-                planet_color[1] = 1.0
-            if planet_color[2] > 1.0:
-                planet_color[2] = 1.0
-            draw_sphere(cmd, vp, pos, planet_r, planet_color, body_mesh)
-
-            # Ring system for Saturn — draw as a slightly larger flattened sphere
+            # Ring system for Saturn
             if body["rings"]:
                 let ring_r = planet_r * 2.2
                 let m_t = mat4_translate(pos[0], pos[1], pos[2])
@@ -316,7 +289,7 @@ while running:
                 let m_s = mat4_scale(ring_r, ring_r * 0.02, ring_r)
                 let ring_model = mat4_mul(mat4_mul(m_t, m_tilt), m_s)
                 let ring_mvp = mat4_mul(vp, ring_model)
-                draw_mesh_unlit(cmd, mat, sphere_lo, ring_mvp, [0.8, 0.73, 0.55, 1.0])
+                draw_mesh_unlit(cmd, mat, sphere_lo, ring_mvp, [0.82, 0.75, 0.55, 1.0])
 
         # ---- Orbit trail ----
         let trail = body["trail"]
