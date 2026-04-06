@@ -118,35 +118,6 @@ proc draw_sphere(cmd, vp, position, radius, color, mesh):
     let mvp = mat4_mul(vp, m)
     draw_mesh_unlit(cmd, mat, mesh, mvp, color)
 
-# Draw a soft glow shell (larger transparent sphere around the body)
-proc draw_glow(cmd, vp, position, inner_radius, glow_size, color, alpha):
-    let glow_r = inner_radius * glow_size
-    let glow_color = [color[0] * 0.6, color[1] * 0.6, color[2] * 0.5, alpha]
-    draw_sphere(cmd, vp, position, glow_r, glow_color, sphere_lo)
-
-# Draw atmosphere halo (thin shell slightly larger than planet)
-proc draw_atmosphere(cmd, vp, position, planet_radius, atm_color, atm_thickness):
-    let atm_r = planet_radius * (1.0 + atm_thickness)
-    let atm_alpha = 0.15 + atm_thickness * 0.2
-    draw_sphere(cmd, vp, position, atm_r, [atm_color[0], atm_color[1], atm_color[2], atm_alpha], sphere_lo)
-
-# Draw ring system (flattened sphere as a disc)
-proc draw_rings(cmd, vp, position, inner_r, outer_r, color, time):
-    let ring_r = outer_r
-    let m_trans = mat4_translate(position[0], position[1], position[2])
-    let m_tilt = mat4_rotate_x(0.4)  # Ring tilt ~23 degrees
-    let m_scale = mat4_scale(ring_r, ring_r * 0.02, ring_r)  # Flatten Y to make disc
-    let model = mat4_mul(mat4_mul(m_trans, m_tilt), m_scale)
-    let mvp = mat4_mul(vp, model)
-    let ring_color = [color[0], color[1], color[2], 0.4]
-    draw_mesh_unlit(cmd, mat, sphere_lo, mvp, ring_color)
-    # Second ring slightly offset
-    let m_scale2 = mat4_scale(ring_r * 0.8, ring_r * 0.015, ring_r * 0.8)
-    let model2 = mat4_mul(mat4_mul(m_trans, m_tilt), m_scale2)
-    let mvp2 = mat4_mul(vp, model2)
-    let ring_color2 = [color[0] * 0.8, color[1] * 0.8, color[2] * 0.7, 0.3]
-    draw_mesh_unlit(cmd, mat, sphere_lo, mvp2, ring_color2)
-
 # ============================================================================
 # Game Loop
 # ============================================================================
@@ -273,6 +244,8 @@ while running:
         sfi = sfi + 4  # Draw every 4th star for performance
 
     # ---- Draw celestial bodies ----
+    # Size scale: Sun=0.3, Jupiter=0.15, Earth=0.06, Mercury=0.03
+    # These are NOT to real scale (sun would fill screen) — artistic sizes
     let bi = 0
     while bi < len(sim["bodies"]):
         let body = sim["bodies"][bi]
@@ -283,9 +256,6 @@ while running:
         let pos = body["position"]
         let dist_to_cam = v3_length(v3_sub(pos, cam_pos))
 
-        # Visual radius — logarithmic scale for huge range
-        let vis_r = 0.08 + math.log(body["radius"] + 1.0) * 0.025
-
         # Choose mesh LOD
         let body_mesh = sphere_hi
         if dist_to_cam < cam_distance * 0.3:
@@ -294,73 +264,73 @@ while running:
             body_mesh = sphere_lo
 
         if body["type"] == "star":
-            # ---- STAR RENDERING ----
-            let star_r = vis_r * 4.0
+            # ---- STAR ----
+            # Fixed artistic size (not log scale — too unpredictable)
+            let star_r = 0.35
 
-            # Core color from temperature
+            # Color from black body temperature
             let tc = [1.0, 0.95, 0.7]
             if body["temperature"] > 0:
                 tc = temperature_to_color(body["temperature"])
 
-            # Bright core (overexposed center)
-            let core_color = [tc[0] * 2.5, tc[1] * 2.5, tc[2] * 2.2, 1.0]
+            # Bright hot core
+            let core_color = [tc[0] * 2.0, tc[1] * 1.9, tc[2] * 1.6, 1.0]
+            if core_color[0] > 1.0:
+                core_color[0] = 1.0
+            if core_color[1] > 1.0:
+                core_color[1] = 1.0
+            if core_color[2] > 1.0:
+                core_color[2] = 1.0
             draw_sphere(cmd, vp, pos, star_r, core_color, body_mesh)
 
-            # Inner glow (warm halo)
-            draw_glow(cmd, vp, pos, star_r, 1.8, tc, 0.25)
-
-            # Outer glow (faint corona)
-            draw_glow(cmd, vp, pos, star_r, 3.0, tc, 0.08)
-
-            # Very faint extended glow
-            draw_glow(cmd, vp, pos, star_r, 5.0, tc, 0.03)
-
         else:
-            # ---- PLANET RENDERING ----
-            let planet_r = vis_r * 2.0
+            # ---- PLANET ----
+            # Size based on actual radius ratio (artistic, not real scale)
+            let planet_r = 0.03 + (body["radius"] / 70000.0) * 0.12
+            if planet_r > 0.15:
+                planet_r = 0.15  # Cap gas giants
+            if planet_r < 0.025:
+                planet_r = 0.025  # Min size so small planets visible
 
-            # Base planet color — slight shading variation
+            # Day/night shading from sun direction
             let bc = body["color"]
-            # Day side (facing camera/sun) brighter, night side darker
-            let sun_dir = v3_normalize(v3_scale(pos, -1.0))
-            let cam_dir = v3_normalize(v3_sub(cam_pos, pos))
-            let sun_dot = sun_dir[0] * cam_dir[0] + sun_dir[1] * cam_dir[1] + sun_dir[2] * cam_dir[2]
-            let shade = 0.4 + 0.6 * ((sun_dot + 1.0) * 0.5)  # 0.4 to 1.0
+            let to_sun = v3_normalize(v3_scale(pos, -1.0))
+            let to_cam = v3_normalize(v3_sub(cam_pos, pos))
+            let light = to_sun[0] * to_cam[0] + to_sun[1] * to_cam[1] + to_sun[2] * to_cam[2]
+            let shade = 0.35 + 0.65 * ((light + 1.0) * 0.5)
 
-            let planet_color = [bc[0] * shade * 1.3, bc[1] * shade * 1.3, bc[2] * shade * 1.3, 1.0]
+            let planet_color = [bc[0] * shade * 1.4, bc[1] * shade * 1.4, bc[2] * shade * 1.4, 1.0]
+            if planet_color[0] > 1.0:
+                planet_color[0] = 1.0
+            if planet_color[1] > 1.0:
+                planet_color[1] = 1.0
+            if planet_color[2] > 1.0:
+                planet_color[2] = 1.0
             draw_sphere(cmd, vp, pos, planet_r, planet_color, body_mesh)
 
-            # Atmosphere halo
-            if body["atmosphere"]:
-                let atm_color = [0.3, 0.5, 0.9]  # Default blue
-                if body["name"] == "Mars":
-                    atm_color = [0.8, 0.5, 0.3]
-                elif body["name"] == "Venus":
-                    atm_color = [0.9, 0.8, 0.5]
-                elif body["name"] == "Jupiter" or body["name"] == "Saturn":
-                    atm_color = [0.7, 0.6, 0.4]
-                elif body["name"] == "Uranus":
-                    atm_color = [0.5, 0.7, 0.85]
-                elif body["name"] == "Neptune":
-                    atm_color = [0.3, 0.4, 0.9]
-                draw_atmosphere(cmd, vp, pos, planet_r, atm_color, 0.15)
-
-            # Ring system
+            # Ring system for Saturn — draw as a slightly larger flattened sphere
             if body["rings"]:
-                draw_rings(cmd, vp, pos, planet_r * 1.3, planet_r * 2.5, [0.85, 0.78, 0.6], sim_time)
+                let ring_r = planet_r * 2.2
+                let m_t = mat4_translate(pos[0], pos[1], pos[2])
+                let m_tilt = mat4_rotate_x(0.4)
+                let m_s = mat4_scale(ring_r, ring_r * 0.02, ring_r)
+                let ring_model = mat4_mul(mat4_mul(m_t, m_tilt), m_s)
+                let ring_mvp = mat4_mul(vp, ring_model)
+                draw_mesh_unlit(cmd, mat, sphere_lo, ring_mvp, [0.8, 0.73, 0.55, 1.0])
 
         # ---- Orbit trail ----
         let trail = body["trail"]
         let trail_len = len(trail)
-        if trail_len > 2:
-            let ti = 0
+        if trail_len > 4:
+            let ti = 2
             while ti < trail_len:
                 let tp = trail[ti]
                 let fade = (ti + 1.0) / trail_len
-                let trail_size = 0.006 * fade
-                let trail_color = [body["color"][0] * fade * 0.7, body["color"][1] * fade * 0.7, body["color"][2] * fade * 0.7, fade * 0.6]
+                let trail_size = 0.004 + 0.004 * fade
+                let tc = body["color"]
+                let trail_color = [tc[0] * fade * 0.5, tc[1] * fade * 0.5, tc[2] * fade * 0.5, 1.0]
                 draw_sphere(cmd, vp, vec3(tp[0], tp[1], tp[2]), trail_size, trail_color, sphere_lo)
-                ti = ti + 16  # Skip points for performance
+                ti = ti + 20
 
         bi = bi + 1
 
