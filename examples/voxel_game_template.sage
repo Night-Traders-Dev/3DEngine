@@ -4,11 +4,11 @@
 import gpu
 from renderer import create_renderer, begin_frame, end_frame, shutdown_renderer, check_resize, update_title_fps
 from input import create_input, update_input, action_just_pressed, action_held, default_fps_bindings, mouse_delta, scroll_value
-from math3d import vec3, v3_add, v3_sub, v3_scale, v3_normalize, v3_length
-from player_controller import create_player_controller, player_forward
+from math3d import vec3, v3_add, v3_sub, v3_scale, v3_normalize, v3_length, mat4_identity, mat4_mul
+from player_controller import create_player_controller, player_forward, player_view_matrix, player_projection
 from voxel_world import create_voxel_world, set_voxel, get_voxel, voxel_palette_ids, voxel_block_name
 from voxel_world import create_voxel_inventory, voxel_inventory_add, voxel_inventory_remove, voxel_inventory_count
-from voxel_world import default_voxel_recipes, try_craft_voxel_recipe
+from voxel_world import default_voxel_recipes, try_craft_voxel_recipe, voxel_visible_draws
 from voxel_hud import create_voxel_hud, update_voxel_hud
 from voxel_gameplay import create_tool, create_voxel_gameplay_state, voxel_add_tool
 from voxel_gameplay import spawn_voxel_mob, ensure_voxel_mob_population, update_voxel_mobs
@@ -17,6 +17,8 @@ from voxel_fluids import create_fluid_system
 from voxel_biomes import default_biomes
 from voxel_weather import create_weather_system, update_weather_system, get_weather_light_modifier
 from voxel_mobai import create_behavior_state, update_mob_ai
+from lighting import create_light_scene, directional_light, add_light, set_ambient, set_fog, set_view_position, init_light_gpu, update_light_ubo
+from render_system import create_lit_material, draw_mesh_lit_surface_controlled
 
 import math  # Import math after voxel modules
 
@@ -46,6 +48,14 @@ let r = create_renderer(1280, 720, GAME_TITLE)
 if r == nil:
     raise "Failed to create renderer"
 print "✓ Renderer: " + str(r["width"]) + "x" + str(r["height"]) + " | GPU: " + gpu.device_name()
+
+# Initialize lighting
+let ls = create_light_scene()
+init_light_gpu(ls)
+add_light(ls, directional_light(0.3, -0.8, 0.5, 1.0, 0.95, 0.85, 1.4))
+set_ambient(ls, 0.2, 0.22, 0.28, 0.4)
+set_fog(ls, true, 40.0, 100.0, 0.52, 0.76, 0.95)
+let lit_mat = create_lit_material(r["render_pass"], ls["desc_layout"], ls["desc_set"])
 
 let inp = create_input()
 default_fps_bindings(inp)
@@ -214,23 +224,42 @@ while running:
     # RENDERING - Customize rendering here
     # ============================================================================
 
+    # Update lighting UBO
+    set_view_position(ls, player_pos)
+    update_light_ubo(ls)
+
     # Set sky color based on weather
     let weather_mod = ENABLE_WEATHER ? get_weather_light_modifier(weather) : 1.0
     r["clear_color"] = [0.52 * weather_mod, 0.76 * weather_mod, 0.95 * weather_mod, 1.0]
-    
+
     let frame = begin_frame(r)
     if frame == nil:
         frame_count = frame_count + 1
+        check_resize(r)
         continue
+
+    let cmd = frame["cmd"]
+
+    # Camera matrices
+    player["position"] = player_pos
+    let view_mat = player_view_matrix(player)
+    let proj_mat = player_projection(player, r["width"] / r["height"])
+    let vp = mat4_mul(proj_mat, view_mat)
+
+    # Render voxel chunks
+    if lit_mat != nil:
+        let visible = voxel_visible_draws(voxel, player_pos[0], player_pos[1], player_pos[2], 3)
+        let vi = 0
+        while vi < len(visible):
+            let draw = visible[vi]
+            let model = mat4_identity()
+            let mvp = mat4_mul(vp, model)
+            draw_mesh_lit_surface_controlled(cmd, lit_mat, draw["gpu_mesh"], mvp, model, ls["desc_set"], draw["surface"], true)
+            vi = vi + 1
 
     # Update window title with game stats
     let mob_count = ENABLE_MOBS ? voxel_alive_mob_count(gameplay) : 0
     update_title_fps(r, GAME_TITLE + " | Mobs: " + str(mob_count))
-
-    # TODO: Add your custom rendering code here
-    # - Render voxel world
-    # - Render HUD/UI
-    # - Render particles/effects
 
     end_frame(r, frame)
 

@@ -6,16 +6,18 @@ import math
 import io
 from renderer import create_renderer, begin_frame, end_frame, shutdown_renderer, check_resize, update_title_fps
 from input import create_input, update_input, action_just_pressed, action_held, default_fps_bindings, mouse_delta
-from math3d import vec3, v3_add, v3_sub, v3_scale, v3_normalize, v3_length
-from player_controller import create_player_controller, update_player, player_eye_position, player_forward
+from math3d import vec3, v3_add, v3_sub, v3_scale, v3_normalize, v3_length, mat4_identity, mat4_mul
+from player_controller import create_player_controller, update_player, player_eye_position, player_forward, player_view_matrix, player_projection
 from mesh import upload_mesh
-from voxel_world import create_voxel_world, set_voxel, get_voxel, voxel_block_name, voxel_palette_ids
+from voxel_world import create_voxel_world, set_voxel, get_voxel, voxel_block_name, voxel_palette_ids, voxel_visible_draws
 from voxel_fluids import create_fluid_system
 from voxel_biomes import default_biomes
 from voxel_weather import create_weather_system, update_weather_system, get_weather_light_modifier
 from voxel_gameplay import create_voxel_gameplay_state, spawn_voxel_mob, ensure_voxel_mob_population
 from voxel_gameplay import update_voxel_mobs, update_voxel_pickups, voxel_alive_mob_count
 from voxel_mobai import create_behavior_state, update_mob_ai
+from lighting import create_light_scene, directional_light, add_light, set_ambient, set_fog, set_view_position, init_light_gpu, update_light_ubo
+from render_system import create_lit_material, draw_mesh_lit_surface_controlled
 
 print "=== Forge Engine - Voxel Demo (Full Graphics) ==="
 
@@ -27,6 +29,14 @@ if r == nil:
 
 print "✓ Renderer initialized: " + str(r["width"]) + "x" + str(r["height"])
 print "GPU: " + gpu.device_name()
+
+# Initialize lighting
+let ls = create_light_scene()
+init_light_gpu(ls)
+add_light(ls, directional_light(0.3, -0.8, 0.5, 1.0, 0.95, 0.85, 1.4))
+set_ambient(ls, 0.2, 0.22, 0.28, 0.4)
+set_fog(ls, true, 40.0, 100.0, 0.52, 0.76, 0.95)
+let lit_mat = create_lit_material(r["render_pass"], ls["desc_layout"], ls["desc_set"])
 
 # Initialize input
 let inp = create_input()
@@ -152,25 +162,48 @@ while running:
     if frame_count % 120 == 0:
         ensure_voxel_mob_population(gameplay, player_pos, 64)
     
+    # Update lighting UBO
+    set_view_position(ls, player_pos)
+    update_light_ubo(ls)
+
     # Render frame
+    let weather_mod = get_weather_light_modifier(weather)
+    r["clear_color"] = [0.5 * weather_mod, 0.7 * weather_mod, 0.9 * weather_mod, 1.0]
+
     let frame = begin_frame(r)
     if frame == nil:
+        frame_count = frame_count + 1
+        check_resize(r)
         continue
-    
-    # Clear screen with weather-affected color
-    let weather_mod = get_weather_light_modifier(weather)
-    gpu.clear_color(0.5 * weather_mod, 0.7 * weather_mod, 0.9 * weather_mod, 1.0)
-    gpu.clear()
-    
+
+    let cmd = frame["cmd"]
+
+    # Camera matrices
+    player["position"] = player_pos
+    let view_mat = player_view_matrix(player)
+    let proj_mat = player_projection(player, r["width"] / r["height"])
+    let vp = mat4_mul(proj_mat, view_mat)
+
+    # Render voxel chunks
+    if lit_mat != nil:
+        let visible = voxel_visible_draws(world, player_pos[0], player_pos[1], player_pos[2], 3)
+        let vi = 0
+        while vi < len(visible):
+            let draw = visible[vi]
+            let model = mat4_identity()
+            let mvp = mat4_mul(vp, model)
+            draw_mesh_lit_surface_controlled(cmd, lit_mat, draw["gpu_mesh"], mvp, model, ls["desc_set"], draw["surface"], true)
+            vi = vi + 1
+
     # Update title
     update_title_fps(r, "Forge Engine - Voxel World [Fluids, Biomes, Weather, AI]")
-    
+
     # End frame
     end_frame(r, frame)
-    
+
     # Frame timing
     frame_count = frame_count + 1
-    
+
     # Check for window resize
     check_resize(r)
 
