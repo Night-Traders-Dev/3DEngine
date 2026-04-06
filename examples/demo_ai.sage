@@ -70,7 +70,7 @@ init_light_gpu(ls)
 add_light(ls, directional_light(0.3, -0.7, 0.5, 1.0, 0.95, 0.85, 1.0))
 add_light(ls, point_light(5.0, 3.0, 0.0, 1.0, 0.4, 0.2, 3.0, 18.0))
 add_light(ls, point_light(-5.0, 3.0, 0.0, 0.2, 0.4, 1.0, 3.0, 18.0))
-set_ambient(ls, 0.15, 0.15, 0.2, 0.3)
+set_ambient(ls, 0.3, 0.3, 0.35, 0.5)
 
 let lit_mat = create_lit_material(r["render_pass"], ls["desc_layout"], ls["desc_set"])
 let sky = create_sky()

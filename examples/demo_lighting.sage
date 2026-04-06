@@ -53,7 +53,7 @@ add_light(ls, point_light(-4.0, 2.0, 0.0, 0.1, 0.3, 1.0, 3.0, 15.0))
 add_light(ls, point_light(0.0, 2.0, 4.0, 0.1, 1.0, 0.3, 3.0, 15.0))
 add_light(ls, point_light(0.0, 2.0, -4.0, 1.0, 1.0, 0.2, 2.0, 12.0))
 
-set_ambient(ls, 0.15, 0.15, 0.2, 0.3)
+set_ambient(ls, 0.3, 0.3, 0.35, 0.5)
 set_fog(ls, false, 30.0, 120.0, 0.6, 0.65, 0.7)
 
 # ============================================================================
@@ -205,7 +205,7 @@ while running:
     # Sky presets
     if action_just_pressed(inp, "preset_day"):
         sky_preset_day(sky)
-        set_ambient(ls, 0.15, 0.15, 0.2, 0.3)
+        set_ambient(ls, 0.3, 0.3, 0.35, 0.5)
         print "Sky: Day"
     if action_just_pressed(inp, "preset_sunset"):
         sky_preset_sunset(sky)

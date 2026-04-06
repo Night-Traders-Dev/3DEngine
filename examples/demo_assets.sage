@@ -89,7 +89,7 @@ add_light(ls, directional_light(0.4, -0.7, 0.3, 1.0, 0.95, 0.85, 1.0))
 add_light(ls, point_light(6.0, 3.0, 2.0, 1.0, 0.5, 0.2, 4.0, 20.0))
 add_light(ls, point_light(-6.0, 3.0, -2.0, 0.2, 0.5, 1.0, 4.0, 20.0))
 add_light(ls, point_light(0.0, 4.0, 0.0, 0.9, 0.9, 0.8, 2.0, 15.0))
-set_ambient(ls, 0.12, 0.12, 0.18, 0.3)
+set_ambient(ls, 0.3, 0.3, 0.35, 0.5)
 
 let lit_mat = create_lit_material(r["render_pass"], ls["desc_layout"], ls["desc_set"])
 
@@ -269,7 +269,7 @@ while running:
     # Sky presets
     if action_just_pressed(inp, "preset_day"):
         sky_preset_day(sky)
-        set_ambient(ls, 0.12, 0.12, 0.18, 0.3)
+        set_ambient(ls, 0.3, 0.3, 0.35, 0.5)
     if action_just_pressed(inp, "preset_sunset"):
         sky_preset_sunset(sky)
         set_ambient(ls, 0.2, 0.12, 0.08, 0.2)

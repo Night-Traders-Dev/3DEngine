@@ -54,9 +54,10 @@ bind_action(inp, "preset_3", [gpu.KEY_3])
 # ============================================================================
 # Camera — orbit around origin
 # ============================================================================
-let cam_distance = 5.0
-let cam_yaw = 0.3
-let cam_pitch = -0.4
+# Start camera above and angled to see the XZ orbital plane in 3D
+let cam_distance = 12.0
+let cam_yaw = 0.6
+let cam_pitch = -0.85   # Looking down at ~48 degrees to see orbits as ellipses
 
 # ============================================================================
 # Meshes
@@ -109,7 +110,8 @@ while running:
         sim = create_nbody_sim()
         add_solar_system(sim)
         compute_gravitational_forces(sim)
-        cam_distance = 5.0
+        cam_distance = 12.0
+        cam_pitch = -0.9
     if action_just_pressed(inp, "preset_2"):
         sim = create_nbody_sim()
         add_binary_star(sim, 0.5, 0.7)

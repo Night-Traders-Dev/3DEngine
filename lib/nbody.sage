@@ -112,63 +112,55 @@ proc remove_body(sim, name):
 # Preset Solar Systems
 # ============================================================================
 
+# Helper: place planet at angle around orbit (not all on +X axis)
+proc _place_planet(sim, name, mass, radius, distance_au, speed_km_s, color, angle_deg):
+    let angle = angle_deg * 0.01745329  # degrees to radians
+    let vel_au_yr = speed_km_s * YEAR_TO_SECONDS / AU_TO_KM
+    # Position on orbit circle at given angle
+    let px = math.cos(angle) * distance_au
+    let pz = math.sin(angle) * distance_au
+    # Velocity perpendicular to radius (tangent to orbit)
+    let vx = 0.0 - math.sin(angle) * vel_au_yr
+    let vz = math.cos(angle) * vel_au_yr
+    return add_body(sim, name, mass, radius, vec3(px, 0.0, pz), vec3(vx, 0.0, vz), color)
+
 proc add_solar_system(sim):
-    # Sun
+    # Sun at center
     let sun = add_body(sim, "Sun", 1.0, 696340.0, vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), [1.0, 0.95, 0.6])
     sun["type"] = "star"
     sun["luminosity"] = 1.0
     sun["temperature"] = 5778.0
-    sun["locked"] = false
 
-    # Mercury
-    let mercury = add_body(sim, "Mercury", 1.66e-7, 2439.7, vec3(0.387, 0.0, 0.0), vec3(0.0, 0.0, 47.87 * YEAR_TO_SECONDS / AU_TO_KM), [0.7, 0.7, 0.7])
+    # Planets spread around orbits at different angles (realistic look)
+    let mercury = _place_planet(sim, "Mercury", 1.66e-7, 2439.7, 0.387, 47.87, [0.7, 0.7, 0.7], 75.0)
     mercury["type"] = "planet"
-    mercury["orbital_period"] = 0.2408
 
-    # Venus
-    let venus = add_body(sim, "Venus", 2.447e-6, 6051.8, vec3(0.723, 0.0, 0.0), vec3(0.0, 0.0, 35.02 * YEAR_TO_SECONDS / AU_TO_KM), [0.9, 0.7, 0.4])
+    let venus = _place_planet(sim, "Venus", 2.447e-6, 6051.8, 0.723, 35.02, [0.9, 0.7, 0.4], 190.0)
     venus["type"] = "planet"
     venus["atmosphere"] = true
-    venus["orbital_period"] = 0.6152
 
-    # Earth
-    let earth = add_body(sim, "Earth", 3.003e-6, 6371.0, vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 29.78 * YEAR_TO_SECONDS / AU_TO_KM), [0.2, 0.4, 0.85])
+    let earth = _place_planet(sim, "Earth", 3.003e-6, 6371.0, 1.0, 29.78, [0.2, 0.5, 0.9], 310.0)
     earth["type"] = "planet"
     earth["atmosphere"] = true
-    earth["orbital_period"] = 1.0
 
-    # Mars
-    let mars = add_body(sim, "Mars", 3.227e-7, 3389.5, vec3(1.524, 0.0, 0.0), vec3(0.0, 0.0, 24.07 * YEAR_TO_SECONDS / AU_TO_KM), [0.85, 0.4, 0.2])
+    let mars = _place_planet(sim, "Mars", 3.227e-7, 3389.5, 1.524, 24.07, [0.85, 0.4, 0.2], 45.0)
     mars["type"] = "planet"
-    mars["atmosphere"] = true
-    mars["orbital_period"] = 1.881
 
-    # Jupiter
-    let jupiter = add_body(sim, "Jupiter", 9.543e-4, 69911.0, vec3(5.203, 0.0, 0.0), vec3(0.0, 0.0, 13.07 * YEAR_TO_SECONDS / AU_TO_KM), [0.8, 0.7, 0.5])
+    let jupiter = _place_planet(sim, "Jupiter", 9.543e-4, 69911.0, 5.203, 13.07, [0.85, 0.75, 0.55], 155.0)
     jupiter["type"] = "planet"
     jupiter["atmosphere"] = true
-    jupiter["orbital_period"] = 11.86
 
-    # Saturn
-    let saturn = add_body(sim, "Saturn", 2.857e-4, 58232.0, vec3(9.537, 0.0, 0.0), vec3(0.0, 0.0, 9.69 * YEAR_TO_SECONDS / AU_TO_KM), [0.9, 0.8, 0.6])
+    let saturn = _place_planet(sim, "Saturn", 2.857e-4, 58232.0, 9.537, 9.69, [0.9, 0.82, 0.6], 240.0)
     saturn["type"] = "planet"
     saturn["rings"] = true
-    saturn["atmosphere"] = true
-    saturn["orbital_period"] = 29.46
 
-    # Uranus
-    let uranus = add_body(sim, "Uranus", 4.365e-5, 25362.0, vec3(19.19, 0.0, 0.0), vec3(0.0, 0.0, 6.81 * YEAR_TO_SECONDS / AU_TO_KM), [0.6, 0.8, 0.9])
+    let uranus = _place_planet(sim, "Uranus", 4.365e-5, 25362.0, 19.19, 6.81, [0.6, 0.8, 0.9], 20.0)
     uranus["type"] = "planet"
-    uranus["atmosphere"] = true
-    uranus["orbital_period"] = 84.01
 
-    # Neptune
-    let neptune = add_body(sim, "Neptune", 5.149e-5, 24622.0, vec3(30.07, 0.0, 0.0), vec3(0.0, 0.0, 5.43 * YEAR_TO_SECONDS / AU_TO_KM), [0.3, 0.4, 0.85])
+    let neptune = _place_planet(sim, "Neptune", 5.149e-5, 24622.0, 30.07, 5.43, [0.3, 0.45, 0.9], 280.0)
     neptune["type"] = "planet"
-    neptune["atmosphere"] = true
-    neptune["orbital_period"] = 164.8
 
-    print "Solar system: 9 bodies (Sun + 8 planets)"
+    print "Solar system: 9 bodies (Sun + 8 planets, spread around orbits)"
 
 proc add_earth_moon_system(sim):
     # Earth at 1 AU
