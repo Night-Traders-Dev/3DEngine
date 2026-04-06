@@ -19,6 +19,7 @@ from render_system import create_lit_material, draw_mesh_lit_surface_controlled
 from nbody import create_nbody_sim, add_body, add_solar_system, add_binary_star
 from nbody import step_simulation, compute_total_energy, alive_body_count, simulation_info, find_body
 from nbody import orbital_velocity_circular
+from star_renderer import temperature_to_color, create_star_visuals, update_star_visuals
 from game_loop import create_time_state, update_time
 
 print "=== N-Body Gravitational Simulation ==="
@@ -35,8 +36,11 @@ print "GPU: " + gpu.device_name()
 
 let ls = create_light_scene()
 init_light_gpu(ls)
-add_light(ls, point_light(0.0, 0.0, 0.0, 1.0, 0.95, 0.8, 2.0, 100.0))  # Sun light
-set_ambient(ls, 0.05, 0.05, 0.08, 0.3)
+# Strong directional light (illuminates everything regardless of distance)
+from lighting import directional_light
+add_light(ls, directional_light(0.3, -0.5, 0.2, 1.0, 0.95, 0.85, 1.5))
+# High ambient so bodies are always visible in space
+set_ambient(ls, 0.25, 0.25, 0.3, 0.6)
 
 let lit_mat = create_lit_material(r["render_pass"], ls["desc_layout"], ls["desc_set"])
 
@@ -220,9 +224,17 @@ while running:
                 model[10] = visual_radius
 
                 let mvp = mat4_mul(vp, model)
-                let surface = {"albedo": body["color"]}
+                # Surface color — stars use temperature-based color, planets use defined color
+                let albedo = body["color"]
                 if body["type"] == "star":
-                    surface["albedo"] = [body["color"][0] * 2.0, body["color"][1] * 2.0, body["color"][2] * 2.0]
+                    if body["temperature"] > 0:
+                        albedo = temperature_to_color(body["temperature"])
+                    # Boost star brightness significantly
+                    albedo = [albedo[0] * 3.0, albedo[1] * 3.0, albedo[2] * 2.5]
+                else:
+                    # Boost planet colors for visibility
+                    albedo = [albedo[0] * 1.5, albedo[1] * 1.5, albedo[2] * 1.5]
+                let surface = {"albedo": albedo}
 
                 let mesh = sphere_hi
                 if v3_length(v3_sub(pos, cam_pos)) > 10.0:
