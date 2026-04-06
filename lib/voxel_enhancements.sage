@@ -1,6 +1,8 @@
 # Ore and Cave Generation Enhancement
 # Append to voxel_world.sage for Minecraft-like world generation
 
+from voxel_world import voxel_in_bounds, get_voxel, set_voxel
+
 # =====================================================
 # Ore & Cave Generation
 # =====================================================

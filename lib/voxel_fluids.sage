@@ -3,6 +3,7 @@
 
 import math
 from math3d import vec3, v3_add, v3_scale
+from voxel_world import voxel_in_bounds, get_voxel, set_voxel
 
 # =====================================================
 # Fluid Physics Constants
