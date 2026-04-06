@@ -155,6 +155,55 @@ proc end_frame(r, frame):
     r["frame"] = r["frame"] + 1
 
 # ============================================================================
+# Multi-pass frame management (for HDR/bloom/postprocess)
+# acquire_frame: gets swapchain image + begins command recording (NO render pass)
+# begin_swapchain_pass: starts the swapchain render pass on the acquired frame
+# end_swapchain_pass: ends the swapchain render pass
+# submit_frame: submits commands + presents
+# ============================================================================
+proc acquire_frame(r):
+    if gpu.window_should_close():
+        return nil
+    gpu.poll_events()
+    let cf = r["frame"] % MAX_FRAMES
+    gpu.wait_fence(r["fences"][cf])
+    gpu.reset_fence(r["fences"][cf])
+    let img_idx = gpu.acquire_next_image(r["img_sems"][cf])
+    if img_idx < 0:
+        check_resize(r)
+        gpu.wait_fence(r["fences"][cf])
+        gpu.reset_fence(r["fences"][cf])
+        img_idx = gpu.acquire_next_image(r["img_sems"][cf])
+        if img_idx < 0:
+            return nil
+    let cmd = r["cmd_bufs"][img_idx]
+    gpu.begin_commands(cmd)
+    let frame = {}
+    frame["cmd"] = cmd
+    frame["image_index"] = img_idx
+    frame["time"] = clock() - r["start_time"]
+    frame["current_frame"] = cf
+    return frame
+
+proc begin_swapchain_pass(r, frame):
+    let cmd = frame["cmd"]
+    let img_idx = frame["image_index"]
+    gpu.cmd_begin_render_pass(cmd, r["render_pass"], r["framebuffers"][img_idx], [r["clear_color"], [1.0, 0.0, 0.0, 0.0]])
+    gpu.cmd_set_viewport(cmd, 0, 0, r["width"], r["height"], 0.0, 1.0)
+    gpu.cmd_set_scissor(cmd, 0, 0, r["width"], r["height"])
+
+proc end_swapchain_pass(cmd):
+    gpu.cmd_end_render_pass(cmd)
+
+proc submit_frame(r, frame):
+    let cmd = frame["cmd"]
+    let cf = frame["current_frame"]
+    gpu.end_commands(cmd)
+    gpu.submit_with_sync(cmd, r["img_sems"][cf], r["rdr_sems"][cf], r["fences"][cf])
+    gpu.present(frame["image_index"], r["rdr_sems"][cf])
+    r["frame"] = r["frame"] + 1
+
+# ============================================================================
 # Shutdown renderer
 # ============================================================================
 proc shutdown_renderer(r):
